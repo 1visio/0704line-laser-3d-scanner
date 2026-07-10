@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "copied_at": "2026-07-10",
+  "source_root": "G:/dev/projects/0324line_3d",
+  "analysis_source": "G:/dev/projects/0514_ruanzhu/新线激光系统可复用代码分析.md",
+  "copy_policy": "verbatim_reference_only",
+  "files": [
+    {
+      "path": "laser_plane_calibration.py",
+      "sha256": "C3D120C2B30CEE81A6CA0AA13A2DDB22BFFC2200E776EF2004C193E093399923"
+    },
+    {
+      "path": "ablation_v1_runner.py",
+      "sha256": "C9CAA7DD89953D131D7BBB27E95513151B6CBB1774666595994BD52D19DE8333"
+    },
+    {
+      "path": "export_v1_roi_centerline_batch.py",
+      "sha256": "CD7907B397F552294B09DC0B393C2C923E5217534EBC86EFBB6079B40781DA20"
+    },
+    {
+      "path": "laser_stripe_subpixel_module_v2.py",
+      "sha256": "BFC95CC8E94E94089AA30822E0D0F95F3F80599DB6C34C71AFDEC4BA6120366C"
+    },
+    {
+      "path": "src/linelaser0319_reusable.py",
+      "sha256": "6DF801F75F435DA076A5C32483FD7A71073C7F256DB0CD48C6F02F916E4B1898"
+    },
+    {
+      "path": "src/red_filter_preprocess_v3_reusable.py",
+      "sha256": "A4E8DEDBA803D478FC2ECE7E044B1512C11B66168175915DD3C7E0F9EF66B102"
+    },
+    {
+      "path": "src/__init__.py",
+      "sha256": "163B2FE3C4E15F877BC4424855F3FC84D14245BE7A2FAF4C5530DB9B4549D179"
+    }
+  ]
+}

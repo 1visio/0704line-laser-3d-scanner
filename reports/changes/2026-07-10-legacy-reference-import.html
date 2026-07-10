@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>旧线激光算法参考代码迁入与可行性分析</title>
+  <style>
+    :root{--ink:#17324d;--muted:#60758a;--line:#ccd8e4;--blue:#1769d2;--green:#16854a;--amber:#b26a00;--pale:#f1f7ff}
+    body{margin:0;background:#f5f7fa;color:var(--ink);font:15px/1.65 "Segoe UI","Microsoft YaHei",sans-serif}
+    main{max-width:1080px;margin:30px auto;padding:36px 42px;background:#fff;box-shadow:0 8px 28px rgba(25,55,85,.09)}
+    h1{margin:0 0 6px;font-size:29px}h2{margin-top:30px;padding-bottom:7px;border-bottom:1px solid var(--line);font-size:21px}
+    .meta{color:var(--muted)}.badge{display:inline-block;margin:12px 8px 0 0;padding:5px 12px;border-radius:99px;color:#fff;background:var(--green);font-weight:650}
+    .warning{background:var(--amber)}table{width:100%;border-collapse:collapse}th,td{padding:9px 11px;border:1px solid var(--line);text-align:left;vertical-align:top}th{background:var(--pale)}
+    .diagram{overflow:auto;padding:16px;border:1px solid var(--line);border-radius:10px;background:var(--pale)}
+    .legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:11px;color:var(--muted)}.dot{display:inline-block;width:10px;height:10px;margin-right:5px;border-radius:2px}
+    .cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.card{padding:14px;border:1px solid var(--line);border-radius:8px}.card strong{color:var(--blue)}
+    code{padding:1px 5px;border-radius:4px;background:#edf1f5}.note{padding:13px 16px;border-left:4px solid var(--amber);background:#fff7e8}
+    svg text{font-family:"Segoe UI","Microsoft YaHei",sans-serif;fill:var(--ink)}
+    @media(max-width:760px){main{margin:0;padding:24px 18px}.cards{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<main>
+  <h1>旧线激光算法参考代码迁入与可行性分析</h1>
+  <div class="meta">2026-07-10 · Windows/Python 静态扫描头路线</div>
+  <span class="badge">总体可行</span><span class="badge warning">需适配 Mono8 蓝光输入</span>
+
+  <h2>结论</h2>
+  <div class="cards">
+    <div class="card"><strong>可直接参考</strong><br>棋盘位姿、平面拟合、Steger 亚像素、射线-平面公式、批量导出结构。</div>
+    <div class="card"><strong>必须替换</strong><br>新 K/D、激光平面、ROI/阈值、旧机器人外参、flip_robot_y。</div>
+    <div class="card"><strong>关键适配</strong><br>红激光 R-G 预处理改为 450 nm 黑白相机的暗场或背景差分。</div>
+  </div>
+
+  <h2>代码流程图</h2>
+  <div class="diagram">
+    <svg viewBox="0 0 1040 310" width="1040" height="310" role="img" aria-label="参考代码适配流程">
+      <defs><marker id="a" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0 0L0 6L9 3z" fill="#1769d2"/></marker></defs>
+      <g fill="#fff" stroke="#1769d2" stroke-width="2">
+        <rect x="15" y="35" width="125" height="55" rx="8"/><rect x="180" y="35" width="145" height="55" rx="8"/>
+        <rect x="365" y="35" width="150" height="55" rx="8"/><rect x="555" y="35" width="130" height="55" rx="8"/>
+        <rect x="725" y="35" width="130" height="55" rx="8"/><rect x="895" y="35" width="125" height="55" rx="8"/>
+        <rect x="725" y="155" width="130" height="55" rx="8"/><rect x="895" y="155" width="125" height="55" rx="8"/>
+      </g>
+      <g font-size="14" text-anchor="middle">
+        <text x="77" y="59"><tspan x="77">新相机 K/D</tspan><tspan x="77" dy="19">新标定图</tspan></text>
+        <text x="252" y="59"><tspan x="252">复用平面标定</tspan><tspan x="252" dy="19">几何与拟合</tspan></text>
+        <text x="440" y="59"><tspan x="440">新激光平面</tspan><tspan x="440" dy="19">留出验证</tspan></text>
+        <text x="620" y="59"><tspan x="620">Mono8</tspan><tspan x="620" dy="19">暗场差分</tspan></text>
+        <text x="790" y="59"><tspan x="790">ROI + Steger</tspan><tspan x="790" dy="19">二维中心线</tspan></text>
+        <text x="957" y="59"><tspan x="957">射线-平面</tspan><tspan x="957" dy="19">相机系 mm</tspan></text>
+        <text x="790" y="179"><tspan x="790">验收指标</tspan><tspan x="790" dy="19">是否通过</tspan></text>
+        <text x="957" y="179"><tspan x="957">冻结算法</tspan><tspan x="957" dy="19">或单变量调整</tspan></text>
+      </g>
+      <g fill="none" stroke="#1769d2" stroke-width="2" marker-end="url(#a)">
+        <path d="M140 62h40"/><path d="M325 62h40"/><path d="M515 62h40"/><path d="M685 62h40"/><path d="M855 62h40"/>
+        <path d="M957 90v35H790v30"/><path d="M855 182h40"/>
+      </g>
+      <path d="M957 210v55H620V90" fill="none" stroke="#b26a00" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#a)"/>
+      <text x="790" y="286" text-anchor="middle" font-size="13" fill="#b26a00">未通过：预处理 → ROI/阈值 → 几何，按顺序单变量调整</text>
+    </svg>
+  </div>
+  <div class="legend">
+    <span><i class="dot" style="background:#1769d2"></i>蓝色：正常复用与适配链路</span>
+    <span><i class="dot" style="background:#b26a00"></i>橙色虚线：验收失败回退</span>
+    <span><i class="dot" style="background:#fff;border:1px solid #1769d2"></i>蓝框：阶段输入或稳定模块</span>
+  </div>
+
+  <h2>可行性矩阵</h2>
+  <table>
+    <thead><tr><th>部分</th><th>可行性</th><th>边界</th></tr></thead>
+    <tbody>
+      <tr><td>Windows/Python 离线调试</td><td>高</td><td>不依赖 ROS；NumPy/OpenCV/Matplotlib 已验证</td></tr>
+      <tr><td>激光平面标定</td><td>高</td><td>只复用流程，K/D 和图像必须来自新设备</td></tr>
+      <tr><td>ROI + Steger</td><td>高</td><td>保留亚像素算法，重新设置 Mono8 预处理与阈值</td></tr>
+      <tr><td>单帧三维点云</td><td>高</td><td>输出相机坐标系毫米点，不使用旧机器人安装变换</td></tr>
+      <tr><td>嵌入式迁移</td><td>中高</td><td>先冻结参考结果，再迁移耗时热点</td></tr>
+    </tbody>
+  </table>
+
+  <h2>验证结果</h2>
+  <p>源/副本 SHA-256 7/7 一致；单元测试 5/5 通过；全部脚本语法编译通过；标定和批量入口帮助命令可启动；标定、Steger 和求交公开符号可导入。</p>
+  <div class="note"><strong>安全边界：</strong>未复制旧 <code>config_plane_*</code>。参考副本不进入默认 CLI，不会自动使用旧 K/D、激光平面、机器人外参或 <code>flip_robot_y</code>。</div>
+
+  <h2>文件位置</h2>
+  <p><code>references/legacy_0324/</code> 保存原样代码、详细 README 和 SOURCE_MANIFEST.json；根 README 已加入 Windows 使用和后续适配说明。</p>
+</main>
+</body>
+</html>
