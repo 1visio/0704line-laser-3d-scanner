@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .algorithms import CentroidStripeExtractor
+from .algorithms import CentroidStripeExtractor, MonoStripeExtractor
 from .calibration import LaserCalibration, load_calibration
 from .config import RunConfig
 from .pipeline import StaticProfilePipeline
@@ -18,6 +18,8 @@ def build_pipeline(config: RunConfig) -> tuple[StaticProfilePipeline, LaserCalib
 
     if config.extraction.name == "centroid":
         extractor = CentroidStripeExtractor(**config.extraction.options)
+    elif config.extraction.name == "mono":
+        extractor = MonoStripeExtractor(**config.extraction.options)
     else:
         raise ValueError(
             f"未知提取适配器 {config.extraction.name!r}；请在 bootstrap.py 接入 StripeExtractor"

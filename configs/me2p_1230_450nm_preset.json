@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "config_version": "ME2P-1230-450NM-MONO8-TUNING-PRESET-V1",
+  "output_dir": "../outputs/me2p-1230-450nm-preset",
+  "calibration_file": "../calibration/me2p_1230_450nm_preset.json",
+  "source": {
+    "name": "synthetic",
+    "options": {
+      "width": 4096,
+      "height": 3000,
+      "stripe_row_px": 1499.25,
+      "stripe_slope": 0.02,
+      "sigma_px": 1.7,
+      "amplitude": 200.0,
+      "background": 15.0,
+      "noise_std": 2.0,
+      "seed": 450,
+      "exposure_us": 2000.0,
+      "gain_db": 0.0
+    }
+  },
+  "extraction": {
+    "name": "mono",
+    "options": {
+      "window_radius": 5,
+      "background_percentile": 50.0,
+      "min_contrast": 30.0,
+      "min_snr": 10.0,
+      "noise_floor": 1.0,
+      "min_fwhm_px": 3.0,
+      "max_fwhm_px": 6.0,
+      "saturation_fraction": 0.98,
+      "reject_saturated": true,
+      "sensor_max_value": 255.0,
+      "roi_x_start": null,
+      "roi_x_end": null,
+      "roi_y_start": null,
+      "roi_y_end": null
+    }
+  },
+  "reconstruction": {
+    "name": "ray_plane",
+    "options": {}
+  }
+}

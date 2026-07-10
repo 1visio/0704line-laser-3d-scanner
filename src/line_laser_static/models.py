@@ -44,6 +44,10 @@ class StripeProfile:
     intensity: FloatArray
     confidence: FloatArray
     valid: BoolArray
+    contrast: FloatArray | None = None
+    snr: FloatArray | None = None
+    fwhm_px: FloatArray | None = None
+    saturated: BoolArray | None = None
 
     def __post_init__(self) -> None:
         _validate_vectors(
@@ -54,6 +58,18 @@ class StripeProfile:
             self.confidence,
             self.valid,
         )
+        for field_name, vector in (
+            ("contrast", self.contrast),
+            ("snr", self.snr),
+            ("fwhm_px", self.fwhm_px),
+            ("saturated", self.saturated),
+        ):
+            if vector is None:
+                continue
+            if vector.ndim != 1 or vector.size != self.u_px.size:
+                raise ValueError(
+                    f"StripeProfile.{field_name} 必须是一维且与 u_px 等长"
+                )
 
 
 @dataclass(frozen=True)
