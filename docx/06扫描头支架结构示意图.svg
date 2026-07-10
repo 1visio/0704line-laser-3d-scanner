@@ -1,0 +1,166 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="1050" viewBox="0 0 1400 1050">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#263238"/>
+    </marker>
+    <marker id="arrowBlue" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#1f6f9f"/>
+    </marker>
+    <style>
+      .title { font: 700 28px "Microsoft YaHei", Arial, sans-serif; fill: #1f2a30; }
+      .subtitle { font: 700 20px "Microsoft YaHei", Arial, sans-serif; fill: #244b5a; }
+      .label { font: 16px "Microsoft YaHei", Arial, sans-serif; fill: #263238; }
+      .small { font: 13px "Microsoft YaHei", Arial, sans-serif; fill: #37474f; }
+      .tiny { font: 12px "Microsoft YaHei", Arial, sans-serif; fill: #455a64; }
+      .plate { fill: #e8ecef; stroke: #455a64; stroke-width: 2; }
+      .slot { fill: #ffffff; stroke: #607d8b; stroke-width: 2; }
+      .camera { fill: #8db9e8; stroke: #315c7e; stroke-width: 2; }
+      .lens { fill: #36454f; stroke: #111a20; stroke-width: 2; }
+      .laser { fill: #f2c15e; stroke: #8a5a08; stroke-width: 2; }
+      .laserLine { stroke: #1e88e5; stroke-width: 3; stroke-dasharray: 8 6; }
+      .fov { fill: rgba(31,111,159,0.08); stroke: #1f6f9f; stroke-width: 2; stroke-dasharray: 7 5; }
+      .dim { stroke: #263238; stroke-width: 1.6; fill: none; marker-start: url(#arrow); marker-end: url(#arrow); }
+      .center { stroke: #78909c; stroke-width: 1.4; stroke-dasharray: 7 5; }
+      .note { fill: #fff8e1; stroke: #d18420; stroke-width: 1.6; }
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="1400" height="1050" fill="#ffffff"/>
+  <text x="50" y="55" class="title">刚性线激光扫描头支架结构示意图 V1</text>
+  <text x="50" y="84" class="small">范围：仅相机、激光器、固定支架与调节机构；暂不包含俯仰电机、安全罩、防尘罩、碰撞保护。</text>
+
+  <!-- Top view -->
+  <text x="60" y="135" class="subtitle">A. 俯视图：基线调节 + 相机水平角度调节</text>
+  <rect x="60" y="160" width="610" height="310" rx="6" class="plate"/>
+  <text x="82" y="188" class="label">主底板，建议 6061-T6，厚 10-12 mm，约 300 x 160 mm 起步</text>
+
+  <!-- base slots -->
+  <rect x="120" y="235" width="190" height="28" rx="14" class="slot"/>
+  <rect x="120" y="360" width="190" height="28" rx="14" class="slot"/>
+  <circle cx="145" cy="249" r="5" fill="#90a4ae"/>
+  <circle cx="285" cy="249" r="5" fill="#90a4ae"/>
+  <circle cx="145" cy="374" r="5" fill="#90a4ae"/>
+  <circle cx="285" cy="374" r="5" fill="#90a4ae"/>
+  <text x="132" y="224" class="small">激光器滑移槽</text>
+
+  <rect x="365" y="235" width="240" height="28" rx="14" class="slot"/>
+  <rect x="365" y="360" width="240" height="28" rx="14" class="slot"/>
+  <circle cx="395" cy="249" r="5" fill="#90a4ae"/>
+  <circle cx="570" cy="249" r="5" fill="#90a4ae"/>
+  <circle cx="395" cy="374" r="5" fill="#90a4ae"/>
+  <circle cx="570" cy="374" r="5" fill="#90a4ae"/>
+  <text x="418" y="224" class="small">相机基线滑移槽，120-220 mm</text>
+
+  <!-- laser top -->
+  <rect x="118" y="276" width="155" height="72" rx="4" fill="#f3e7c7" stroke="#8a5a08" stroke-width="2"/>
+  <circle cx="170" cy="312" r="25" fill="#ffe0a3" stroke="#8a5a08" stroke-width="2"/>
+  <rect x="165" y="293" width="145" height="38" rx="19" class="laser"/>
+  <text x="128" y="335" class="small">激光器 Phi16.5 夹持环</text>
+  <line x1="310" y1="312" x2="505" y2="312" class="laserLine"/>
+  <text x="318" y="300" class="tiny" fill="#1e88e5">激光平面投向相机视场中心</text>
+
+  <!-- camera top -->
+  <rect x="455" y="260" width="130" height="105" rx="5" fill="#dce7ef" stroke="#455a64" stroke-width="2"/>
+  <path d="M455 250 A92 92 0 0 1 585 250" fill="none" stroke="#607d8b" stroke-width="8"/>
+  <path d="M455 375 A92 92 0 0 0 585 375" fill="none" stroke="#607d8b" stroke-width="8"/>
+  <circle cx="520" cy="312" r="7" fill="#607d8b"/>
+  <rect x="492" y="278" width="55" height="68" rx="5" class="camera"/>
+  <rect x="540" y="292" width="52" height="40" rx="20" class="lens"/>
+  <polygon points="592,292 650,235 650,389 592,332" class="fov"/>
+  <text x="462" y="389" class="small">相机转台板：中心销 + 双弧形槽，水平角度建议 +/- 5-8 deg</text>
+
+  <!-- dimensions top -->
+  <line x1="170" y1="438" x2="520" y2="438" class="dim"/>
+  <line x1="170" y1="418" x2="170" y2="452" stroke="#263238" stroke-width="1.4"/>
+  <line x1="520" y1="418" x2="520" y2="452" stroke="#263238" stroke-width="1.4"/>
+  <text x="287" y="432" class="label">基线 B：120-220 mm 可调；初始建议 180-200 mm</text>
+  <line x1="520" y1="312" x2="650" y2="312" stroke="#1f6f9f" stroke-width="2" marker-end="url(#arrowBlue)"/>
+  <text x="555" y="306" class="tiny" fill="#1f6f9f">相机光轴</text>
+
+  <!-- axes top -->
+  <line x1="80" y1="500" x2="160" y2="500" stroke="#263238" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="80" y1="500" x2="80" y2="420" stroke="#263238" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="168" y="505" class="small">X 基线方向</text>
+  <text x="90" y="426" class="small">Z 工作距离方向</text>
+
+  <!-- Side view -->
+  <text x="740" y="135" class="subtitle">B. 侧视图：激光器俯仰调节 + 相机固定面板</text>
+  <rect x="740" y="380" width="590" height="60" rx="6" class="plate"/>
+  <text x="760" y="416" class="label">主底板</text>
+
+  <!-- camera side bracket -->
+  <rect x="1080" y="210" width="26" height="170" rx="3" class="plate"/>
+  <rect x="1030" y="220" width="110" height="58" rx="5" class="camera"/>
+  <rect x="950" y="232" width="85" height="34" rx="17" class="lens"/>
+  <rect x="925" y="238" width="26" height="22" rx="4" fill="#55636b" stroke="#111a20" stroke-width="2"/>
+  <line x1="970" y1="300" x2="1115" y2="300" stroke="#607d8b" stroke-width="3"/>
+  <circle cx="1093" cy="250" r="5" fill="#607d8b"/>
+  <circle cx="1093" cy="337" r="5" fill="#607d8b"/>
+  <text x="1026" y="197" class="small">相机面板：按 ME2P 孔位开 M3</text>
+  <text x="910" y="286" class="small">镜头轻支撑环，内径按 Phi40 + 0.2 mm</text>
+
+  <!-- laser side bracket -->
+  <rect x="805" y="265" width="25" height="115" rx="3" class="plate"/>
+  <path d="M790 335 A80 80 0 0 1 855 265" fill="none" stroke="#607d8b" stroke-width="8"/>
+  <circle cx="820" cy="335" r="8" fill="#607d8b"/>
+  <line x1="820" y1="335" x2="910" y2="290" stroke="#8a5a08" stroke-width="6"/>
+  <rect x="845" y="285" width="145" height="38" rx="19" class="laser" transform="rotate(-24 845 285)"/>
+  <text x="782" y="250" class="small">激光俯仰板：中心轴 + 弧形槽</text>
+  <text x="804" y="462" class="small">俯仰角建议 10-25 deg，调好后用定位销固化</text>
+
+  <!-- side dimensions -->
+  <line x1="740" y1="485" x2="1330" y2="485" class="dim"/>
+  <text x="966" y="510" class="label">总长按结构空间确定，第一版建议约 260-320 mm</text>
+  <line x1="1335" y1="380" x2="1335" y2="440" class="dim"/>
+  <text x="1345" y="415" class="small">10-12 mm</text>
+
+  <!-- Front / exploded view -->
+  <text x="60" y="585" class="subtitle">C. 建模拆分：建议做成 6 个可加工零件</text>
+  <rect x="60" y="615" width="1270" height="370" rx="8" fill="#f7f9fa" stroke="#cfd8dc" stroke-width="2"/>
+
+  <!-- exploded components -->
+  <rect x="110" y="760" width="245" height="60" rx="5" class="plate"/>
+  <text x="140" y="795" class="label">1 主底板</text>
+  <rect x="145" y="735" width="58" height="14" rx="7" class="slot"/>
+  <rect x="250" y="735" width="58" height="14" rx="7" class="slot"/>
+  <text x="125" y="850" class="small">长槽用于基线调节，调好后补定位销孔</text>
+
+  <line x1="360" y1="790" x2="430" y2="790" stroke="#90a4ae" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <rect x="440" y="685" width="110" height="135" rx="5" class="plate"/>
+  <rect x="455" y="710" width="80" height="48" rx="5" class="camera"/>
+  <circle cx="466" cy="735" r="4" fill="#607d8b"/>
+  <circle cx="525" cy="735" r="4" fill="#607d8b"/>
+  <text x="450" y="852" class="small">2 相机面板</text>
+
+  <line x1="555" y1="745" x2="625" y2="745" stroke="#90a4ae" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <rect x="635" y="720" width="125" height="85" rx="5" fill="#dce7ef" stroke="#455a64" stroke-width="2"/>
+  <path d="M650 710 A70 70 0 0 1 745 710" fill="none" stroke="#607d8b" stroke-width="7"/>
+  <path d="M650 815 A70 70 0 0 0 745 815" fill="none" stroke="#607d8b" stroke-width="7"/>
+  <circle cx="697" cy="762" r="7" fill="#607d8b"/>
+  <text x="635" y="852" class="small">3 相机转台/滑块</text>
+
+  <line x1="765" y1="762" x2="835" y2="762" stroke="#90a4ae" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <rect x="850" y="725" width="120" height="95" rx="5" class="plate"/>
+  <path d="M865 790 A70 70 0 0 1 950 730" fill="none" stroke="#607d8b" stroke-width="7"/>
+  <circle cx="895" cy="790" r="7" fill="#607d8b"/>
+  <text x="858" y="852" class="small">4 激光俯仰板</text>
+
+  <line x1="975" y1="770" x2="1045" y2="770" stroke="#90a4ae" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <rect x="1055" y="735" width="150" height="55" rx="28" class="laser"/>
+  <circle cx="1080" cy="762" r="24" fill="#ffe0a3" stroke="#8a5a08" stroke-width="2"/>
+  <line x1="1080" y1="735" x2="1080" y2="790" stroke="#8a5a08" stroke-width="2"/>
+  <text x="1048" y="852" class="small">5 分体夹持环</text>
+  <text x="1048" y="872" class="tiny">按激光器 Phi16.5 mm 设计</text>
+
+  <rect x="430" y="910" width="235" height="42" rx="6" class="note"/>
+  <text x="448" y="936" class="small">6 镜头轻支撑环：只抗振，不强行校正光轴</text>
+
+  <!-- notes -->
+  <rect x="770" y="905" width="510" height="58" rx="6" class="note"/>
+  <text x="790" y="930" class="small">建模顺序：先画主底板基准面 -> 相机滑块/转台 -> 相机面板 -> 激光俯仰板 -> 夹持环。</text>
+  <text x="790" y="950" class="small">第一版所有可调槽锁紧后，建议补钻铰 2 个定位销孔。</text>
+</svg>

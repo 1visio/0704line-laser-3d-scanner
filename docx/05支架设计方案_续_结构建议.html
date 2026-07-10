@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>线激光扫描头支架结构建议续稿</title>
+  <style>
+    body {
+      font-family: "Microsoft YaHei", Arial, sans-serif;
+      margin: 32px auto;
+      max-width: 1080px;
+      line-height: 1.65;
+      color: #20242a;
+    }
+    h1, h2, h3 { line-height: 1.25; }
+    h1 { font-size: 28px; border-bottom: 3px solid #2f6f73; padding-bottom: 10px; }
+    h2 { margin-top: 32px; color: #1f5558; }
+    table { border-collapse: collapse; width: 100%; margin: 14px 0 22px; }
+    th, td { border: 1px solid #cbd5d6; padding: 8px 10px; vertical-align: top; }
+    th { background: #eef5f5; }
+    .note { background: #f3f7f7; border-left: 4px solid #2f6f73; padding: 12px 16px; }
+    .warn { background: #fff7eb; border-left: 4px solid #d18420; padding: 12px 16px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+    .card { border: 1px solid #d6dee0; padding: 16px; border-radius: 6px; }
+    svg { width: 100%; height: auto; border: 1px solid #d6dee0; background: #fbfcfc; }
+    code, pre { font-family: Consolas, monospace; }
+    pre { background: #f6f8fa; padding: 12px; overflow: auto; }
+    a { color: #1d5f91; }
+  </style>
+</head>
+<body>
+  <h1>线激光扫描头支架结构建议续稿</h1>
+  <p>日期：2026-07-06</p>
+
+  <div class="note">
+    <strong>结论：</strong>推荐采用“紧凑一体式箱型主架 + 可锁紧相机座 + 可锁紧激光器分体夹持座”。不建议把激光器自带 100 mm 高万向支架直接作为机器人末端正式结构件。
+  </div>
+
+  <h2>1. 当前设计输入</h2>
+  <table>
+    <tr><th>项目</th><th>参数</th></tr>
+    <tr><td>相机</td><td>大恒 ME2P-1230-23U3M，约 36 mm x 31 mm x 38.8 mm，约 66 g</td></tr>
+    <tr><td>镜头</td><td>大恒 HN-P-2524-20M-C1.1/1，25 mm，约 Phi40 mm x 58.44 mm，约 164 g</td></tr>
+    <tr><td>激光器</td><td>450 nm，30 deg 扇角，1 m 处线长约 536 mm</td></tr>
+    <tr><td>激光器现有支架</td><td>垂直高度约 100 mm，底盘直径 80 mm，3 孔间距 62 mm，安装孔 Phi3.75 mm，夹持圈 Phi16.5 mm，约 0.12 kg</td></tr>
+    <tr><td>目标工作距离</td><td>约 1 m</td></tr>
+    <tr><td>目标视场</td><td>约 0.5 m x 0.5 m</td></tr>
+    <tr><td>当前基线设想</td><td>120-220 mm 可调</td></tr>
+  </table>
+
+  <h2>2. 方案对比</h2>
+  <table>
+    <tr><th>方案</th><th>优点</th><th>问题</th><th>建议</th></tr>
+    <tr>
+      <td>直接使用激光器自带万向支架</td>
+      <td>最快、调试方便</td>
+      <td>高、软、重，整体俯仰扫描时容易放大振动</td>
+      <td>仅用于实验台验证，不作为最终机器人末端结构</td>
+    </tr>
+    <tr>
+      <td>平板 + 长圆槽 + L 型相机/激光座</td>
+      <td>加工简单、成本低</td>
+      <td>抗扭刚度中等，长槽锁紧后重复性有限</td>
+      <td>可作为快速第一版，但要加筋和定位销</td>
+    </tr>
+    <tr>
+      <td>箱型主架 + 可调模块 + 定位销固化</td>
+      <td>刚度高、惯量可控、外参稳定</td>
+      <td>建模和加工稍复杂</td>
+      <td><strong>推荐</strong></td>
+    </tr>
+  </table>
+
+  <h2>3. 光路与基线建议</h2>
+  <p>推荐“同侧斜射三角测量”：相机近似正视工作面，激光器布置在相机一侧，激光平面穿过相机视场中心。反射镜式方案会增加标定变量和装配误差，第一版样机不优先。</p>
+  <table>
+    <tr><th>基线</th><th>1 m 工作距离下几何夹角约值</th><th>评价</th></tr>
+    <tr><td>120 mm</td><td>6.8 deg</td><td>紧凑、遮挡少，但深度灵敏度偏低</td></tr>
+    <tr><td>160 mm</td><td>9.1 deg</td><td>兼顾紧凑和可用灵敏度</td></tr>
+    <tr><td>180 mm</td><td>10.2 deg</td><td>推荐初始值</td></tr>
+    <tr><td>220 mm</td><td>12.4 deg</td><td>推荐调试上限，深度灵敏度更好</td></tr>
+    <tr><td>268 mm</td><td>15.0 deg</td><td>若追求更强三角测量灵敏度，需要放宽当前基线范围</td></tr>
+  </table>
+
+  <h2>4. 结构示意图</h2>
+  <div class="grid">
+    <div class="card">
+      <h3>俯视示意</h3>
+      <svg viewBox="0 0 720 360" role="img" aria-label="top view schematic">
+        <defs>
+          <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L9,3 z" fill="#2f6f73"></path>
+          </marker>
+        </defs>
+        <line x1="60" y1="300" x2="660" y2="300" stroke="#2f6f73" stroke-width="2" marker-end="url(#arrow)"></line>
+        <text x="540" y="326" font-size="18">X / 基线方向</text>
+        <line x1="80" y1="320" x2="80" y2="45" stroke="#2f6f73" stroke-width="2" marker-end="url(#arrow)"></line>
+        <text x="96" y="65" font-size="18">Z / 工作面方向</text>
+        <rect x="380" y="220" width="150" height="52" rx="4" fill="#dae8ef" stroke="#385d6b" stroke-width="2"></rect>
+        <text x="405" y="253" font-size="18">相机座</text>
+        <rect x="530" y="218" width="72" height="56" rx="4" fill="#f4f1df" stroke="#746a35" stroke-width="2"></rect>
+        <text x="538" y="252" font-size="16">相机</text>
+        <rect x="160" y="226" width="150" height="40" rx="4" fill="#e9e3f0" stroke="#655076" stroke-width="2"></rect>
+        <text x="178" y="252" font-size="17">激光滑移座</text>
+        <line x1="250" y1="246" x2="450" y2="246" stroke="#51575c" stroke-width="6"></line>
+        <text x="292" y="229" font-size="16">基线 120-220 mm</text>
+        <line x1="218" y1="226" x2="455" y2="92" stroke="#d18420" stroke-width="3"></line>
+        <line x1="250" y1="226" x2="500" y2="92" stroke="#d18420" stroke-width="1.5" stroke-dasharray="8 6"></line>
+        <text x="250" y="108" font-size="16" fill="#8a540e">激光平面穿过相机视场中心</text>
+        <circle cx="220" cy="226" r="15" fill="#f7cf83" stroke="#8a540e" stroke-width="2"></circle>
+        <text x="145" y="210" font-size="16">Phi16.5 夹持环</text>
+      </svg>
+    </div>
+    <div class="card">
+      <h3>侧视示意</h3>
+      <svg viewBox="0 0 720 360" role="img" aria-label="side view schematic">
+        <rect x="190" y="110" width="320" height="62" rx="4" fill="#dae8ef" stroke="#385d6b" stroke-width="2"></rect>
+        <text x="285" y="148" font-size="18">CNC 箱型主承力底座</text>
+        <rect x="405" y="54" width="72" height="56" rx="4" fill="#f4f1df" stroke="#746a35" stroke-width="2"></rect>
+        <text x="422" y="89" font-size="16">相机</text>
+        <rect x="465" y="66" width="100" height="32" rx="16" fill="#ece9db" stroke="#746a35" stroke-width="2"></rect>
+        <text x="484" y="88" font-size="15">镜头/滤镜</text>
+        <line x1="445" y1="110" x2="445" y2="54" stroke="#385d6b" stroke-width="6"></line>
+        <polygon points="210,172 275,172 245,240" fill="#edf3f3" stroke="#385d6b" stroke-width="2"></polygon>
+        <polygon points="445,172 510,172 475,240" fill="#edf3f3" stroke="#385d6b" stroke-width="2"></polygon>
+        <rect x="250" y="235" width="220" height="42" rx="4" fill="#e9e3f0" stroke="#655076" stroke-width="2"></rect>
+        <text x="296" y="262" font-size="17">电机转轴连接板</text>
+        <circle cx="360" cy="300" r="20" fill="#f7cf83" stroke="#8a540e" stroke-width="3"></circle>
+        <text x="387" y="307" font-size="17">俯仰电机轴</text>
+        <line x1="360" y1="300" x2="360" y2="70" stroke="#d18420" stroke-width="2" stroke-dasharray="8 6"></line>
+        <text x="375" y="205" font-size="15" fill="#8a540e">电机轴靠近质心/光心</text>
+      </svg>
+    </div>
+  </div>
+
+  <h2>5. 相机支架</h2>
+  <ul>
+    <li>以相机机身侧面或底面作为主定位面，用相机自带 M3 孔固定。</li>
+    <li>至少 2 颗螺钉固定，最好 4 颗，并增加定位台阶抗剪。</li>
+    <li>俯仰调节采用中心转轴孔 + 双弧形槽，范围建议 +/- 5 deg，最多 +/- 10 deg。</li>
+    <li>镜头前端增加轻支撑环，内径留 0.1-0.3 mm 余量，只抗振，不强行矫正光轴。</li>
+  </ul>
+
+  <h2>6. 激光器支架</h2>
+  <ul>
+    <li>按 Phi16.5 mm 做分体夹持环，夹持长度建议 25-35 mm。</li>
+    <li>基线通过滑移座实现 120-220 mm 调节。</li>
+    <li>激光俯仰通过圆心转轴 + 弧形槽实现，范围建议 10-25 deg。</li>
+    <li>激光滚转通过夹持环绕激光轴旋转实现，范围建议 +/- 10 deg。</li>
+    <li>线缆从侧后方固定，避免线缆拖拽改变激光角度。</li>
+  </ul>
+
+  <h2>7. CNC 输出建议</h2>
+  <p>第一版建议分件加工：主承力底座、相机俯仰板、镜头支撑环、激光基线滑块、激光角度板、激光分体夹持环。输出 STEP、PDF 工程图、BOM、装配爆炸图，并标注相机光轴、激光平面、基线、工作距离。</p>
+
+  <h2>8. 参考图片链接</h2>
+  <ul>
+    <li><a href="https://support.cognex.com/docs/dmst_616SR1/web/EN/DM300_Manual/Content/Topics/DM300_360_470_Manual/Acc_MountingBrackets.htm?TocPath=Getting+Started%7CDataMan+300+Series+Accessories%7C_____8">Cognex 外置光源/传感器可调支架</a></li>
+    <li><a href="https://www.sukhamburg.com/products/linescancamera/linescancamera/accessories/mounting.html">Schafter + Kirchhoff 线阵相机刚性安装环支架</a></li>
+    <li><a href="https://th.misumi-ec.com/en/vona2/detail/110400469320/">MISUMI 相机角度调整座</a></li>
+    <li><a href="https://www.dadisick.com/pid18444072/Laser-displacement-sensor-COMS-Distance-Sensor-DADISICK.htm">DADISICK 激光位移传感器安装附件示意</a></li>
+  </ul>
+
+  <h2>9. 待确认参数</h2>
+  <ol>
+    <li>俯仰电机型号、额定/峰值扭矩、允许负载惯量。</li>
+    <li>电机输出法兰孔位和中心定位方式。</li>
+    <li>期望俯仰扫描角度范围和最大角速度/加速度。</li>
+    <li>激光器本体准确外径、长度、出光口到夹持位置距离。</li>
+    <li>机器人末端允许的扫描头最大宽度、高度、重量。</li>
+  </ol>
+</body>
+</html>

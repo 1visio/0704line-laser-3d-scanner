@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>刚性线激光扫描头支架建模说明</title>
+  <style>
+    body {
+      font-family: "Microsoft YaHei", Arial, sans-serif;
+      max-width: 1120px;
+      margin: 30px auto;
+      color: #1f2a30;
+      line-height: 1.65;
+    }
+    h1 { font-size: 30px; border-bottom: 3px solid #2f6f73; padding-bottom: 10px; }
+    h2 { margin-top: 30px; color: #1f5558; }
+    table { width: 100%; border-collapse: collapse; margin: 14px 0 22px; }
+    th, td { border: 1px solid #cbd5d6; padding: 8px 10px; vertical-align: top; }
+    th { background: #eef5f5; }
+    .note { background: #f3f7f7; border-left: 4px solid #2f6f73; padding: 12px 16px; }
+    .warn { background: #fff8e1; border-left: 4px solid #d18420; padding: 12px 16px; }
+    pre { background: #f6f8fa; padding: 12px; overflow: auto; }
+    img { width: 100%; border: 1px solid #d6dee0; }
+  </style>
+</head>
+<body>
+  <h1>刚性线激光扫描头支架建模说明</h1>
+  <p>日期：2026-07-06</p>
+
+  <div class="note">
+    <strong>推荐方案：</strong>参照你给的相机面板式结构，但改为“厚主底板 + 相机滑块/转台 + 激光俯仰夹持座”的线激光扫描头结构。暂不考虑俯仰电机、安全罩、防尘罩和碰撞保护。
+  </div>
+
+  <h2>1. 结构图</h2>
+  <p>下面的 SVG 可以直接作为三维建模参考图使用，包含俯视、侧视和拆分建模关系。</p>
+  <img src="./06扫描头支架结构示意图.svg" alt="刚性线激光扫描头支架结构示意图">
+
+  <h2>2. 总体结构</h2>
+  <pre>主底板
+  ├─ 相机基线滑块
+  │   ├─ 相机水平角度转台
+  │   └─ 相机安装面板
+  │       └─ 镜头轻支撑环
+  └─ 激光器滑块
+      └─ 激光器俯仰调节板
+          └─ Phi16.5 分体夹持环</pre>
+
+  <h2>3. 相机支架</h2>
+  <ul>
+    <li>相机先装在独立面板上，面板按 <code>ME2P-1230-23U3M机械尺寸.png</code> 精确开孔。</li>
+    <li>面板厚度建议 6-8 mm，增加定位台阶，避免只靠螺钉抗剪。</li>
+    <li>相机水平角度转台采用中心销 + 双弧形槽，建议调节范围 ±5°，最多 ±8°。</li>
+    <li>镜头轻支撑环按 <code>Phi40 + 0.2 mm</code> 起步，只用于抗振，不用于矫正光轴。</li>
+  </ul>
+
+  <h2>4. 激光器支架</h2>
+  <ul>
+    <li>激光器按 <code>Phi16.5 mm</code> 分体夹持环设计，夹持长度建议 25-35 mm。</li>
+    <li>激光俯仰调节板采用中心转轴 + 双弧形槽，建议 10-25°。</li>
+    <li>夹持环允许激光器绕自身轴 ±10° 滚转，用于调激光线水平度。</li>
+    <li>不建议使用激光器自带 100 mm 高万向支架作为正式上机结构。</li>
+  </ul>
+
+  <h2>5. 第一版尺寸建议</h2>
+  <table>
+    <tr><th>项目</th><th>建议</th></tr>
+    <tr><td>主底板</td><td>6061-T6，厚 10-12 mm，约 260-320 mm x 130-180 mm</td></tr>
+    <tr><td>相机面板</td><td>厚 6-8 mm，按相机图纸开孔</td></tr>
+    <tr><td>相机水平角度</td><td>±5°，最多 ±8°</td></tr>
+    <tr><td>激光俯仰角</td><td>10-25°</td></tr>
+    <tr><td>激光滚转角</td><td>±10°</td></tr>
+    <tr><td>基线范围</td><td>120-220 mm，初始建议 180-200 mm</td></tr>
+  </table>
+
+  <h2>6. 建模顺序</h2>
+  <ol>
+    <li>建主底板，画外形、厚度、两组长圆孔。</li>
+    <li>建相机滑块和水平角度转台。</li>
+    <li>建相机安装面板并导入相机包络。</li>
+    <li>建镜头轻支撑环。</li>
+    <li>建激光器滑块、俯仰调节板和分体夹持环。</li>
+    <li>装配检查视场、激光平面、基线、螺钉可达性。</li>
+  </ol>
+
+  <div class="warn">
+    第一版长槽用于调试，调好后建议补钻铰定位销孔，或者第二版改成固定角度和固定基线。这样联合外参更稳定。
+  </div>
+</body>
+</html>

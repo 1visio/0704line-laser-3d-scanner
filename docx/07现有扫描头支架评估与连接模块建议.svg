@@ -1,0 +1,128 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="980" viewBox="0 0 1400 980">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#263238"/>
+    </marker>
+    <style>
+      .title { font: 700 28px "Microsoft YaHei", Arial, sans-serif; fill: #1f2a30; }
+      .subtitle { font: 700 20px "Microsoft YaHei", Arial, sans-serif; fill: #244b5a; }
+      .label { font: 16px "Microsoft YaHei", Arial, sans-serif; fill: #263238; }
+      .small { font: 13px "Microsoft YaHei", Arial, sans-serif; fill: #37474f; }
+      .tiny { font: 12px "Microsoft YaHei", Arial, sans-serif; fill: #455a64; }
+      .plate { fill: #e9edf0; stroke: #455a64; stroke-width: 2; }
+      .dark { fill: #607d8b; stroke: #263238; stroke-width: 2; }
+      .slot { fill: #ffffff; stroke: #607d8b; stroke-width: 2; }
+      .warn { fill: #fff8e1; stroke: #d18420; stroke-width: 2; }
+      .good { fill: #edf7ed; stroke: #2e7d32; stroke-width: 2; }
+      .camera { fill: #8db9e8; stroke: #315c7e; stroke-width: 2; }
+      .laser { fill: #f2c15e; stroke: #8a5a08; stroke-width: 2; }
+      .dim { stroke: #263238; stroke-width: 1.5; fill: none; marker-start: url(#arrow); marker-end: url(#arrow); }
+      .axis { stroke: #78909c; stroke-width: 1.2; stroke-dasharray: 7 5; }
+    </style>
+  </defs>
+
+  <rect width="1400" height="980" fill="#ffffff"/>
+  <text x="50" y="55" class="title">现有扫描头支架评估与可替换连接模块建议</text>
+  <text x="50" y="84" class="small">目标：保留当前相机/激光器可调结构，增加可换连接模块，先固定到铝型材，后续替换为机器人末端接口。</text>
+
+  <!-- Existing structure assessment -->
+  <text x="60" y="135" class="subtitle">A. 当前结构可行，但建议补强与定位</text>
+  <rect x="60" y="160" width="620" height="270" rx="8" class="plate"/>
+  <rect x="125" y="250" width="440" height="48" rx="8" fill="#f7f9fa" stroke="#455a64" stroke-width="2"/>
+  <rect x="150" y="265" width="300" height="14" rx="7" class="slot"/>
+  <rect x="150" y="292" width="300" height="14" rx="7" class="slot"/>
+  <circle cx="185" cy="286" r="5" fill="#90a4ae"/>
+  <circle cx="230" cy="286" r="5" fill="#90a4ae"/>
+  <circle cx="275" cy="286" r="5" fill="#90a4ae"/>
+  <circle cx="320" cy="286" r="5" fill="#90a4ae"/>
+  <circle cx="365" cy="286" r="5" fill="#90a4ae"/>
+  <circle cx="410" cy="286" r="5" fill="#90a4ae"/>
+  <rect x="220" y="190" width="85" height="78" rx="6" class="camera"/>
+  <text x="222" y="183" class="small">相机滑块</text>
+  <rect x="530" y="222" width="110" height="80" rx="5" fill="#f3e7c7" stroke="#8a5a08" stroke-width="2"/>
+  <path d="M552 268 A65 65 0 0 1 630 218" fill="none" stroke="#607d8b" stroke-width="8"/>
+  <circle cx="558" cy="268" r="7" fill="#607d8b"/>
+  <rect x="560" y="270" width="145" height="36" rx="18" class="laser" transform="rotate(65 560 270)"/>
+  <line x1="260" y1="340" x2="595" y2="340" class="dim"/>
+  <text x="335" y="333" class="label">基线 70-170 mm</text>
+  <rect x="85" y="360" width="555" height="45" rx="6" class="warn"/>
+  <text x="103" y="388" class="small">风险：长条薄板 + 长槽 + 多孔会降低弯扭刚度；70-170 mm 在 1 m 下三角夹角偏小。</text>
+
+  <!-- Optimized structure -->
+  <text x="740" y="135" class="subtitle">B. 建议优化：从薄长板变成“带筋梁 + 可换连接板”</text>
+  <rect x="740" y="160" width="590" height="270" rx="8" class="plate"/>
+  <rect x="795" y="235" width="420" height="50" rx="8" fill="#f7f9fa" stroke="#455a64" stroke-width="2"/>
+  <rect x="800" y="288" width="410" height="34" rx="5" class="dark"/>
+  <text x="932" y="310" class="small" fill="#ffffff">下翻边 / 加强肋</text>
+  <polygon points="805,322 850,322 805,390" fill="#edf3f3" stroke="#455a64" stroke-width="2"/>
+  <polygon points="1165,322 1210,322 1210,390" fill="#edf3f3" stroke="#455a64" stroke-width="2"/>
+  <rect x="910" y="175" width="180" height="45" rx="5" class="good"/>
+  <text x="927" y="203" class="small">相机/激光调好后补定位销</text>
+  <rect x="1240" y="210" width="55" height="150" rx="6" class="good"/>
+  <text x="1252" y="248" class="tiny">连接</text>
+  <text x="1252" y="268" class="tiny">模块</text>
+  <text x="1252" y="288" class="tiny">接口</text>
+  <line x1="1215" y1="260" x2="1240" y2="260" stroke="#2e7d32" stroke-width="3" marker-end="url(#arrow)"/>
+  <text x="760" y="388" class="small">建议：主板 8-10 mm 起步；若仍细长，增加下翻边、侧肋或背部矩形梁。</text>
+
+  <!-- Adapter module options -->
+  <text x="60" y="500" class="subtitle">C. 可替换连接模块：推荐三层接口</text>
+  <rect x="60" y="525" width="1270" height="380" rx="8" fill="#f8fafb" stroke="#cfd8dc" stroke-width="2"/>
+
+  <!-- scan head plate -->
+  <rect x="120" y="650" width="250" height="70" rx="6" class="plate"/>
+  <text x="150" y="690" class="label">扫描头主支架</text>
+  <circle cx="155" cy="672" r="6" fill="#607d8b"/>
+  <circle cx="335" cy="672" r="6" fill="#607d8b"/>
+  <circle cx="155" cy="706" r="6" fill="#607d8b"/>
+  <circle cx="335" cy="706" r="6" fill="#607d8b"/>
+
+  <line x1="380" y1="685" x2="455" y2="685" stroke="#607d8b" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <!-- common interface plate -->
+  <rect x="470" y="590" width="215" height="190" rx="8" class="good"/>
+  <text x="503" y="622" class="label">通用接口板</text>
+  <text x="493" y="646" class="small">固定孔 + 销孔</text>
+  <circle cx="525" cy="690" r="13" class="slot"/>
+  <circle cx="630" cy="690" r="13" class="slot"/>
+  <circle cx="525" cy="742" r="13" class="slot"/>
+  <circle cx="630" cy="742" r="13" class="slot"/>
+  <circle cx="577" cy="716" r="6" fill="#2e7d32"/>
+  <circle cx="655" cy="610" r="5" fill="#2e7d32"/>
+  <text x="492" y="818" class="small">这块板以后不变，机器人/铝型材只换后级模块</text>
+
+  <line x1="700" y1="685" x2="775" y2="685" stroke="#607d8b" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <!-- extrusion adapter -->
+  <rect x="795" y="610" width="235" height="150" rx="8" fill="#f7f9fa" stroke="#455a64" stroke-width="2"/>
+  <rect x="825" y="632" width="175" height="28" rx="4" fill="#cfd8dc" stroke="#607d8b" stroke-width="2"/>
+  <rect x="825" y="682" width="175" height="28" rx="4" fill="#cfd8dc" stroke="#607d8b" stroke-width="2"/>
+  <rect x="835" y="638" width="155" height="8" rx="4" fill="#90a4ae"/>
+  <rect x="835" y="688" width="155" height="8" rx="4" fill="#90a4ae"/>
+  <rect x="790" y="575" width="245" height="42" rx="5" class="plate"/>
+  <rect x="820" y="585" width="65" height="16" rx="8" class="slot"/>
+  <rect x="940" y="585" width="65" height="16" rx="8" class="slot"/>
+  <text x="827" y="748" class="label">铝型材转接模块</text>
+  <text x="806" y="786" class="small">适合 2020/3030/4040，使用 T 螺母 + 槽孔</text>
+
+  <!-- robot adapter -->
+  <rect x="1105" y="600" width="160" height="160" rx="12" fill="#f7f9fa" stroke="#455a64" stroke-width="2"/>
+  <circle cx="1185" cy="680" r="45" fill="#ffffff" stroke="#607d8b" stroke-width="2"/>
+  <circle cx="1185" cy="680" r="13" fill="#cfd8dc" stroke="#607d8b" stroke-width="2"/>
+  <circle cx="1185" cy="622" r="9" class="slot"/>
+  <circle cx="1243" cy="680" r="9" class="slot"/>
+  <circle cx="1185" cy="738" r="9" class="slot"/>
+  <circle cx="1127" cy="680" r="9" class="slot"/>
+  <circle cx="1150" cy="645" r="5" fill="#2e7d32"/>
+  <circle cx="1220" cy="715" r="5" fill="#2e7d32"/>
+  <text x="1107" y="790" class="label">机器人末端转接模块</text>
+  <text x="1098" y="816" class="small">后续按电机/机器人法兰重做此板</text>
+
+  <line x1="1035" y1="660" x2="1095" y2="660" stroke="#607d8b" stroke-width="3" marker-end="url(#arrow)"/>
+  <text x="1045" y="642" class="tiny">替换</text>
+  <line x1="1035" y1="710" x2="1095" y2="710" stroke="#607d8b" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <!-- bottom notes -->
+  <rect x="100" y="925" width="1180" height="34" rx="6" class="warn"/>
+  <text x="120" y="947" class="small">接口原则：扫描头本体只保留一套标准孔位；铝型材安装和机器人末端安装都通过可替换连接模块完成。</text>
+</svg>

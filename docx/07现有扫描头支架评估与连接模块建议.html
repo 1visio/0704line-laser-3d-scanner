@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>现有扫描头支架评估与连接模块建议</title>
+  <style>
+    body { font-family: "Microsoft YaHei", Arial, sans-serif; max-width: 1120px; margin: 30px auto; line-height: 1.65; color: #1f2a30; }
+    h1 { font-size: 30px; border-bottom: 3px solid #2f6f73; padding-bottom: 10px; }
+    h2 { margin-top: 30px; color: #1f5558; }
+    table { width: 100%; border-collapse: collapse; margin: 14px 0 22px; }
+    th, td { border: 1px solid #cbd5d6; padding: 8px 10px; vertical-align: top; }
+    th { background: #eef5f5; }
+    img { width: 100%; border: 1px solid #d6dee0; }
+    .note { background: #f3f7f7; border-left: 4px solid #2f6f73; padding: 12px 16px; }
+    .warn { background: #fff8e1; border-left: 4px solid #d18420; padding: 12px 16px; }
+    pre { background: #f6f8fa; padding: 12px; overflow: auto; }
+    a { color: #1d5f91; }
+  </style>
+</head>
+<body>
+  <h1>现有扫描头支架评估与连接模块建议</h1>
+  <p>日期：2026-07-07</p>
+
+  <div class="note">
+    <strong>结论：</strong>当前结构可以用于初步实验，但更像第一版调试支架。建议重点加强主板抗扭、相机滑块防偏摆、激光器双点锁紧，并增加“通用接口板 + 可替换连接模块”。
+  </div>
+
+  <h2>1. 示意图</h2>
+  <img src="./07现有扫描头支架评估与连接模块建议.svg" alt="现有扫描头支架评估与连接模块建议">
+
+  <h2>2. 主要风险</h2>
+  <ul>
+    <li>基线 70-170 mm 在 1 m 工作距离下对应约 4.0-9.6 deg，Z 向灵敏度偏弱。</li>
+    <li>长条主板、长槽和多排圆孔会降低弯扭刚度。</li>
+    <li>激光器圆弧槽最好改成中心转轴 + 双弧形锁紧槽。</li>
+    <li>相机直槽调基线需要增加导向边、定位台阶或定位销，避免偏摆。</li>
+  </ul>
+
+  <h2>3. 孔径建议</h2>
+  <table>
+    <tr><th>螺钉</th><th>当前通孔</th><th>建议</th></tr>
+    <tr><td>M3</td><td>3.3 mm</td><td>普通圆孔可以；若长槽建议 3.6-4.0 mm 并配垫圈</td></tr>
+    <tr><td>M4</td><td>4.5 mm</td><td>普通圆孔合适；若长槽建议约 5.0 mm 并配大垫圈或压板</td></tr>
+  </table>
+  <div class="warn">
+    反复调节的实验件建议优先用圆柱头内六角螺钉 + 平垫圈。沉头螺钉会自动找锥面中心，不利于微调。
+  </div>
+
+  <h2>4. 连接模块建议</h2>
+  <pre>扫描头主支架
+  ↓
+通用接口板：以后尽量不变
+  ↓
+可替换连接模块
+  ├─ 铝型材转接模块：当前实验用
+  └─ 机器人末端转接模块：后续替换</pre>
+
+  <p>通用接口板建议厚 8-10 mm，使用 4 x M4 固定孔 + 2 个 Phi4H7 或 Phi5H7 定位销孔。铝型材转接模块可以先做 L 型转接座：一面连 3030/4040 铝型材，另一面连通用接口板，两侧加三角筋。</p>
+
+  <h2>5. 参考图</h2>
+  <ul>
+    <li><a href="https://www.autoauditorium.com/fm_tslot.html">T-slot camera mount：铝型材相机支架参考</a></li>
+    <li><a href="https://multipix.com/product/hikrobot-ca-ce-camera-bracket/">HIKrobot camera bracket：工业相机 U/L 型支架参考</a></li>
+    <li><a href="https://frigate.ai/product/end-of-arm-tooling-adapter-plate/">EOAT adapter plate：机器人末端接口板参考</a></li>
+    <li><a href="https://vention.io/parts/robot-flange-to-extrusion-adaptor-2025">Robot flange to extrusion adaptor：机器人法兰到铝型材转接参考</a></li>
+    <li><a href="https://www.sigmaintegrale.com/products/t-slot-mounting-bracket">T-slot mounting bracket：铝型材长槽转接板参考</a></li>
+  </ul>
+</body>
+</html>
