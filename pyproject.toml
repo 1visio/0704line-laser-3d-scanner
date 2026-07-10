@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "line-laser-static-head"
+version = "0.1.0"
+description = "线激光静态扫描头最小研发框架"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.26"]
+
+[project.scripts]
+line-laser-static = "line_laser_static.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

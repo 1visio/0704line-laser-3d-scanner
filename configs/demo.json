@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "config_version": "demo-v1",
+  "output_dir": "../outputs/demo",
+  "calibration_file": "../calibration/demo.json",
+  "source": {
+    "name": "synthetic",
+    "options": {
+      "width": 640,
+      "height": 480,
+      "stripe_row_px": 239.25,
+      "stripe_slope": 0.03,
+      "sigma_px": 1.4,
+      "amplitude": 220.0,
+      "background": 8.0,
+      "noise_std": 1.0,
+      "seed": 7,
+      "exposure_us": 2000.0,
+      "gain_db": 0.0
+    }
+  },
+  "extraction": {
+    "name": "centroid",
+    "options": {
+      "window_radius": 4,
+      "min_contrast": 30.0
+    }
+  },
+  "reconstruction": {
+    "name": "ray_plane",
+    "options": {}
+  }
+}
