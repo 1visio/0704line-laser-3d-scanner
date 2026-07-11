@@ -22,6 +22,26 @@ class FrameMetadata:
     camera_model: str
     serial_number: str
     sdk_version: str
+    offset_x_px: int = 0
+    offset_y_px: int = 0
+    full_width_px: int | None = None
+    full_height_px: int | None = None
+
+    def __post_init__(self) -> None:
+        if self.width <= 0 or self.height <= 0:
+            raise ValueError("FrameMetadata.width/height 必须为正数")
+        if self.offset_x_px < 0 or self.offset_y_px < 0:
+            raise ValueError("相机 ROI 的 OffsetX/OffsetY 不能为负数")
+        if self.full_width_px is not None:
+            if self.full_width_px <= 0:
+                raise ValueError("full_width_px 必须为正数")
+            if self.offset_x_px + self.width > self.full_width_px:
+                raise ValueError("相机 ROI 在 x 方向超出完整图像")
+        if self.full_height_px is not None:
+            if self.full_height_px <= 0:
+                raise ValueError("full_height_px 必须为正数")
+            if self.offset_y_px + self.height > self.full_height_px:
+                raise ValueError("相机 ROI 在 y 方向超出完整图像")
 
 
 @dataclass(frozen=True)

@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "config_version": "ME2P-1230-450NM-DAHENG-USB3-MONO8-V1",
+  "output_dir": "../outputs/me2p-1230-450nm-daheng-usb3",
+  "calibration_file": "../calibration/me2p_1230_450nm_preset.json",
+  "source": {
+    "name": "daheng_usb3",
+    "options": {
+      "serial_number": null,
+      "device_index": 1,
+      "width": 4096,
+      "height": 512,
+      "offset_x_px": 0,
+      "offset_y_px": 1244,
+      "full_width_px": 4096,
+      "full_height_px": 3000,
+      "pixel_format": "Mono8",
+      "exposure_us": 2000.0,
+      "gain_db": 0.0,
+      "discovery_timeout_ms": 1000,
+      "capture_timeout_ms": 3000
+    }
+  },
+  "extraction": {
+    "name": "mono_sensor_roi",
+    "options": {
+      "window_radius": 5,
+      "background_percentile": 50.0,
+      "min_contrast": 30.0,
+      "min_snr": 10.0,
+      "noise_floor": 1.0,
+      "min_fwhm_px": 3.0,
+      "max_fwhm_px": 6.0,
+      "saturation_fraction": 0.98,
+      "reject_saturated": true,
+      "sensor_max_value": 255.0
+    }
+  },
+  "reconstruction": {
+    "name": "ray_plane",
+    "options": {}
+  }
+}
