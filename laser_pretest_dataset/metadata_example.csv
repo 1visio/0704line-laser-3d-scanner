@@ -1,0 +1,4 @@
+exp_id,image_dir,exposure_us,gain,material,distance_mm,baseline_mm,laser_angle_deg,frame_count,remark
+A001,raw/A001,2000,0,white_board,300,80,15,20,基准组
+A002,raw/A002,4000,0,brushed_aluminum,300,80,15,20,高反射材料
+A003,raw/A003,2000,0,black_plastic,400,80,20,20,远工作距离
