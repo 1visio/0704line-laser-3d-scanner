@@ -21,6 +21,14 @@ class SyntheticCameraSession:
         self._rows = np.arange(config.height, dtype=np.float32)[:, None]
         self._columns = np.arange(config.width, dtype=np.float32)[None, :]
 
+    def configure(self, config: CameraConfig) -> CameraConfig:
+        if self._started:
+            raise RuntimeError("模拟相机取流时不能修改采集参数")
+        self.config = config
+        self._rows = np.arange(config.height, dtype=np.float32)[:, None]
+        self._columns = np.arange(config.width, dtype=np.float32)[None, :]
+        return self.config
+
     def start(self) -> None:
         self._started = True
         self._next_frame_time = time.monotonic()

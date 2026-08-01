@@ -220,6 +220,30 @@ def _camera_ticks(info: object) -> int | None:
     return int(info.nDevTimeStamp) if hasattr(info, "nDevTimeStamp") else None
 
 
+def _apply_config(
+    camera: object, sdk: ModuleType, config: CameraConfig
+) -> CameraConfig:
+    _set_enum(camera, "PixelFormat", config.pixel_format)
+    exposure = _set_float(camera, sdk, "ExposureTime", config.exposure_us)
+    gain = _set_float(camera, sdk, "Gain", config.gain_db)
+    _set_int(camera, sdk, "OffsetX", 0)
+    _set_int(camera, sdk, "OffsetY", 0)
+    width = _set_int(camera, sdk, "Width", config.width)
+    height = _set_int(camera, sdk, "Height", config.height)
+    offset_x = _set_int(camera, sdk, "OffsetX", config.offset_x)
+    offset_y = _set_int(camera, sdk, "OffsetY", config.offset_y)
+    return CameraConfig(
+        exposure_us=exposure,
+        gain_db=gain,
+        pixel_format=config.pixel_format,
+        offset_x=offset_x,
+        offset_y=offset_y,
+        width=width,
+        height=height,
+        timeout_ms=config.timeout_ms,
+    )
+
+
 class MvsCameraSession:
     """Exclusive continuous-acquisition session for one HIKROBOT camera."""
 
@@ -258,25 +282,7 @@ class MvsCameraSession:
             _set_enum(camera, "TriggerMode", "Off")
             _set_enum(camera, "ExposureAuto", "Off")
             _set_enum(camera, "GainAuto", "Off")
-            _set_enum(camera, "PixelFormat", config.pixel_format)
-            exposure = _set_float(camera, sdk, "ExposureTime", config.exposure_us)
-            gain = _set_float(camera, sdk, "Gain", config.gain_db)
-            _set_int(camera, sdk, "OffsetX", 0)
-            _set_int(camera, sdk, "OffsetY", 0)
-            width = _set_int(camera, sdk, "Width", config.width)
-            height = _set_int(camera, sdk, "Height", config.height)
-            offset_x = _set_int(camera, sdk, "OffsetX", config.offset_x)
-            offset_y = _set_int(camera, sdk, "OffsetY", config.offset_y)
-            applied = CameraConfig(
-                exposure_us=exposure,
-                gain_db=gain,
-                pixel_format=config.pixel_format,
-                offset_x=offset_x,
-                offset_y=offset_y,
-                width=width,
-                height=height,
-                timeout_ms=config.timeout_ms,
-            )
+            applied = _apply_config(camera, sdk, config)
             return cls(sdk, camera, selected.info, applied)
         except Exception:
             if opened:
@@ -284,6 +290,14 @@ class MvsCameraSession:
             if created:
                 camera.MV_CC_DestroyHandle()
             raise
+
+    def configure(self, config: CameraConfig) -> CameraConfig:
+        if self._closed:
+            raise RuntimeError("相机已经关闭")
+        if self._started:
+            raise RuntimeError("请先停止取流，再修改采集参数")
+        self.config = _apply_config(self.camera, self.sdk, config)
+        return self.config
 
     def start(self) -> None:
         if self._closed:

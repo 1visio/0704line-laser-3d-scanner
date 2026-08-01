@@ -10,10 +10,12 @@ import numpy as np
 
 from app_config import DEFAULT_CONFIG_PATH, load_app_config
 from online.fake_camera import SyntheticCameraSession
-from online.models import CameraConfig, CapturedFrame
+from online.controller import OnlineController
+from online.models import CameraConfig, CameraDeviceInfo, CapturedFrame
 from online.pipeline import FramePipeline
 from online.recording import FrameRecorder
 from online.runtime import LatestFrameSlot
+from online_camera import build_parser
 
 
 def _frame(number: int, dtype: np.dtype = np.dtype(np.uint8)) -> CapturedFrame:
@@ -30,10 +32,62 @@ def _frame(number: int, dtype: np.dtype = np.dtype(np.uint8)) -> CapturedFrame:
 
 class OnlineCoreTests(unittest.TestCase):
     def test_camera_config_validation(self) -> None:
+        defaults = CameraConfig()
+        self.assertEqual(defaults.pixel_format, "Mono8")
+        self.assertEqual(defaults.exposure_us, 1200.0)
+        self.assertEqual(
+            (defaults.width, defaults.height, defaults.offset_x, defaults.offset_y),
+            (2448, 300, 0, 880),
+        )
         with self.assertRaises(ValueError):
             CameraConfig(pixel_format="Mono12Packed")
         with self.assertRaises(ValueError):
             CameraConfig(offset_y=-1)
+
+    def test_synthetic_camera_can_reconfigure_while_stopped(self) -> None:
+        camera = SyntheticCameraSession(CameraConfig())
+        updated = CameraConfig(
+            exposure_us=4321.0,
+            width=1200,
+            height=200,
+            offset_x=100,
+            offset_y=700,
+        )
+        self.assertEqual(camera.configure(updated), updated)
+        camera.start()
+        frame = camera.get_frame()
+        self.assertEqual(frame.image.shape, (200, 1200))
+        self.assertEqual((frame.offset_x, frame.offset_y), (100, 700))
+        with self.assertRaises(RuntimeError):
+            camera.configure(CameraConfig())
+        camera.stop()
+
+    def test_controller_rolls_back_when_camera_start_fails(self) -> None:
+        class StartFailureSession:
+            device = CameraDeviceInfo("TEST", "FAIL")
+            config = CameraConfig()
+
+            def configure(self, config: CameraConfig) -> CameraConfig:
+                self.config = config
+                return config
+
+            def start(self) -> None:
+                raise RuntimeError("expected start failure")
+
+            def stop(self) -> None:
+                pass
+
+            def close(self) -> None:
+                pass
+
+        controller = OnlineController()
+        with self.assertRaisesRegex(RuntimeError, "expected start failure"):
+            controller.start(
+                StartFailureSession(),
+                FramePipeline(load_app_config(DEFAULT_CONFIG_PATH)),
+                FrameRecorder(),
+            )
+        self.assertFalse(controller.running)
 
     def test_latest_slot_replaces_stale_frame(self) -> None:
         slot = LatestFrameSlot()
@@ -58,6 +112,24 @@ class OnlineCoreTests(unittest.TestCase):
         self.assertLess(float(np.median(result.centers_uv_full[:, 1])), 1050.0)
         self.assertEqual(result.overlay_rgb.shape, (128, 2448, 3))
         self.assertEqual(result.section_xz.shape[1], 2)
+
+    def test_pipeline_accepts_each_configured_extraction_method(self) -> None:
+        config = load_app_config(DEFAULT_CONFIG_PATH)
+        hashes: set[str] = set()
+        for method in ("centroid", "steger", "shared_steger"):
+            pipeline = FramePipeline(config, method)
+            self.assertEqual(pipeline.extraction_method, method)
+            self.assertEqual(
+                pipeline.extraction_params.options,
+                config.extraction_options_by_method[method],
+            )
+            hashes.add(pipeline.algorithm_config_sha256)
+        self.assertEqual(len(hashes), 3)
+
+    def test_online_cli_can_override_extraction_method(self) -> None:
+        args = build_parser().parse_args(["--method", "steger", "--simulate"])
+        self.assertEqual(args.method, "steger")
+        self.assertTrue(args.simulate)
 
     def test_recorder_writes_lossless_frames_and_gap_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -86,6 +158,18 @@ class OnlineCoreTests(unittest.TestCase):
             ) as stream:
                 second_rows = list(csv.DictReader(stream))
             self.assertEqual(second_rows[0]["camera_frame_number"], "20")
+
+    def test_recorder_cancel_is_clean_and_non_erroring(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            recorder = FrameRecorder(queue_capacity=4)
+            recorder.start(temporary, 100, CameraConfig(width=12, height=8))
+            recorder.enqueue(_frame(1))
+            recorder.cancel()
+            self.assertIsNone(recorder.wait(5.0))
+            self.assertTrue(recorder.cancelled)
+            self.assertIsNone(recorder.error)
+            self.assertFalse(recorder.active)
+            self.assertEqual(list(Path(temporary).iterdir()), [])
 
 
 if __name__ == "__main__":

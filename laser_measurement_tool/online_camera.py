@@ -9,11 +9,17 @@ from pathlib import Path
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from app_config import DEFAULT_CONFIG_PATH, AppConfigError, load_app_config
+from laser.backends import AVAILABLE_METHODS
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="海康在线线激光三维截面程序")
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
+    parser.add_argument(
+        "--method",
+        choices=tuple(AVAILABLE_METHODS),
+        help="覆盖配置文件中的在线激光提取算法",
+    )
     parser.add_argument(
         "--simulate",
         action="store_true",
@@ -29,7 +35,11 @@ def main(argv: list[str] | None = None) -> int:
         config = load_app_config(args.config)
         from online.window import OnlineCameraWindow
 
-        window = OnlineCameraWindow(config, simulate=args.simulate)
+        window = OnlineCameraWindow(
+            config,
+            simulate=args.simulate,
+            extraction_method=args.method,
+        )
     except (AppConfigError, RuntimeError, ValueError, OSError) as error:
         QMessageBox.critical(None, "在线程序启动失败", str(error))
         return 1

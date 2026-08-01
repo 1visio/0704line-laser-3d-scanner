@@ -23,13 +23,13 @@ class CameraDeviceInfo:
 
 @dataclass(frozen=True, slots=True)
 class CameraConfig:
-    exposure_us: float = 1000.0
+    exposure_us: float = 1200.0
     gain_db: float = 0.0
-    pixel_format: str = "Mono12"
+    pixel_format: str = "Mono8"
     offset_x: int = 0
-    offset_y: int = 992
+    offset_y: int = 880
     width: int = 2448
-    height: int = 64
+    height: int = 300
     timeout_ms: int = 2000
 
     def __post_init__(self) -> None:
@@ -82,6 +82,8 @@ class FrameResult:
 class CameraSession(Protocol):
     device: CameraDeviceInfo
     config: CameraConfig
+
+    def configure(self, config: CameraConfig) -> CameraConfig: ...
 
     def start(self) -> None: ...
 

@@ -56,6 +56,7 @@ class FrameRecorder:
         self._result: RecordingResult | None = None
         self._error: BaseException | None = None
         self._queue_drops = 0
+        self._cancelled = False
 
     @property
     def active(self) -> bool:
@@ -69,6 +70,11 @@ class FrameRecorder:
     @property
     def error(self) -> BaseException | None:
         return self._error
+
+    @property
+    def cancelled(self) -> bool:
+        with self._lock:
+            return self._cancelled
 
     def start(self, root: str | Path, frame_count: int, config: CameraConfig) -> Path:
         if frame_count <= 0:
@@ -93,6 +99,7 @@ class FrameRecorder:
             self._result = None
             self._error = None
             self._queue_drops = 0
+            self._cancelled = False
             self._active = True
             self._thread = threading.Thread(
                 target=self._writer_loop, name="frame-recorder", daemon=True
@@ -111,8 +118,10 @@ class FrameRecorder:
             return False
 
     def cancel(self) -> None:
-        if not self.active:
-            return
+        with self._lock:
+            if not self._active:
+                return
+            self._cancelled = True
         while True:
             try:
                 self._queue.get_nowait()
@@ -139,6 +148,8 @@ class FrameRecorder:
             while len(rows) < self._target:
                 frame = self._queue.get()
                 if frame is None:
+                    if self.cancelled:
+                        return
                     raise RuntimeError("录制在达到目标帧数前被取消")
                 suffix = ".png" if frame.image.dtype.name == "uint8" else ".tiff"
                 filename = f"frame_{len(rows) + 1:06d}{suffix}"
@@ -186,6 +197,8 @@ class FrameRecorder:
             self._error = error
             shutil.rmtree(self._temp_dir, ignore_errors=True)
         finally:
+            if self.cancelled and self._temp_dir is not None:
+                shutil.rmtree(self._temp_dir, ignore_errors=True)
             with self._lock:
                 self._active = False
 

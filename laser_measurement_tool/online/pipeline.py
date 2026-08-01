@@ -19,21 +19,27 @@ from .models import CapturedFrame, FrameResult
 
 
 class FramePipeline:
-    """Run the production shared-Steger and reconstruction path for one frame."""
+    """Run the selected extraction and reconstruction path for one frame."""
 
-    def __init__(self, config: AppConfig) -> None:
-        if config.extraction_method != "shared_steger":
-            raise ValueError("在线测量只允许使用 shared_steger")
+    def __init__(
+        self, config: AppConfig, extraction_method: str | None = None
+    ) -> None:
         if config.calibration.manifest is None:
             raise ValueError("在线测量配置必须指定 calibration.manifest")
         self.config = config
+        self.extraction_method = extraction_method or config.extraction_method
+        self.extraction_options = dict(
+            config.extraction_options_by_method.get(self.extraction_method, {})
+        )
         self.package: CalibrationPackage = load_calibration_package(
             config.calibration.manifest
         )
         self.extraction_params = create_extraction_params(
-            "shared_steger", config.extraction_options
+            self.extraction_method, self.extraction_options
         )
-        self.algorithm_config_sha256 = _algorithm_hash(config)
+        self.algorithm_config_sha256 = _algorithm_hash(
+            self.extraction_method, self.extraction_options
+        )
 
     def run_frame(self, frame: CapturedFrame) -> FrameResult:
         self._validate_frame_bounds(frame)
@@ -85,10 +91,10 @@ class FramePipeline:
             raise ValueError("相机 ROI 纵向范围超出标定图像尺寸")
 
 
-def _algorithm_hash(config: AppConfig) -> str:
+def _algorithm_hash(method: str, options: dict[str, object]) -> str:
     import json
 
-    payload = {"method": config.extraction_method, "options": config.extraction_options}
+    payload = {"method": method, "options": options}
     encoded = json.dumps(
         payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True
     ).encode("utf-8")

@@ -31,6 +31,21 @@ class CalibrationManifestTests(unittest.TestCase):
             with self.assertRaisesRegex(CalibrationManifestError, "哈希不匹配"):
                 load_calibration_package(destination / "manifest.yaml")
 
+    def test_crlf_checkout_is_accepted(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary) / "calibration"
+            shutil.copytree(PACKAGE_DIR, destination)
+            manifest = yaml.safe_load(
+                (destination / "manifest.yaml").read_text(encoding="utf-8")
+            )
+            for entry in manifest["files"].values():
+                path = destination / entry["path"]
+                lf_data = path.read_bytes().replace(b"\r\n", b"\n")
+                path.write_bytes(lf_data.replace(b"\n", b"\r\n"))
+
+            package = load_calibration_package(destination / "manifest.yaml")
+            self.assertEqual(package.camera_model, "MV-CS050-60GM")
+
     def test_parent_path_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             destination = Path(temporary) / "calibration"

@@ -29,11 +29,9 @@ class CalibrationPackage:
 
 
 def sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as stream:
-        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+    """Hash calibration text consistently across LF and CRLF checkouts."""
+    data = path.read_bytes().replace(b"\r\n", b"\n")
+    return hashlib.sha256(data).hexdigest()
 
 
 def load_calibration_package(manifest_path: str | Path) -> CalibrationPackage:

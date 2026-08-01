@@ -18,7 +18,7 @@ calibration:
 
 extraction:
   # 当前使用的算法：centroid（快速）、steger（旧 Hessian）或 shared_steger（与标定 V4 共享核心）
-  method: shared_steger
+  method: centroid
   centroid:
     background_kernel: 51            # 背景抑制高斯核（奇数，像素）
     min_local_contrast_dn: 20.0      # 峰值最低局部对比度（DN，按源位深）
