@@ -1,0 +1,76 @@
+{
+  "platform": "Windows-11-10.0.26200-SP0",
+  "python": "3.13.0",
+  "opencv": "5.0.0",
+  "source": "samples\\pose_10.tif（2448×2048, uint8）",
+  "image_size": [
+    2448,
+    2048
+  ],
+  "method": "shared_steger",
+  "options": {
+    "sigma_px": 1.2,
+    "max_offset_px": 0.75,
+    "min_normal_y": 0.5,
+    "min_response_ratio": 0.0005,
+    "background_window_px": 31,
+    "background_percentile": 20.0,
+    "min_prominence_ratio": 0.01,
+    "profile_smoothing_sigma_px": 0.8,
+    "sensor_max_value": null,
+    "segment_min_columns": 42,
+    "continuity_max_column_gap": 2,
+    "continuity_max_vertical_jump": 14.0,
+    "post_filter": "reconstruction",
+    "scan_axis": "column"
+  },
+  "aoi_margin": 27,
+  "calibration_source": "manifest:mv-cs050-60gm-runtime-20260731-v1",
+  "repeat": 5,
+  "point_count_full": 2209,
+  "aoi_band": [
+    997,
+    1061
+  ],
+  "timings": [
+    {
+      "label": "提取 · 全幅（默认参数）",
+      "mean_ms": 762.3773399973288,
+      "median_ms": 743.2416999945417,
+      "min_ms": 734.721599961631,
+      "max_ms": 811.4961999235675,
+      "fps": 1.311686415028421,
+      "note": "2209 点"
+    },
+    {
+      "label": "提取 · AOI 64×2448（参数不变）",
+      "mean_ms": 72.18993997666985,
+      "median_ms": 74.03879996854812,
+      "min_ms": 61.182099976576865,
+      "max_ms": 81.29169989842921,
+      "fps": 13.852345636014897,
+      "note": "范围 [997, 1061)"
+    },
+    {
+      "label": "重建 · 2209 点 → 地面系",
+      "mean_ms": 0.4490049963351339,
+      "median_ms": 0.4497499903663993,
+      "min_ms": 0.40250003803521395,
+      "max_ms": 0.548599986359477,
+      "fps": 2227.146709195208,
+      "note": ""
+    }
+  ],
+  "consistency": {
+    "count_full": 2209,
+    "count_aoi": 2209,
+    "common": 2209,
+    "only_full": 0,
+    "only_aoi": 0,
+    "max_abs_delta": 2.2737367544323206e-13,
+    "differing_keys": 0,
+    "verdict": "identical",
+    "examples": []
+  },
+  "interference": null
+}

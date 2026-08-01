@@ -1,0 +1,1056 @@
+"""图像视图与控制面板组成的应用主窗口。"""
+
+from collections.abc import Mapping
+from pathlib import Path
+from typing import Any
+
+import cv2
+import numpy as np
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtWidgets import (
+    QComboBox,
+    QFileDialog,
+    QFormLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QMainWindow,
+    QMessageBox,
+    QPushButton,
+    QStackedWidget,
+    QVBoxLayout,
+    QWidget,
+)
+
+from app_config import AppConfig
+from calibration.config_loader import (
+    CalibrationConfigError,
+    CalibrationFileNotFoundError,
+    load_calibration_files,
+)
+from calibration.manifest import load_calibration_package
+from gui.image_view import ImageView, _to_uint8_display
+from gui.point_cloud_view import PointCloudView
+from gui.section_view import SectionView
+from laser.backends import AVAILABLE_METHODS, create_extraction_params
+from laser.laser_extractor import (
+    LaserAlgorithmNotConfiguredError,
+    LaserExtractionError,
+    LaserExtractionParams,
+    LaserExtractionParamsInput,
+    extract_laser_center,
+)
+from measurement.height_measure import (
+    HeightLineMeasurement,
+    MeasurementError,
+    measure_height_lines,
+)
+from measurement.roi_manager import RoiKind, RoiManager
+from reconstruction.reconstructor import (
+    ReconstructionInputError,
+    ReconstructionResult,
+    project_ground_points_to_pixels,
+    reconstruct_uv_to_ground,
+)
+from utils.image_io import load_grayscale_image
+from utils.result_io import (
+    next_measurement_dir,
+    save_image_png,
+    save_ground_pointcloud_ply,
+    save_laser_centers_csv,
+    save_measurement_json,
+    save_reconstructed_points_csv,
+)
+
+
+class MainWindow(QMainWindow):
+    """单帧线激光测量工具的主窗口。"""
+
+    extract_laser_requested = Signal()
+    laser_centers_extracted = Signal(object, str)
+    roi_selection_requested = Signal(str)
+    roi_points_changed = Signal(object, object)
+    reconstruction_requested = Signal()
+    save_requested = Signal()
+
+    def __init__(self, config: AppConfig | None = None) -> None:
+        super().__init__()
+        self._app_config = config
+        self._calibration: dict[str, Any] | None = None
+        self._image: np.ndarray | None = None
+        self._image_path: Path | None = None
+        self._laser_centers = np.empty((0, 2), dtype=np.float64)
+        self._laser_extraction_params: LaserExtractionParamsInput = (
+            self._extraction_params_from_config(
+                config.extraction_method if config else None
+            )
+        )
+        self._last_laser_csv_path: Path | None = None
+        self._output_directory = (
+            config.output.directory
+            if config is not None and config.output is not None
+            else Path(__file__).resolve().parents[1] / "output"
+        )
+        self._roi_manager = RoiManager()
+        self._baseline_points = np.empty((0, 2), dtype=np.float64)
+        self._obstacle_points = np.empty((0, 2), dtype=np.float64)
+        self._obstacle_point_groups: list[np.ndarray] = []
+        self._last_measurements: list[HeightLineMeasurement] = []
+        self._last_reconstruction: dict[str, ReconstructionResult] = {}
+        self._last_obstacle_reconstructions: list[ReconstructionResult] = []
+        self._last_full_reconstruction: ReconstructionResult | None = None
+        self._last_overlay_segments: list[tuple[str, np.ndarray]] = []
+        self._online_window: QMainWindow | None = None
+
+        self.setWindowTitle("单帧线激光三维截面测量工具")
+        self.resize(1200, 760)
+
+        self.image_view = ImageView(self)
+        self.point_cloud_view = PointCloudView(self)
+        self.section_view = SectionView(self)
+        self.view_stack = QStackedWidget(self)
+        self.view_stack.addWidget(self.image_view)
+        self.view_stack.addWidget(self.point_cloud_view)
+        self.view_stack.addWidget(self.section_view)
+        self.setCentralWidget(self._build_central_widget())
+        self._connect_signals()
+        self._set_image_actions_enabled(False)
+        self.statusBar().showMessage("请加载灰度图像")
+
+    @property
+    def current_image(self) -> np.ndarray | None:
+        """返回原始灰度数据，供后续算法控制器读取。"""
+        return self._image
+
+    @property
+    def current_image_path(self) -> Path | None:
+        """返回当前图像路径。"""
+        return self._image_path
+
+    @property
+    def current_laser_centers(self) -> np.ndarray:
+        """返回最近一次成功提取的 ``(u, v)`` 中心点。"""
+        return self._laser_centers
+
+    @property
+    def last_laser_csv_path(self) -> Path | None:
+        """返回最近一次成功保存的中心点 CSV 路径。"""
+        return self._last_laser_csv_path
+
+    @property
+    def baseline_points(self) -> np.ndarray:
+        """返回基准 ROI 内的亚像素激光中心点。"""
+        return self._baseline_points
+
+    @property
+    def obstacle_points(self) -> np.ndarray:
+        """返回障碍物 ROI 内的亚像素激光中心点。"""
+        return self._obstacle_points
+
+    def set_laser_extraction_params(
+        self,
+        params: LaserExtractionParams | Mapping[str, Any],
+    ) -> None:
+        """注入现有 Steger、Gaussian 或 RANSAC backend 及参数。"""
+        self._laser_extraction_params = params
+
+    def open_image(self) -> None:
+        """选择并加载受支持的灰度图像。"""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "加载灰度图像",
+            "",
+            "灰度图像 (*.tif *.tiff *.png *.bmp)",
+        )
+        if not file_path:
+            return
+
+        try:
+            image = load_grayscale_image(file_path)
+        except (FileNotFoundError, ValueError, OSError) as error:
+            QMessageBox.critical(self, "加载失败", str(error))
+            return
+
+        self._image = image
+        self._image_path = Path(file_path)
+        self._laser_centers = np.empty((0, 2), dtype=np.float64)
+        self._last_laser_csv_path = None
+        self._roi_manager.clear()
+        self._update_roi_points()
+        self.image_view.set_image(image)
+        self.point_cloud_view.clear()
+        self.section_view.clear()
+        self._show_image_view()
+        self._set_image_actions_enabled(True)
+        self.point_cloud_button.setEnabled(False)
+        self.section_view_button.setEnabled(False)
+        height, width = image.shape
+        self.statusBar().showMessage(
+            f"已加载 {self._image_path.name} | {width} × {height} | {image.dtype}"
+        )
+
+    def _build_central_widget(self) -> QWidget:
+        central_widget = QWidget(self)
+        layout = QHBoxLayout(central_widget)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(8)
+        layout.addWidget(self.view_stack, 1)
+        layout.addWidget(self._build_control_panel())
+        return central_widget
+
+    def _build_control_panel(self) -> QWidget:
+        panel = QWidget(self)
+        panel.setFixedWidth(260)
+        layout = QVBoxLayout(panel)
+
+        self.load_button = QPushButton("加载图像", panel)
+        self.online_button = QPushButton("在线相机", panel)
+        self.method_combo = QComboBox(panel)
+        for method in AVAILABLE_METHODS:
+            self.method_combo.addItem(method)
+        if self._app_config is not None:
+            index = self.method_combo.findText(
+                self._app_config.extraction_method
+            )
+            if index >= 0:
+                self.method_combo.setCurrentIndex(index)
+        self.extract_laser_button = QPushButton("提取激光线", panel)
+        self.point_cloud_button = QPushButton("三维点云", panel)
+        self.point_cloud_button.setEnabled(False)
+        self.section_view_button = QPushButton("截面视图", panel)
+        self.section_view_button.setEnabled(False)
+        self.baseline_roi_button = QPushButton("添加基准区域", panel)
+        self.obstacle_roi_button = QPushButton("添加障碍物区域", panel)
+        self.remove_last_roi_button = QPushButton("删除最后一个区域", panel)
+        self.clear_rois_button = QPushButton("清空区域", panel)
+        self.reconstruct_button = QPushButton("三维恢复并测量", panel)
+        self.save_button = QPushButton("保存结果", panel)
+
+        layout.addWidget(self.load_button)
+        layout.addWidget(self.online_button)
+        layout.addSpacing(12)
+        layout.addWidget(QLabel("提取算法:", panel))
+        layout.addWidget(self.method_combo)
+        for button in self._image_action_buttons:
+            layout.addWidget(button)
+        layout.addSpacing(12)
+        layout.addWidget(self._build_results_group(panel))
+        layout.addStretch(1)
+        return panel
+
+    def _build_results_group(self, parent: QWidget) -> QGroupBox:
+        group = QGroupBox("计算结果 (mm)", parent)
+        layout = QVBoxLayout(group)
+        reference_group = QGroupBox("公共地面基准", group)
+        reference_form = QFormLayout(reference_group)
+        self._result_labels: dict[str, QLabel] = {}
+        for key, title in (
+            ("ground", "地面基准 Zg"),
+            ("ground_sigma", "地面噪声 σ"),
+            ("baseline_points", "内点/总点"),
+        ):
+            label = QLabel("—", reference_group)
+            label.setTextInteractionFlags(
+                Qt.TextInteractionFlag.TextSelectableByMouse
+            )
+            self._result_labels[key] = label
+            reference_form.addRow(f"{title}:", label)
+        layout.addWidget(reference_group)
+        self._obstacle_results_layout = QVBoxLayout()
+        self._obstacle_result_groups: list[QGroupBox] = []
+        layout.addLayout(self._obstacle_results_layout)
+        return group
+
+    @property
+    def _image_action_buttons(self) -> tuple[QPushButton, ...]:
+        return (
+            self.extract_laser_button,
+            self.point_cloud_button,
+            self.section_view_button,
+            self.baseline_roi_button,
+            self.obstacle_roi_button,
+            self.remove_last_roi_button,
+            self.clear_rois_button,
+            self.reconstruct_button,
+            self.save_button,
+        )
+
+    def _connect_signals(self) -> None:
+        self.load_button.clicked.connect(self.open_image)
+        self.online_button.clicked.connect(self._open_online_window)
+        self.extract_laser_button.clicked.connect(self._extract_laser_line)
+        self.point_cloud_button.clicked.connect(
+            lambda _checked=False: self._toggle_point_cloud_view()
+        )
+        self.section_view_button.clicked.connect(
+            lambda _checked=False: self._toggle_section_view()
+        )
+        self.baseline_roi_button.clicked.connect(
+            lambda _checked=False: self._request_roi_selection("baseline")
+        )
+        self.obstacle_roi_button.clicked.connect(
+            lambda _checked=False: self._request_roi_selection("obstacle")
+        )
+        self.remove_last_roi_button.clicked.connect(
+            lambda _checked=False: self._remove_last_roi()
+        )
+        self.clear_rois_button.clicked.connect(
+            lambda _checked=False: self._clear_rois()
+        )
+        self.reconstruct_button.clicked.connect(
+            lambda _checked=False: self._run_measurement()
+        )
+        self.save_button.clicked.connect(
+            lambda _checked=False: self._save_results()
+        )
+        self.method_combo.currentTextChanged.connect(self._change_method)
+        self.image_view.image_coordinates_changed.connect(self._show_image_coordinates)
+        self.image_view.image_coordinates_cleared.connect(self._clear_image_coordinates)
+        self.image_view.roi_selected.connect(self._add_roi_region)
+
+    def _open_online_window(self) -> None:
+        if self._app_config is None:
+            QMessageBox.critical(self, "缺少配置", "在线相机需要有效的统一配置文件")
+            return
+        try:
+            from online.window import OnlineCameraWindow
+
+            if self._online_window is None:
+                self._online_window = OnlineCameraWindow(self._app_config)
+            self._online_window.show()
+            self._online_window.raise_()
+            self._online_window.activateWindow()
+        except (RuntimeError, ValueError, OSError) as error:
+            QMessageBox.critical(self, "在线相机启动失败", str(error))
+
+    def _set_image_actions_enabled(self, enabled: bool) -> None:
+        for button in self._image_action_buttons:
+            button.setEnabled(enabled)
+
+    def _request_roi_selection(self, roi_kind: str) -> None:
+        self.image_view.begin_roi_selection(roi_kind)
+        self.roi_selection_requested.emit(roi_kind)
+        label = "基准区域" if roi_kind == "baseline" else "障碍物区域"
+        self.statusBar().showMessage(f"请在图像中拖动框选{label}")
+
+    def _add_roi_region(self, roi_kind: str, rectangle) -> None:
+        self._roi_manager.add_region(
+            roi_kind,
+            rectangle.left(),
+            rectangle.top(),
+            rectangle.right(),
+            rectangle.bottom(),
+        )
+        self.image_view.set_roi_regions(self._roi_manager.regions)
+        self._update_roi_points()
+        self.statusBar().showMessage(
+            f"已添加 ROI，共 {len(self._roi_manager.regions)} 个区域 | "
+            f"基准点 {len(self._baseline_points)}，障碍物点 {len(self._obstacle_points)}"
+        )
+
+    def _remove_last_roi(self) -> None:
+        self.image_view.cancel_roi_selection()
+        removed = self._roi_manager.remove_last()
+        if removed is None:
+            self.statusBar().showMessage("当前没有可删除的 ROI")
+            return
+        self.image_view.set_roi_regions(self._roi_manager.regions)
+        self._update_roi_points()
+        self.statusBar().showMessage(
+            f"已删除最后一个 ROI，剩余 {len(self._roi_manager.regions)} 个 | "
+            f"基准点 {len(self._baseline_points)}，障碍物点 {len(self._obstacle_points)}"
+        )
+
+    def _clear_rois(self) -> None:
+        self.image_view.cancel_roi_selection()
+        self._roi_manager.clear()
+        self.image_view.clear_roi_regions()
+        self._update_roi_points()
+        self.statusBar().showMessage("已清空全部 ROI")
+
+    def _extract_laser_line(self) -> None:
+        if self._image is None or self._image_path is None:
+            return
+
+        self.extract_laser_requested.emit()
+        try:
+            centers = extract_laser_center(
+                self._image,
+                self._laser_extraction_params,
+            )
+        except LaserAlgorithmNotConfiguredError as error:
+            self.statusBar().showMessage(str(error))
+            QMessageBox.information(self, "算法未配置", str(error))
+            return
+        except (LaserExtractionError, TypeError, ValueError) as error:
+            self.statusBar().showMessage("激光中心提取失败")
+            QMessageBox.critical(self, "提取失败", str(error))
+            return
+
+        self._laser_centers = centers
+        self._last_laser_csv_path = None
+        self.image_view.set_laser_centers(centers)
+        self.point_cloud_view.clear()
+        self.section_view.clear()
+        self._show_image_view()
+        self.point_cloud_button.setEnabled(len(centers) > 0)
+        self.section_view_button.setEnabled(len(centers) > 0)
+        self._update_roi_points()
+        self.laser_centers_extracted.emit(centers, "")
+        self.statusBar().showMessage(
+            f"已提取 {len(centers)} 个中心点（点击“保存结果”写入文件） | "
+            f"基准点 {len(self._baseline_points)}，障碍物点 {len(self._obstacle_points)}"
+        )
+
+    def _update_roi_points(self) -> None:
+        self._baseline_points, self._obstacle_points = (
+            self._roi_manager.filter_points(self._laser_centers)
+        )
+        self._obstacle_point_groups = self._roi_manager.filter_points_by_region(
+            self._laser_centers, RoiKind.OBSTACLE
+        )
+        self._invalidate_measurement()
+        self.roi_points_changed.emit(
+            self._baseline_points,
+            self._obstacle_points,
+        )
+
+    def _invalidate_measurement(self) -> None:
+        """点或 ROI 变化后，上一次测量结果作废。"""
+        self._last_measurements = []
+        self._last_reconstruction = {}
+        self._last_obstacle_reconstructions = []
+        self._last_full_reconstruction = None
+        self._last_overlay_segments = []
+        if hasattr(self, "point_cloud_view"):
+            self.point_cloud_view.clear()
+        if hasattr(self, "section_view"):
+            self.section_view.clear()
+        if hasattr(self, "view_stack"):
+            self._show_image_view()
+        if self.image_view.has_image:
+            self.image_view.clear_measurement_overlay()
+        if hasattr(self, "_result_labels"):
+            for label in self._result_labels.values():
+                label.setText("—")
+        if hasattr(self, "_obstacle_result_groups"):
+            self._clear_obstacle_result_groups()
+
+    def _extraction_params_from_config(
+        self, method: str | None
+    ) -> LaserExtractionParamsInput:
+        if method is None:
+            method = "centroid"
+        if self._app_config is None:
+            return create_extraction_params(method, {})
+        options = self._app_config.extraction_options_by_method.get(method, {})
+        try:
+            return create_extraction_params(method, options)
+        except ValueError:
+            return LaserExtractionParams(method=method)
+
+    def _change_method(self, method: str) -> None:
+        self._laser_extraction_params = self._extraction_params_from_config(
+            method
+        )
+        self.statusBar().showMessage(f"提取算法切换为 {method}")
+
+    def _ensure_calibration(self) -> dict[str, Any] | None:
+        """惰性加载标定；失败时弹窗并返回 None。"""
+        if self._calibration is not None:
+            return self._calibration
+        if self._app_config is None:
+            QMessageBox.critical(
+                self,
+                "缺少配置",
+                "未加载配置文件，无法读取标定参数。\n"
+                "请通过 python main.py --config <measure_tool.yaml> 启动。",
+            )
+            return None
+        paths = self._app_config.calibration
+        try:
+            if paths.manifest is not None:
+                self._calibration = load_calibration_package(
+                    paths.manifest
+                ).calibration
+            else:
+                self._calibration = load_calibration_files(
+                    intrinsics=paths.intrinsics,
+                    laser_plane=paths.laser_plane,
+                    extrinsics=paths.extrinsics,
+                    ground_u_compensation=paths.ground_u_compensation,
+                )
+        except (
+            CalibrationFileNotFoundError,
+            CalibrationConfigError,
+            OSError,
+        ) as error:
+            QMessageBox.critical(self, "标定加载失败", str(error))
+            return None
+        return self._calibration
+
+    def _run_measurement(self) -> None:
+        """三维恢复基准线与高度线，计算高度和长度并叠加显示。"""
+        self.reconstruction_requested.emit()
+        if self._image is None:
+            return
+        if len(self._laser_centers) == 0:
+            QMessageBox.information(self, "缺少数据", "请先提取激光线")
+            return
+        has_baseline_roi = any(
+            region.kind is RoiKind.BASELINE
+            for region in self._roi_manager.regions
+        )
+        if not self._obstacle_point_groups:
+            QMessageBox.information(
+                self,
+                "缺少 ROI",
+                "请先框选障碍物（高度线）区域，"
+                "并确认区域内包含激光中心点。基准区域可不选，"
+                "此时使用 Zg=0 作为固定地面基准。",
+            )
+            return
+        empty_obstacles = [
+            str(index)
+            for index, points in enumerate(
+                self._obstacle_point_groups, start=1
+            )
+            if len(points) == 0
+        ]
+        if empty_obstacles:
+            QMessageBox.information(
+                self,
+                "障碍物区域无有效点",
+                f"障碍物区域 {', '.join(empty_obstacles)} 中没有激光中心点。"
+                "请调整或删除这些区域。",
+            )
+            return
+        if has_baseline_roi and len(self._baseline_points) == 0:
+            QMessageBox.information(
+                self,
+                "基准区域无有效点",
+                "已选择基准区域，但区域内没有激光中心点。"
+                "请调整基准区域，或删除全部基准区域后使用 Zg=0 模式。",
+            )
+            return
+        calibration = self._ensure_calibration()
+        if calibration is None:
+            return
+
+        config = self._app_config
+        assert config is not None
+        try:
+            baseline_recon = None
+            if has_baseline_roi:
+                baseline_recon = reconstruct_uv_to_ground(
+                    self._baseline_points, calibration, config.reconstruction
+                )
+            obstacle_recons = [
+                reconstruct_uv_to_ground(
+                    points, calibration, config.reconstruction
+                )
+                for points in self._obstacle_point_groups
+            ]
+            full_recon = reconstruct_uv_to_ground(
+                self._laser_centers, calibration, config.reconstruction
+            )
+            measurements = measure_height_lines(
+                (
+                    baseline_recon.points_ground
+                    if baseline_recon is not None
+                    else None
+                ),
+                [recon.points_ground for recon in obstacle_recons],
+                config.measurement,
+            )
+        except (ReconstructionInputError, MeasurementError) as error:
+            QMessageBox.warning(self, "测量失败", str(error))
+            return
+
+        self._last_reconstruction = {}
+        if baseline_recon is not None:
+            self._last_reconstruction["baseline"] = baseline_recon
+        if len(obstacle_recons) == 1:
+            self._last_reconstruction["height"] = obstacle_recons[0]
+        else:
+            for index, recon in enumerate(obstacle_recons, start=1):
+                self._last_reconstruction[f"obstacle_{index}"] = recon
+        self._last_obstacle_reconstructions = obstacle_recons
+        self._last_full_reconstruction = full_recon
+        self._last_measurements = measurements
+        self._last_overlay_segments = self._build_overlay_segments(
+            measurements, calibration
+        )
+        self.image_view.set_measurement_overlay(self._last_overlay_segments)
+        self._update_results_panel(measurements)
+        first_measurement = measurements[0]
+        if first_measurement.baseline_fit is not None:
+            reference_status = (
+                f"基准 {first_measurement.baseline_inlier_count}/"
+                f"{first_measurement.baseline_point_count}"
+            )
+        else:
+            reference_status = "固定基准 Zg=0"
+        height_status = "，".join(
+            f"障碍物{index} {measurement.height_mean_mm:.3f} mm"
+            for index, measurement in enumerate(measurements, start=1)
+        )
+        self.statusBar().showMessage(
+            f"{height_status} | {reference_status}"
+        )
+
+    def _toggle_point_cloud_view(self) -> None:
+        if self.view_stack.currentWidget() is self.point_cloud_view:
+            self._show_image_view()
+            self.statusBar().showMessage("已切回图像视图")
+            return
+        self._show_point_cloud_view()
+
+    def _show_image_view(self) -> None:
+        self.view_stack.setCurrentWidget(self.image_view)
+        if hasattr(self, "point_cloud_button"):
+            self.point_cloud_button.setText("三维点云")
+        if hasattr(self, "section_view_button"):
+            self.section_view_button.setText("截面视图")
+
+    def _show_point_cloud_view(self) -> None:
+        try:
+            full_reconstruction = self._ensure_full_laser_reconstruction()
+            if full_reconstruction is None:
+                return
+            self.point_cloud_view.set_points(
+                full_reconstruction.points_ground
+            )
+        except (ReconstructionInputError, ValueError) as error:
+            QMessageBox.warning(self, "点云生成失败", str(error))
+            return
+
+        self.view_stack.setCurrentWidget(self.point_cloud_view)
+        self.point_cloud_button.setText("返回图像")
+        self.section_view_button.setText("截面视图")
+        self.statusBar().showMessage(
+            f"三维点云：{full_reconstruction.point_count} 个点 | "
+            "颜色=Zg(mm)"
+        )
+
+    def _toggle_section_view(self) -> None:
+        if self.view_stack.currentWidget() is self.section_view:
+            self._show_image_view()
+            self.statusBar().showMessage("已切回图像视图")
+            return
+        self._show_section_view()
+
+    def _show_section_view(self) -> None:
+        try:
+            full_reconstruction = self._ensure_full_laser_reconstruction()
+            if full_reconstruction is None:
+                return
+            self.section_view.set_points(full_reconstruction.points_ground)
+        except (ReconstructionInputError, ValueError) as error:
+            QMessageBox.warning(self, "截面视图生成失败", str(error))
+            return
+
+        self.view_stack.setCurrentWidget(self.section_view)
+        self.point_cloud_button.setText("三维点云")
+        self.section_view_button.setText("返回图像")
+        self.statusBar().showMessage(
+            f"截面视图：{full_reconstruction.point_count} 个点 | "
+            "横轴=S(mm)，纵轴=Zg(mm)"
+        )
+
+    def _ensure_full_laser_reconstruction(self) -> ReconstructionResult | None:
+        if len(self._laser_centers) == 0:
+            QMessageBox.information(self, "缺少数据", "请先提取激光线")
+            return None
+        calibration = self._ensure_calibration()
+        if calibration is None:
+            return None
+        config = self._app_config
+        if config is None:
+            return None
+
+        if self._last_full_reconstruction is None:
+            self._last_full_reconstruction = reconstruct_uv_to_ground(
+                self._laser_centers,
+                calibration,
+                config.reconstruction,
+            )
+        return self._last_full_reconstruction
+
+    def _build_overlay_segments(
+        self,
+        measurements: list[HeightLineMeasurement],
+        calibration: dict[str, Any],
+    ) -> list[tuple[str, np.ndarray]]:
+        """把公共基准与各障碍物拟合线端点投影回图像。"""
+        segments: list[tuple[str, np.ndarray]] = []
+        first_measurement = measurements[0]
+        ground_segments = [
+            (f"obstacle_{index}", measurement.endpoints_ground)
+            for index, measurement in enumerate(measurements, start=1)
+        ]
+        if first_measurement.baseline_fit is not None:
+            baseline_xy = first_measurement.baseline_fit.endpoints_xy
+            if first_measurement.ground_profile_fit is None:
+                baseline_z = np.full(2, first_measurement.ground_baseline_zg_mm)
+            else:
+                baseline_z = first_measurement.ground_profile_fit.predict_z(
+                    baseline_xy
+                )
+            baseline_endpoints = np.column_stack(
+                [baseline_xy, baseline_z]
+            )
+            ground_segments.insert(0, ("baseline", baseline_endpoints))
+        for kind, endpoints_ground in ground_segments:
+            pixels = project_ground_points_to_pixels(
+                endpoints_ground, calibration
+            )
+            if np.isfinite(pixels).all():
+                segments.append((kind, pixels))
+        return segments
+
+    def _clear_obstacle_result_groups(self) -> None:
+        for group in self._obstacle_result_groups:
+            self._obstacle_results_layout.removeWidget(group)
+            group.deleteLater()
+        self._obstacle_result_groups.clear()
+
+    def _update_results_panel(
+        self, measurements: list[HeightLineMeasurement]
+    ) -> None:
+        self._clear_obstacle_result_groups()
+        reference = measurements[0]
+        ground_suffix = (
+            " (固定)" if reference.ground_reference_mode == "zg_zero" else ""
+        )
+        self._result_labels["ground"].setText(
+            f"{reference.ground_baseline_zg_mm:.3f}{ground_suffix}"
+        )
+        ground_sigma = reference.ground_noise_sigma_mm
+        self._result_labels["ground_sigma"].setText(
+            "—" if ground_sigma is None else f"{ground_sigma:.3f}"
+        )
+        if reference.baseline_fit is not None:
+            baseline_counts = (
+                f"{reference.baseline_inlier_count}/"
+                f"{reference.baseline_point_count}"
+            )
+        else:
+            baseline_counts = "固定 Zg=0"
+        self._result_labels["baseline_points"].setText(baseline_counts)
+
+        for index, measurement in enumerate(measurements, start=1):
+            group = QGroupBox(f"障碍物 {index}")
+            form = QFormLayout(group)
+            angle = measurement.angle_with_baseline_deg
+            rows = (
+                (
+                    "高度 均值±σ",
+                    f"{measurement.height_mean_mm:.3f} ± "
+                    f"{measurement.height_std_mm:.3f}",
+                ),
+                ("高度 中位数", f"{measurement.height_median_mm:.3f}"),
+                ("长度", f"{measurement.length_mm:.3f}"),
+                ("与基准线夹角", "—" if angle is None else f"{angle:.2f}°"),
+                ("拟合 RMSE", f"{measurement.height_fit.rmse_mm:.3f}"),
+                (
+                    "内点/总点",
+                    f"{measurement.height_inlier_count}/"
+                    f"{measurement.height_point_count}",
+                ),
+            )
+            for title, value in rows:
+                label = QLabel(value, group)
+                label.setTextInteractionFlags(
+                    Qt.TextInteractionFlag.TextSelectableByMouse
+                )
+                form.addRow(f"{title}:", label)
+            self._obstacle_results_layout.addWidget(group)
+            self._obstacle_result_groups.append(group)
+
+    def _save_results(self) -> None:
+        """保存二维提取结果，并按当前处理阶段追加三维与测量结果。"""
+        self.save_requested.emit()
+        if self._image_path is None or len(self._laser_centers) == 0:
+            QMessageBox.information(
+                self, "无结果", "请先加载图像并提取激光线，再保存结果"
+            )
+            return
+
+        config = self._app_config
+        save_full_ply = (
+            config is None
+            or config.output is None
+            or config.output.save_full_pointcloud_ply
+        )
+        reconstruction_error: str | None = None
+        if (
+            save_full_ply
+            and self._last_full_reconstruction is None
+            and config is not None
+        ):
+            try:
+                full_reconstruction = self._ensure_full_laser_reconstruction()
+                if full_reconstruction is None:
+                    reconstruction_error = "标定不可用"
+            except ReconstructionInputError as error:
+                reconstruction_error = str(error)
+
+        target_dir = next_measurement_dir(
+            self._image_path, self._output_directory
+        )
+        payload = self._measurement_payload(self._last_measurements)
+        try:
+            laser_csv_path = save_laser_centers_csv(
+                target_dir / "laser_center.csv", self._laser_centers
+            )
+            self._last_laser_csv_path = laser_csv_path
+            save_measurement_json(target_dir / "result.json", payload)
+            if (
+                self._last_measurements
+                and (
+                    config is None
+                    or config.output is None
+                    or config.output.save_pointcloud_csv
+                )
+            ):
+                for name, recon in self._last_reconstruction.items():
+                    save_reconstructed_points_csv(
+                        target_dir / f"{name}_points.csv",
+                        recon.pixels_uv,
+                        recon.points_camera,
+                        recon.points_ground,
+                    )
+            if config is None or config.output is None or (
+                config.output.save_overlay_png
+            ):
+                save_image_png(
+                    target_dir / "overlay.png", self._render_overlay_bgr()
+                )
+            if (
+                self._last_full_reconstruction is not None
+                and save_full_ply
+            ):
+                save_ground_pointcloud_ply(
+                    target_dir / "full_laser_ground.ply",
+                    self._last_full_reconstruction.points_ground,
+                )
+        except (OSError, ValueError, FileExistsError) as error:
+            QMessageBox.critical(self, "保存失败", str(error))
+            return
+        if self._last_measurements:
+            mode = "完整测量结果"
+        elif self._last_full_reconstruction is not None:
+            mode = "二维/三维提取结果"
+        else:
+            mode = "二维提取结果"
+        if reconstruction_error is None:
+            self.statusBar().showMessage(f"{mode}已保存到 {target_dir}")
+        else:
+            self.statusBar().showMessage(
+                f"二维中心点已保存到 {target_dir}，PLY 未生成"
+            )
+            QMessageBox.warning(
+                self,
+                "点云未保存",
+                f"二维中心点和其他可用结果已保存，但三维点云生成失败：\n"
+                f"{reconstruction_error}",
+            )
+
+    def _measurement_payload(
+        self, measurements: list[HeightLineMeasurement]
+    ) -> dict[str, Any]:
+        common = self._common_result_payload(bool(measurements))
+        if not measurements:
+            return {
+                **common,
+                "point_counts": {
+                    "laser_centers_2d": len(self._laser_centers),
+                    "full_laser_reconstructed": (
+                        self._last_full_reconstruction.point_count
+                        if self._last_full_reconstruction is not None
+                        else 0
+                    ),
+                },
+                "full_laser_reconstruction_filtered": (
+                    self._last_full_reconstruction.filtered
+                    if self._last_full_reconstruction is not None
+                    else None
+                ),
+            }
+
+        primary = measurements[0]
+        obstacles = [
+            {
+                "index": index,
+                "points_csv": (
+                    "height_points.csv"
+                    if len(measurements) == 1
+                    else f"obstacle_{index}_points.csv"
+                ),
+                "results_mm": self._measurement_values(measurement),
+                "point_counts": {
+                    "total": measurement.height_point_count,
+                    "inliers": measurement.height_inlier_count,
+                },
+                "reconstruction_filtered": reconstruction.filtered,
+            }
+            for index, (measurement, reconstruction) in enumerate(
+                zip(
+                    measurements,
+                    self._last_obstacle_reconstructions,
+                    strict=True,
+                ),
+                start=1,
+            )
+        ]
+        return {
+            **common,
+            "ground_reference_mode": primary.ground_reference_mode,
+            # 兼容旧版单障碍物读取：顶层结果仍对应障碍物 1。
+            "results_mm": self._measurement_values(primary),
+            "obstacles": obstacles,
+            "point_counts": {
+                "laser_centers_2d": len(self._laser_centers),
+                "full_laser_reconstructed": (
+                    self._last_full_reconstruction.point_count
+                    if self._last_full_reconstruction is not None
+                    else 0
+                ),
+                "baseline_total": primary.baseline_point_count,
+                "baseline_inliers": primary.baseline_inlier_count,
+                "height_total": primary.height_point_count,
+                "height_inliers": primary.height_inlier_count,
+            },
+            "reconstruction_filtered": {
+                name: recon.filtered
+                for name, recon in self._last_reconstruction.items()
+            },
+            "full_laser_reconstruction_filtered": (
+                self._last_full_reconstruction.filtered
+                if self._last_full_reconstruction is not None
+                else None
+            ),
+        }
+
+    def _common_result_payload(self, measurement_performed: bool) -> dict[str, Any]:
+        config = self._app_config
+        return {
+            "image": str(self._image_path),
+            "config": str(config.config_path) if config else None,
+            "calibration": (
+                {
+                    "intrinsics": str(config.calibration.intrinsics),
+                    "laser_plane": str(config.calibration.laser_plane),
+                    "extrinsics": str(config.calibration.extrinsics),
+                    "ground_u_compensation": (
+                        str(config.calibration.ground_u_compensation)
+                        if config.calibration.ground_u_compensation
+                        else None
+                    ),
+                }
+                if config
+                else None
+            ),
+            "extraction_method": (
+                self.method_combo.currentText()
+                if hasattr(self, "method_combo")
+                else None
+            ),
+            "measurement_performed": measurement_performed,
+            "laser_center_csv": "laser_center.csv",
+        }
+
+    @staticmethod
+    def _measurement_values(
+        measurement: HeightLineMeasurement,
+    ) -> dict[str, Any]:
+        ground_profile = None
+        if measurement.ground_profile_fit is not None:
+            ground_profile = {
+                "model": "z_mm = slope_z_per_mm * s_mm + intercept_z_mm",
+                "slope_z_per_mm": (
+                    measurement.ground_profile_fit.slope_z_per_mm
+                ),
+                "intercept_z_mm": (
+                    measurement.ground_profile_fit.intercept_z_mm
+                ),
+                "rmse_mm": measurement.ground_profile_fit.rmse_mm,
+            }
+        return {
+            "height_mean": measurement.height_mean_mm,
+            "height_median": measurement.height_median_mm,
+            "height_std": measurement.height_std_mm,
+            "length": measurement.length_mm,
+            "angle_with_baseline_deg": measurement.angle_with_baseline_deg,
+            "ground_baseline_zg": measurement.ground_baseline_zg_mm,
+            "ground_noise_sigma": measurement.ground_noise_sigma_mm,
+            "ground_profile": ground_profile,
+            "height_line_fit_rmse": measurement.height_fit.rmse_mm,
+            "endpoints_ground": measurement.endpoints_ground.tolist(),
+        }
+
+    def _render_overlay_bgr(self) -> np.ndarray:
+        """渲染保存用叠加图：中心点、ROI 点、拟合线与结果文字。"""
+        assert self._image is not None
+        display = _to_uint8_display(self._image)
+        canvas = cv2.cvtColor(display, cv2.COLOR_GRAY2BGR)
+
+        def draw_points(points: np.ndarray, color: tuple[int, int, int]) -> None:
+            for u, v in points:
+                cv2.circle(
+                    canvas,
+                    (int(round(u + 0.5)), int(round(v + 0.5))),
+                    1,
+                    color,
+                    -1,
+                    lineType=cv2.LINE_AA,
+                )
+
+        draw_points(self._laser_centers, (80, 255, 0))
+        draw_points(self._baseline_points, (255, 110, 40))
+        draw_points(self._obstacle_points, (60, 60, 235))
+        for kind, endpoints in self._last_overlay_segments:
+            color = (255, 210, 0) if kind == "baseline" else (0, 170, 255)
+            start = (
+                int(round(endpoints[0, 0] + 0.5)),
+                int(round(endpoints[0, 1] + 0.5)),
+            )
+            end = (
+                int(round(endpoints[1, 0] + 0.5)),
+                int(round(endpoints[1, 1] + 0.5)),
+            )
+            cv2.line(canvas, start, end, color, 2, lineType=cv2.LINE_AA)
+
+        if self._last_measurements:
+            lines = tuple(
+                f"obstacle {index}: height={measurement.height_mean_mm:.3f} "
+                f"+/- {measurement.height_std_mm:.3f} mm, "
+                f"length={measurement.length_mm:.3f} mm"
+                for index, measurement in enumerate(
+                    self._last_measurements, start=1
+                )
+            )
+            for row, text in enumerate(lines):
+                cv2.putText(
+                    canvas,
+                    text,
+                    (12, 28 + row * 26),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.7,
+                    (0, 255, 255),
+                    2,
+                    lineType=cv2.LINE_AA,
+                )
+        return canvas
+
+    def _show_image_coordinates(self, x: float, y: float) -> None:
+        self.statusBar().showMessage(
+            f"图像坐标 x={x:.2f}, y={y:.2f} | 像素 ({int(x)}, {int(y)})"
+        )
+
+    def _clear_image_coordinates(self) -> None:
+        if self._image_path is None:
+            self.statusBar().showMessage("请加载灰度图像")
+        else:
+            self.statusBar().showMessage(f"已加载 {self._image_path.name}")

@@ -1,0 +1,47 @@
+from __future__ import annotations
+
+import shutil
+import tempfile
+import unittest
+from pathlib import Path
+
+import yaml
+
+from calibration.manifest import CalibrationManifestError, load_calibration_package
+
+
+PACKAGE_DIR = Path(__file__).resolve().parents[1] / "configs" / "calibration"
+
+
+class CalibrationManifestTests(unittest.TestCase):
+    def test_runtime_package_loads_and_identifies_camera(self) -> None:
+        package = load_calibration_package(PACKAGE_DIR / "manifest.yaml")
+        self.assertEqual(package.camera_model, "MV-CS050-60GM")
+        self.assertEqual((package.image_width, package.image_height), (2448, 2048))
+        self.assertEqual(package.algorithm, "shared_steger")
+        self.assertEqual(package.calibration["K"].shape, (3, 3))
+        self.assertEqual(len(package.manifest_sha256), 64)
+
+    def test_modified_file_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary) / "calibration"
+            shutil.copytree(PACKAGE_DIR, destination)
+            with (destination / "camera_intrinsics.yaml").open("a", encoding="utf-8") as stream:
+                stream.write("\n# modified\n")
+            with self.assertRaisesRegex(CalibrationManifestError, "哈希不匹配"):
+                load_calibration_package(destination / "manifest.yaml")
+
+    def test_parent_path_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary) / "calibration"
+            shutil.copytree(PACKAGE_DIR, destination)
+            path = destination / "manifest.yaml"
+            document = yaml.safe_load(path.read_text(encoding="utf-8"))
+            document["files"]["intrinsics"]["path"] = "../outside.yaml"
+            path.write_text(yaml.safe_dump(document), encoding="utf-8")
+            with self.assertRaisesRegex(CalibrationManifestError, "包内相对路径"):
+                load_calibration_package(path)
+
+
+if __name__ == "__main__":
+    unittest.main()
