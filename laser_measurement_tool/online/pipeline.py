@@ -60,7 +60,6 @@ class FramePipeline:
             self.config.reconstruction,
         )
         reconstruction_ms = (time.perf_counter_ns() - reconstruction_start) / 1e6
-        overlay = _render_overlay(frame.image, centers_local)
         points = reconstructed.points_ground
         section = (
             np.ascontiguousarray(points[:, (0, 2)])
@@ -73,7 +72,6 @@ class FramePipeline:
             centers_uv_full=np.ascontiguousarray(centers_full),
             points_ground=points,
             section_xz=section,
-            overlay_rgb=overlay,
             extraction_ms=extraction_ms,
             reconstruction_ms=reconstruction_ms,
             total_ms=total_ms,
@@ -101,7 +99,8 @@ def _algorithm_hash(method: str, options: dict[str, object]) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
-def _render_overlay(image: np.ndarray, centers_local: np.ndarray) -> np.ndarray:
+def render_overlay(image: np.ndarray, centers_local: np.ndarray) -> np.ndarray:
+    """Render the extracted centers only when a preview actually needs them."""
     gray = _to_uint8_display(image)
     canvas = cv2.cvtColor(gray, cv2.COLOR_GRAY2RGB)
     for u, v in centers_local:

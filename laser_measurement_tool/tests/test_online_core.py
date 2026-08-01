@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ctypes
 import csv
 import tempfile
 import time
@@ -7,11 +8,17 @@ import unittest
 from pathlib import Path
 
 import numpy as np
+from PySide6.QtCore import QCoreApplication
 
 from app_config import DEFAULT_CONFIG_PATH, load_app_config
 from online.fake_camera import SyntheticCameraSession
-from online.controller import OnlineController
+from online.controller import (
+    RESULT_EMIT_INTERVAL_S,
+    STATS_EMIT_INTERVAL_S,
+    OnlineController,
+)
 from online.models import CameraConfig, CameraDeviceInfo, CapturedFrame
+from online.mvs_camera import _copy_frame_payload
 from online.pipeline import FramePipeline
 from online.recording import FrameRecorder
 from online.runtime import LatestFrameSlot
@@ -43,6 +50,17 @@ class OnlineCoreTests(unittest.TestCase):
             CameraConfig(pixel_format="Mono12Packed")
         with self.assertRaises(ValueError):
             CameraConfig(offset_y=-1)
+
+    def test_mvs_payload_copy_owns_memory_after_sdk_buffer_changes(self) -> None:
+        source = (ctypes.c_ubyte * 12)(*range(12))
+        image = _copy_frame_payload(
+            ctypes.addressof(source), 3, 4, np.dtype(np.uint8)
+        )
+        source[0] = 255
+
+        self.assertTrue(image.flags.owndata)
+        self.assertEqual(image.shape, (3, 4))
+        self.assertEqual(int(image[0, 0]), 0)
 
     def test_synthetic_camera_can_reconfigure_while_stopped(self) -> None:
         camera = SyntheticCameraSession(CameraConfig())
@@ -89,6 +107,50 @@ class OnlineCoreTests(unittest.TestCase):
             )
         self.assertFalse(controller.running)
 
+    def test_controller_throttles_ui_signals_without_throttling_processing(
+        self,
+    ) -> None:
+        camera = SyntheticCameraSession(
+            CameraConfig(width=2448, height=128, offset_y=960), target_fps=1000
+        )
+        controller = OnlineController()
+        result_count = 0
+        stats_count = 0
+
+        def count_result(_result: object) -> None:
+            nonlocal result_count
+            result_count += 1
+
+        def count_stats(_stats: object) -> None:
+            nonlocal stats_count
+            stats_count += 1
+
+        controller.result_ready.connect(count_result)
+        controller.stats_updated.connect(count_stats)
+        duration_s = 0.65
+        app = QCoreApplication.instance() or QCoreApplication([])
+        controller.start(
+            camera,
+            FramePipeline(load_app_config(DEFAULT_CONFIG_PATH)),
+            FrameRecorder(),
+        )
+        deadline = time.monotonic() + duration_s
+        while time.monotonic() < deadline:
+            app.processEvents()
+            time.sleep(0.005)
+        controller.stop()
+        app.processEvents()
+
+        self.assertGreater(controller._processed, result_count * 2)
+        self.assertGreater(result_count, 1)
+        self.assertGreater(stats_count, 1)
+        self.assertLessEqual(
+            result_count, int(duration_s / RESULT_EMIT_INTERVAL_S) + 2
+        )
+        self.assertLessEqual(
+            stats_count, int(duration_s / STATS_EMIT_INTERVAL_S) + 3
+        )
+
     def test_latest_slot_replaces_stale_frame(self) -> None:
         slot = LatestFrameSlot()
         slot.put(_frame(1))
@@ -110,7 +172,9 @@ class OnlineCoreTests(unittest.TestCase):
         self.assertGreater(len(result.centers_uv_full), 2300)
         self.assertGreater(float(np.median(result.centers_uv_full[:, 1])), 1000.0)
         self.assertLess(float(np.median(result.centers_uv_full[:, 1])), 1050.0)
+        self.assertIsNone(result._overlay_rgb)
         self.assertEqual(result.overlay_rgb.shape, (128, 2448, 3))
+        self.assertIs(result.overlay_rgb, result._overlay_rgb)
         self.assertEqual(result.section_xz.shape[1], 2)
 
     def test_pipeline_accepts_each_configured_extraction_method(self) -> None:

@@ -235,6 +235,7 @@ class OnlineCameraWindow(QMainWindow):
         self._extracted_view_shape: tuple[int, int] | None = None
         self._section_x_bounds: tuple[float, float] | None = None
         self._section_points = np.empty((0, 2), dtype=np.float64)
+        self._section_points_ground = np.empty((0, 3), dtype=np.float64)
         self._online_state = OnlineState.DISCONNECTED
         self._device_count = 0
         self._pending_disconnect = False
@@ -565,7 +566,6 @@ class OnlineCameraWindow(QMainWindow):
         section_title = QLabel("截面分析", section_toolbar)
         section_title.setObjectName("sectionTitle")
         section_toolbar_layout.addWidget(section_title)
-        section_toolbar_layout.addStretch(1)
         self.section_grid_checkbox = QCheckBox("网格", section_toolbar)
         self.section_grid_checkbox.setChecked(True)
         self.section_zero_checkbox = QCheckBox("零基准", section_toolbar)
@@ -574,8 +574,33 @@ class OnlineCameraWindow(QMainWindow):
         self.section_crosshair_checkbox.setChecked(True)
         self.section_auto_height_checkbox = QCheckBox("自动高度", section_toolbar)
         self.section_auto_height_checkbox.setChecked(True)
+        self.section_max_dx = _double_spin(
+            section_toolbar, 0.1, 100.0, 2.0, " mm"
+        )
+        self.section_max_dz = _double_spin(
+            section_toolbar, 0.1, 100.0, 3.0, " mm"
+        )
+        self.section_max_distance = _double_spin(
+            section_toolbar, 0.1, 100.0, 4.0, " mm"
+        )
+        for control in (
+            self.section_max_dx,
+            self.section_max_dz,
+            self.section_max_distance,
+        ):
+            control.setDecimals(1)
+            control.setSingleStep(0.5)
+            control.setFixedWidth(82)
         self.section_fit_button = QPushButton("适配截面", section_toolbar)
         self.section_fit_button.setFixedHeight(28)
+        section_toolbar_layout.addWidget(QLabel("断线阈值", section_toolbar))
+        section_toolbar_layout.addWidget(QLabel("ΔXg", section_toolbar))
+        section_toolbar_layout.addWidget(self.section_max_dx)
+        section_toolbar_layout.addWidget(QLabel("ΔZg", section_toolbar))
+        section_toolbar_layout.addWidget(self.section_max_dz)
+        section_toolbar_layout.addWidget(QLabel("3D", section_toolbar))
+        section_toolbar_layout.addWidget(self.section_max_distance)
+        section_toolbar_layout.addStretch(1)
         section_toolbar_layout.addWidget(self.section_grid_checkbox)
         section_toolbar_layout.addWidget(self.section_zero_checkbox)
         section_toolbar_layout.addWidget(self.section_crosshair_checkbox)
@@ -597,9 +622,17 @@ class OnlineCameraWindow(QMainWindow):
             axis.setTextPen(text_pen)
             axis.setTickFont(QFont("Segoe UI", 10))
         self.section_curve = self.section_view.plot(
-            pen=pg.mkPen("#007f7b", width=2.2),
-            connect="finite",
+            pen=pg.mkPen((0, 127, 123, 155), width=1.4),
         )
+        self.section_curve.setZValue(1)
+        self.section_scatter = pg.ScatterPlotItem(
+            size=4.0,
+            pen=pg.mkPen((0, 91, 88, 210), width=0.7),
+            brush=pg.mkBrush(0, 154, 148, 205),
+            pxMode=True,
+        )
+        self.section_scatter.setZValue(3)
+        self.section_view.addItem(self.section_scatter)
         self.section_zero_line = pg.InfiniteLine(
             pos=0.0,
             angle=0,
@@ -671,6 +704,15 @@ class OnlineCameraWindow(QMainWindow):
         )
         self.section_auto_height_checkbox.toggled.connect(
             self._set_section_auto_height
+        )
+        self.section_max_dx.valueChanged.connect(
+            self._refresh_section_connections
+        )
+        self.section_max_dz.valueChanged.connect(
+            self._refresh_section_connections
+        )
+        self.section_max_distance.valueChanged.connect(
+            self._refresh_section_connections
         )
         self.section_fit_button.clicked.connect(self._fit_section_view)
         self.section_view.getViewBox().sigRangeChangedManually.connect(
@@ -944,7 +986,9 @@ class OnlineCameraWindow(QMainWindow):
     def _reset_section_view(self) -> None:
         self._section_x_bounds = None
         self._section_points = np.empty((0, 2), dtype=np.float64)
+        self._section_points_ground = np.empty((0, 3), dtype=np.float64)
         self.section_curve.setData([], [])
+        self.section_scatter.setData([], [])
         view_box = self.section_view.getViewBox()
         view_box.setLimits(xMin=None, xMax=None, maxXRange=None)
         view_box.enableAutoRange(axis=pg.ViewBox.XAxis, enable=False)
@@ -955,23 +999,26 @@ class OnlineCameraWindow(QMainWindow):
         self.section_extrema_label.setText("最低 --  |  最高 --")
         self._set_section_crosshair_enabled(False)
 
-    def _update_section_view(self, section_xz: np.ndarray) -> None:
-        points = np.asarray(section_xz, dtype=np.float64)
-        if points.ndim != 2 or points.shape[1] != 2:
-            points = np.empty((0, 2), dtype=np.float64)
-        points = points[np.isfinite(points).all(axis=1)]
+    def _update_section_view(self, points_ground: np.ndarray) -> None:
+        ground = np.asarray(points_ground, dtype=np.float64)
+        if ground.ndim != 2 or ground.shape[1] != 3:
+            ground = np.empty((0, 3), dtype=np.float64)
+        ground = ground[np.isfinite(ground).all(axis=1)]
+        self._section_points_ground = np.ascontiguousarray(ground)
+        points = ground[:, (0, 2)]
         self._section_points = np.ascontiguousarray(points)
         if not len(points):
             self.section_curve.setData([], [])
+            self.section_scatter.setData([], [])
             self.section_count_label.setText("截面 0 点")
             self.section_range_label.setText("Xg --  |  Zg --")
             self.section_extrema_label.setText("最低 --  |  最高 --")
             return
 
-        self.section_curve.setData(points[:, 0], points[:, 1])
+        self.section_scatter.setData(x=points[:, 0], y=points[:, 1])
+        self._refresh_section_connections()
         minimum = points.min(axis=0)
         maximum = points.max(axis=0)
-        self.section_count_label.setText(f"截面 {len(points)} 点")
         self.section_range_label.setText(
             f"Xg {minimum[0]:.1f} ~ {maximum[0]:.1f} mm  |  "
             f"Zg {minimum[1]:.1f} ~ {maximum[1]:.1f} mm"
@@ -986,6 +1033,29 @@ class OnlineCameraWindow(QMainWindow):
                 axis=pg.ViewBox.YAxis,
                 enable=True,
             )
+
+    def _refresh_section_connections(self) -> None:
+        points = self._section_points
+        if not len(points):
+            self.section_curve.setData([], [])
+            self.section_count_label.setText("截面 0 点")
+            return
+        connections = _section_connection_mask(
+            self._section_points_ground,
+            max_dx=self.section_max_dx.value(),
+            max_dz=self.section_max_dz.value(),
+            max_distance=self.section_max_distance.value(),
+        )
+        self.section_curve.setData(
+            points[:, 0],
+            points[:, 1],
+            connect=connections,
+            skipFiniteCheck=True,
+        )
+        segment_count = 1 + int(np.count_nonzero(connections[:-1] == 0))
+        self.section_count_label.setText(
+            f"截面 {len(points)} 点 · {segment_count} 段"
+        )
 
     def _set_section_x_limits(self, minimum: float, maximum: float) -> None:
         interval = 10.0
@@ -1521,7 +1591,7 @@ class OnlineCameraWindow(QMainWindow):
                     pos=np.empty((0, 3), dtype=np.float32)
                 )
         else:
-            self._update_section_view(result.section_xz)
+            self._update_section_view(result.points_ground)
         self._displayed_frames += 1
 
     def _show_stats(self, stats: dict[str, float | int]) -> None:
@@ -1593,6 +1663,47 @@ def _spin(parent: QWidget, minimum: int, maximum: int, value: int) -> QSpinBox:
     widget.setRange(minimum, maximum)
     widget.setValue(value)
     return widget
+
+
+def _double_spin(
+    parent: QWidget,
+    minimum: float,
+    maximum: float,
+    value: float,
+    suffix: str = "",
+) -> QDoubleSpinBox:
+    widget = QDoubleSpinBox(parent)
+    widget.setRange(minimum, maximum)
+    widget.setValue(value)
+    widget.setSuffix(suffix)
+    return widget
+
+
+def _section_connection_mask(
+    points_ground: np.ndarray,
+    *,
+    max_dx: float,
+    max_dz: float,
+    max_distance: float,
+) -> np.ndarray:
+    points = np.asarray(points_ground, dtype=np.float64)
+    if points.ndim != 2 or points.shape[1] != 3:
+        raise ValueError("points_ground 必须是形状为 (N, 3) 的数组")
+    if min(max_dx, max_dz, max_distance) <= 0:
+        raise ValueError("截面断线阈值必须大于 0")
+    connections = np.zeros(len(points), dtype=np.int32)
+    if len(points) < 2:
+        return connections
+    differences = np.diff(points, axis=0)
+    distances = np.linalg.norm(differences, axis=1)
+    continuous = (
+        (np.abs(differences[:, 0]) <= max_dx)
+        & (np.abs(differences[:, 2]) <= max_dz)
+        & (distances <= max_distance)
+    )
+    # PlotCurveItem uses item i to decide whether point i connects to i + 1.
+    connections[:-1] = continuous.astype(np.int32)
+    return connections
 
 
 def _set_image_boundary(boundary: pg.PlotDataItem, image: np.ndarray) -> None:

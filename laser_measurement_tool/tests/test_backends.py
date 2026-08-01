@@ -6,6 +6,8 @@ import numpy as np
 
 from laser.backends import (
     AVAILABLE_METHODS,
+    CentroidParams,
+    _correct_segment_v,
     _load_shared_steger_module,
     centroid_backend,
     create_extraction_params,
@@ -56,6 +58,33 @@ _STEGER_OPTIONS = {
 
 
 class CentroidBackendTest(unittest.TestCase):
+    def test_segment_correction_matches_reference_loop(self) -> None:
+        values = np.array(
+            [11.0, 12.5, 9.25, 15.0, 16.75, 13.0, 14.5], dtype=np.float64
+        )
+        contrast = np.array(
+            [22.0, 45.0, 31.0, 80.0, 55.0, 19.0, 64.0], dtype=np.float64
+        )
+        params = CentroidParams(correction_window=5, correction_max_shift=2.25)
+        weights = contrast / max(float(np.max(contrast)), 1.0e-6) + 1.0e-4
+        expected = values.copy()
+        radius = params.correction_window // 2
+        for index in range(len(values)):
+            left = max(0, index - radius)
+            right = min(len(values), index + radius + 1)
+            estimate = np.sum(
+                weights[left:right] * values[left:right]
+            ) / np.sum(weights[left:right])
+            expected[index] = values[index] + np.clip(
+                estimate - values[index],
+                -params.correction_max_shift,
+                params.correction_max_shift,
+            )
+
+        np.testing.assert_allclose(
+            _correct_segment_v(values, contrast, params), expected, rtol=1e-12
+        )
+
     def test_recovers_subpixel_centres_column_axis(self) -> None:
         image, truth = _horizontal_stripe_image()
         points = centroid_backend(image, _TEST_OPTIONS)

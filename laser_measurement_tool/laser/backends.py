@@ -169,21 +169,20 @@ def _correct_segment_v(
         return values
     weights = contrast / max(float(np.max(contrast)), 1.0e-6) + 1.0e-4
     radius = params.correction_window // 2
-    corrected = values.copy()
-    for index in range(len(values)):
-        left = max(0, index - radius)
-        right = min(len(values), index + radius + 1)
-        estimate = float(
-            np.sum(weights[left:right] * values[left:right])
-            / np.sum(weights[left:right])
-        )
-        shift = np.clip(
-            estimate - values[index],
-            -params.correction_max_shift,
-            params.correction_max_shift,
-        )
-        corrected[index] = values[index] + shift
-    return corrected
+    indexes = np.arange(len(values))
+    left = np.maximum(0, indexes - radius)
+    right = np.minimum(len(values), indexes + radius + 1)
+    weight_prefix = np.concatenate(([0.0], np.cumsum(weights)))
+    value_prefix = np.concatenate(([0.0], np.cumsum(weights * values)))
+    estimates = (
+        value_prefix[right] - value_prefix[left]
+    ) / (weight_prefix[right] - weight_prefix[left])
+    shifts = np.clip(
+        estimates - values,
+        -params.correction_max_shift,
+        params.correction_max_shift,
+    )
+    return values + shifts
 
 
 def _extract_columnwise(

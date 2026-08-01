@@ -69,7 +69,6 @@ class FrameResult:
     centers_uv_full: np.ndarray
     points_ground: np.ndarray
     section_xz: np.ndarray
-    overlay_rgb: np.ndarray
     extraction_ms: float
     reconstruction_ms: float
     total_ms: float
@@ -77,6 +76,23 @@ class FrameResult:
     calibration_manifest_sha256: str
     algorithm_config_sha256: str
     filtered: dict[str, int] = field(default_factory=dict)
+    _overlay_rgb: np.ndarray | None = field(
+        default=None, repr=False, compare=False
+    )
+
+    @property
+    def overlay_rgb(self) -> np.ndarray:
+        overlay = self._overlay_rgb
+        if overlay is None:
+            from .pipeline import render_overlay
+
+            centers_local = self.centers_uv_full.copy()
+            if centers_local.size:
+                centers_local[:, 0] -= self.frame.offset_x
+                centers_local[:, 1] -= self.frame.offset_y
+            overlay = render_overlay(self.frame.image, centers_local)
+            object.__setattr__(self, "_overlay_rgb", overlay)
+        return overlay
 
 
 class CameraSession(Protocol):

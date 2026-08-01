@@ -220,6 +220,15 @@ def _camera_ticks(info: object) -> int | None:
     return int(info.nDevTimeStamp) if hasattr(info, "nDevTimeStamp") else None
 
 
+def _copy_frame_payload(
+    address: int, height: int, width: int, dtype: np.dtype
+) -> np.ndarray:
+    """Copy an SDK-owned image buffer once into NumPy-owned memory."""
+    image = np.empty((height, width), dtype=dtype)
+    ctypes.memmove(image.ctypes.data, address, image.nbytes)
+    return image
+
+
 def _apply_config(
     camera: object, sdk: ModuleType, config: CameraConfig
 ) -> CameraConfig:
@@ -329,9 +338,7 @@ class MvsCameraSession:
             expected = width * height * dtype.itemsize
             if int(info.nFrameLen) < expected:
                 raise RuntimeError(f"图像负载不完整: {int(info.nFrameLen)} < {expected}")
-            image = np.frombuffer(
-                ctypes.string_at(output.pBufAddr, expected), dtype=dtype
-            ).reshape(height, width).copy()
+            image = _copy_frame_payload(output.pBufAddr, height, width, dtype)
             if self.config.pixel_format == "Mono12" and int(image.max()) > 4095:
                 raise RuntimeError("Mono12 数据超过 4095，请确认未选择 Mono12Packed")
             return CapturedFrame(

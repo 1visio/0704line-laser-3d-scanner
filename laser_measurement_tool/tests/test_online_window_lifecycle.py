@@ -18,6 +18,7 @@ from online.window import (
     OnlineCameraWindow,
     OnlineState,
     _fit_image_view,
+    _section_connection_mask,
 )
 
 
@@ -145,6 +146,39 @@ class OnlineWindowLifecycleTests(unittest.TestCase):
                     )
         finally:
             view.close()
+
+    def test_section_keeps_points_and_breaks_on_each_distance_threshold(self) -> None:
+        points = np.array(
+            [
+                [0.0, 0.0, 0.0],
+                [1.0, 0.0, 1.0],
+                [4.0, 0.0, 1.0],
+                [4.5, 0.0, 5.0],
+                [5.0, 4.0, 5.0],
+                [5.5, 4.0, 5.5],
+            ],
+            dtype=np.float64,
+        )
+        expected = np.array([1, 0, 0, 0, 1, 0], dtype=np.int32)
+        connections = _section_connection_mask(
+            points,
+            max_dx=2.0,
+            max_dz=3.0,
+            max_distance=4.0,
+        )
+        np.testing.assert_array_equal(connections, expected)
+
+        window = OnlineCameraWindow(self.config, simulate=True)
+        window._update_section_view(points)
+        scatter_x, scatter_z = window.section_scatter.getData()
+        self.assertEqual(len(scatter_x), len(points))
+        np.testing.assert_allclose(scatter_x, points[:, 0])
+        np.testing.assert_allclose(scatter_z, points[:, 2])
+        np.testing.assert_array_equal(
+            window.section_curve.opts["connect"], expected
+        )
+        self.assertEqual(window.section_count_label.text(), "截面 6 点 · 4 段")
+        window.close()
 
 
 if __name__ == "__main__":

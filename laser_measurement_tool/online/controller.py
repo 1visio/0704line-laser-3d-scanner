@@ -13,6 +13,10 @@ from .recording import FrameRecorder
 from .runtime import LatestFrameSlot
 
 
+RESULT_EMIT_INTERVAL_S = 0.075
+STATS_EMIT_INTERVAL_S = 0.25
+
+
 class OnlineController(QObject):
     raw_frame_ready = Signal(object)
     result_ready = Signal(object)
@@ -37,6 +41,9 @@ class OnlineController(QObject):
         self._camera_gaps = 0
         self._last_camera_frame: int | None = None
         self._last_raw_emit_at = 0.0
+        self._last_result_emit_at = 0.0
+        self._last_stats_emit_at = 0.0
+        self._stats_lock = threading.Lock()
         self._started_at = 0.0
         self._last_result: FrameResult | None = None
 
@@ -69,6 +76,8 @@ class OnlineController(QObject):
         self._captured = self._processed = self._camera_gaps = 0
         self._last_camera_frame = None
         self._last_raw_emit_at = 0.0
+        self._last_result_emit_at = 0.0
+        self._last_stats_emit_at = 0.0
         self._last_result = None
         self._started_at = time.monotonic()
         try:
@@ -134,6 +143,7 @@ class OnlineController(QObject):
         with self._lock:
             self._running = False
             self._stopping = False
+        self._emit_stats_if_due(force=True)
         if errors:
             self.failed.emit("；".join(errors))
         self.stopped.emit()
@@ -175,17 +185,23 @@ class OnlineController(QObject):
                 result = self._pipeline.run_frame(frame)
                 self._last_result = result
                 self._processed += 1
-                self.result_ready.emit(result)
-                self._emit_stats_if_due(force=True)
+                now = time.monotonic()
+                if now - self._last_result_emit_at >= RESULT_EMIT_INTERVAL_S:
+                    self._last_result_emit_at = now
+                    self.result_ready.emit(result)
+                self._emit_stats_if_due()
         except Exception as error:
             if not self._stop_event.is_set():
                 self.failed.emit(f"逐帧处理失败: {error}")
                 self._stop_event.set()
 
     def _emit_stats_if_due(self, force: bool = False) -> None:
-        elapsed = max(time.monotonic() - self._started_at, 1e-9)
-        if not force and self._captured % 10:
-            return
+        now = time.monotonic()
+        with self._stats_lock:
+            if not force and now - self._last_stats_emit_at < STATS_EMIT_INTERVAL_S:
+                return
+            self._last_stats_emit_at = now
+        elapsed = max(now - self._started_at, 1e-9)
         result = self._last_result
         self.stats_updated.emit(
             {
