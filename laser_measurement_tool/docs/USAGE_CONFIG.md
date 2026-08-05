@@ -91,7 +91,8 @@ calibration:
 
 ```yaml
 extraction:
-  method: centroid          # 当前算法；界面下拉框可临时切换
+  method: steger            # 标定与在线统一使用实时 Steger
+  profile: ../../../calibration/config/realtime_steger.yaml
   centroid:
     background_kernel: 51             # 背景抑制高斯核，奇数；噪声大调大
     min_local_contrast_dn: 20.0       # 峰值最低对比度（DN）；Mono12 需按位深放大
@@ -104,16 +105,12 @@ extraction:
     scan_axis: column   # ★ column=条纹接近水平（laser_obs 数据集）
                         #   row=条纹接近竖直（如老工具截图那种竖线）
   steger:
-    sigma: 3.0               # 高斯导数尺度，建议 >= 条纹半宽/sqrt(3)
-    threshold: 30.0          # 原始灰度下限（DN，不是局部对比度）
-    deriv_thresh: 0.5        # 法向二阶导数绝对值下限
-    roi_margin: 120          # 条纹带扩展；需覆盖地面与障碍物的高度差
-    roi_max_height: 512      # Hessian 计算带最大宽度，限制内存和耗时
-    scan_axis: column
+    {}                       # 实际参数由中央 profile 提供
 ```
 
-`centroid` 速度快且覆盖率高，适合作为默认算法；`steger` 通过 Hessian 主曲率
-和二阶泰勒展开得到亚像素中心，精度和重复性更好，但对弱条纹更严格且计算量较大。
+`steger` 通过 Hessian 主曲率和二阶泰勒展开得到亚像素中心；当前标定和在线
+测量都调用 `calibration/src/realtime_steger.py`。FWHM 约 2～3 px 的线建议从
+`sigma=1.5` 开始，再对照 `1.2/1.8/2.0`。`shared_steger` 只是历史兼容别名。
 GUI 下拉框切换算法只对当前会话生效；要改变启动默认值，修改
 `extraction.method`。
 
@@ -123,6 +120,7 @@ GUI 下拉框切换算法只对当前会话生效；要改变启动默认值，�
 reconstruction:
   min_camera_depth_mm: 100.0    # 工作距离窗口（相机系 Zc）；换支架高度时调整
   max_camera_depth_mm: 1500.0
+  image_roi_polygon: null       # 可选：固定姿态棋盘格内部像素四边形 [[u,v], ...]
 measurement:
   outlier_sigma_multiplier: 2.0 # 残差>该倍数稳健σ的点剔除；想更宽松调大
   outlier_max_iterations: 5
@@ -134,6 +132,35 @@ output:
   save_overlay_png: true
   save_full_pointcloud_ply: true  # 整幅激光线的 Xg/Yg/Zg，ASCII PLY，mm
 ```
+
+`image_roi_polygon` 是在线重建前的像素门控。启用时，只有多边形内部的激光
+中心点才会进入射线-平面求交，结果中的 `filtered.outside_image_roi` 会记录
+被丢弃的点数。它适合棋盘格姿态固定、需要只观察棋盘格内部的验证场景，例如：
+原始提取 overlay 仍保留全线用于诊断，但三维点、测量结果和完整 PLY 只包含
+ROI 内且通过重建约束的点。
+
+```yaml
+reconstruction:
+  image_roi_polygon:
+    - [420, 260]
+    - [2010, 290]
+    - [2070, 1760]
+    - [390, 1730]
+```
+
+坐标必须是**原始图像**像素，顶点按顺时针或逆时针填写，边界点包含在内。
+棋盘格姿态改变后应重新测量四个外角并更新配置；该固定多边形不会自动跟踪
+棋盘格。若要动态跟踪，应另采一张高曝光、关闭激光的棋盘格图像做角点检测，
+再把当帧四边形传给重建流程。补偿建表则应使用独立的平地扫描，不要把这里的
+棋盘格 ROI 当成 `ground_u_compensation` 的输入筛选条件。
+
+在线 GUI 的 `calibration.manifest` 仍然必须存在并校验文件哈希。几何标定刚完成、
+尚未建立补偿表时，可以在临时 smoke-test 包的 manifest 中写
+`files.ground_u_compensation: null`；这只表示关闭补偿，不代表该包已经通过平地
+补偿验收。生产包仍应填入真实的 `ground_bias_table` 并通过独立验证。
+当 `manifest` 非空时，manifest 是唯一标定来源；配置中的三个路径以及
+`calibration.ground_u_compensation` 不会覆盖 manifest。也就是说，仅把
+`measure_tool.yaml` 的补偿项改成 `null`，并不能关闭 manifest 里仍然指向的旧 CSV。
 
 ---
 
@@ -154,7 +181,7 @@ extraction:
 from laser.backends import steger_backend
 
 points_uv = steger_backend(image, {
-    "sigma": 3.0,
+    "sigma": 1.5,
     "threshold": 30.0,
     "deriv_thresh": 0.5,
     "roi_margin": 120,
@@ -163,8 +190,8 @@ points_uv = steger_backend(image, {
 })
 ```
 
-实现来源是 `stripe_center_experiment/laser_center_extraction.py`，接入时修复了
-严格水平/竖直条纹下特征向量退化为零的问题，并加入条纹带裁剪以限制大图内存。
+实现位于共享的 `calibration/src/realtime_steger.py`，标定工具与在线测量直接
+调用同一个模块；其条纹带裁剪可限制大图 Hessian 的内存和耗时。
 依赖 `scipy`；安装命令仍为 `python -m pip install -r requirements.txt`。
 
 ### 3.2 脚本化调用（不开界面批处理）

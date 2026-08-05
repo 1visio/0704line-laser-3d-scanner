@@ -52,6 +52,15 @@ from .models import CameraConfig, CameraDeviceInfo, CapturedFrame, FrameResult
 from .mvs_camera import MvsCameraSession, list_devices
 from .pipeline import FramePipeline
 from .recording import FrameRecorder
+from reconstruction.reconstructor import reconstruct_uv_to_ground
+from utils.result_io import (
+    next_measurement_dir,
+    save_ground_pointcloud_ply,
+    save_image_png,
+    save_laser_centers_csv,
+    save_measurement_json,
+    save_reconstructed_points_csv,
+)
 
 
 pg.setConfigOptions(imageAxisOrder="row-major")
@@ -227,6 +236,7 @@ class OnlineCameraWindow(QMainWindow):
         self._recorder = FrameRecorder()
         self._session: MvsCameraSession | SyntheticCameraSession | None = None
         self._last_result: FrameResult | None = None
+        self._analysis_window: QMainWindow | None = None
         self._trail: deque[tuple[float, np.ndarray]] = deque(maxlen=30)
         self._displayed_frames = 0
         self._display_started = time.monotonic()
@@ -1164,6 +1174,16 @@ class OnlineCameraWindow(QMainWindow):
         stream_layout.addLayout(row)
         self.snapshot_button = QPushButton("保存当前帧", stream_group)
         stream_layout.addWidget(self.snapshot_button)
+        self.export_button = QPushButton("导出当前点云/CSV", stream_group)
+        self.export_button.setToolTip(
+            "保存当前帧的激光中心 CSV、重建点 CSV、地面系 PLY 和叠加图"
+        )
+        stream_layout.addWidget(self.export_button)
+        self.analysis_button = QPushButton("单帧测量与区域选择", stream_group)
+        self.analysis_button.setToolTip(
+            "打开离线测量界面，框选基准/障碍物区域并计算高度、长度"
+        )
+        stream_layout.addWidget(self.analysis_button)
         record_row = QHBoxLayout()
         self.record_count = _spin(stream_group, 1, 100000, 100)
         self.record_button = QPushButton("定长录制", stream_group)
@@ -1205,6 +1225,8 @@ class OnlineCameraWindow(QMainWindow):
         self.start_button.clicked.connect(self.start_stream)
         self.stop_button.clicked.connect(self.stop_stream)
         self.snapshot_button.clicked.connect(self.save_snapshot)
+        self.export_button.clicked.connect(self._export_current_frame)
+        self.analysis_button.clicked.connect(self.open_frame_analysis)
         self.record_button.clicked.connect(self.start_recording)
         queued = Qt.ConnectionType.QueuedConnection
         self._controller.raw_frame_ready.connect(self._show_raw_frame, queued)
@@ -1261,6 +1283,12 @@ class OnlineCameraWindow(QMainWindow):
         self.camera_settings_group.setEnabled(editable)
         self.processing_group.setEnabled(editable)
         self.snapshot_button.setEnabled(
+            self._last_result is not None and not busy
+        )
+        self.export_button.setEnabled(
+            self._last_result is not None and not busy
+        )
+        self.analysis_button.setEnabled(
             self._last_result is not None and not busy
         )
         self.record_count.setEnabled(streaming and not self._recorder.active)
@@ -1492,6 +1520,123 @@ class OnlineCameraWindow(QMainWindow):
         if path and not cv2.imwrite(path, self._last_result.frame.image):
             self._show_error(f"无法保存图像: {path}")
 
+    def export_current_frame(self) -> Path:
+        """导出当前实时帧的中心点、重建点云和地面系 PLY。
+
+        导出目录采用与离线工具相同的 ``*_measure`` 命名规则，但放在
+        ``output/online_measurements`` 下，避免覆盖已有离线结果。
+        """
+        result = self._last_result
+        if result is None:
+            raise RuntimeError("当前尚无可导出的实时帧")
+
+        reconstruction = reconstruct_uv_to_ground(
+            result.centers_uv_full,
+            self._pipeline.package.calibration,
+            self._config.reconstruction,
+        )
+        root = (
+            self._config.output.directory / "online_measurements"
+            if self._config.output is not None
+            else Path(__file__).resolve().parents[1]
+            / "output"
+            / "online_measurements"
+        )
+        image_name = f"frame_{result.frame.camera_frame_number:06d}.tiff"
+        target_dir = next_measurement_dir(image_name, root)
+        save_laser_centers_csv(
+            target_dir / "laser_center.csv", result.centers_uv_full
+        )
+        save_reconstructed_points_csv(
+            target_dir / "full_points.csv",
+            reconstruction.pixels_uv,
+            reconstruction.points_camera,
+            reconstruction.points_ground,
+        )
+        save_ground_pointcloud_ply(
+            target_dir / "full_laser_ground.ply",
+            reconstruction.points_ground,
+        )
+        save_image_png(
+            target_dir / "overlay.png",
+            cv2.cvtColor(result.overlay_rgb, cv2.COLOR_RGB2BGR),
+        )
+        payload = {
+            "source": "online",
+            "frame": {
+                "camera_frame_number": int(result.frame.camera_frame_number),
+                "camera_timestamp_ticks": (
+                    None
+                    if result.frame.camera_timestamp_ticks is None
+                    else int(result.frame.camera_timestamp_ticks)
+                ),
+                "host_timestamp_ns": int(result.frame.host_timestamp_ns),
+                "offset_x": int(result.frame.offset_x),
+                "offset_y": int(result.frame.offset_y),
+                "width": int(result.frame.image.shape[1]),
+                "height": int(result.frame.image.shape[0]),
+                "dtype": str(result.frame.image.dtype),
+            },
+            "extraction_method": self._pipeline.extraction_method,
+            "calibration_package_id": result.calibration_package_id,
+            "calibration_manifest_sha256": result.calibration_manifest_sha256,
+            "algorithm_config_sha256": result.algorithm_config_sha256,
+            "point_counts": {
+                "laser_centers_2d": int(len(result.centers_uv_full)),
+                "reconstructed": int(reconstruction.point_count),
+            },
+            "filtered": {key: int(value) for key, value in reconstruction.filtered.items()},
+            "files": {
+                "laser_center_csv": "laser_center.csv",
+                "full_points_csv": "full_points.csv",
+                "full_laser_ground_ply": "full_laser_ground.ply",
+                "overlay_png": "overlay.png",
+            },
+        }
+        save_measurement_json(target_dir / "result.json", payload)
+        return target_dir
+
+    def _export_current_frame(self) -> None:
+        try:
+            target_dir = self.export_current_frame()
+        except Exception as error:  # 导出失败应留在当前实时会话内
+            QMessageBox.critical(self, "当前帧导出失败", str(error))
+            return
+        self.statusBar().showMessage(f"当前帧点云/CSV 已保存到 {target_dir}")
+
+    def open_frame_analysis(self) -> None:
+        """打开离线同款单帧分析窗口，支持 ROI 与高度/长度测量。"""
+        result = self._last_result
+        if result is None:
+            QMessageBox.information(self, "没有图像", "当前尚无可分析帧")
+            return
+        if self._analysis_window is not None:
+            self._analysis_window.show()
+            self._analysis_window.raise_()
+            self._analysis_window.activateWindow()
+            return
+        try:
+            from gui.main_window import MainWindow
+
+            analysis = MainWindow(self._config)
+            analysis.load_external_frame(
+                result.frame.image,
+                result.centers_uv_full,
+                image_name=f"frame_{result.frame.camera_frame_number:06d}.tiff",
+                image_offset=(result.frame.offset_x, result.frame.offset_y),
+            )
+        except Exception as error:  # 在线入口必须把配置/依赖错误转成界面提示
+            QMessageBox.critical(self, "单帧分析启动失败", str(error))
+            return
+        self._analysis_window = analysis
+        analysis.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
+        analysis.destroyed.connect(
+            lambda _object=None: setattr(self, "_analysis_window", None)
+        )
+        analysis.show()
+        analysis.raise_()
+        analysis.activateWindow()
+
     def _set_image_view_mode(self, mode: str) -> None:
         if mode not in {"width", "fit"}:
             raise ValueError(f"未知图像视野模式: {mode}")
@@ -1635,6 +1780,9 @@ class OnlineCameraWindow(QMainWindow):
         QMessageBox.critical(self, "在线相机错误", message)
 
     def closeEvent(self, event) -> None:  # noqa: N802 - Qt API
+        if self._analysis_window is not None:
+            self._analysis_window.close()
+            self._analysis_window = None
         if (
             self._closing
             and self._session is None

@@ -178,7 +178,7 @@ sample_table:
 
 | 参数 | 单位 | 说明 |
 | --- | --- | --- |
-| `extraction.method` | — | `centroid`（默认、快速）或 `steger`（Hessian 亚像素） |
+| `extraction.method` | — | 当前默认为统一实时 `steger`；`shared_steger` 是兼容别名 |
 | `background_kernel` | px | 背景抑制高斯核，必须为奇数 |
 | `min_local_contrast_dn` | DN | 最低局部对比度；调低会增加弱线点，也可能增加噪声 |
 | `centroid_window_radius` | px | 灰度重心窗口半径 |
@@ -193,16 +193,15 @@ Steger 专用参数：
 
 | 参数 | 单位 | 说明 |
 | --- | --- | --- |
-| `sigma` | px | 高斯导数尺度，实验默认 3.0 |
+| `sigma` | px | 高斯导数尺度，中央 profile 默认 1.5；FWHM 2～3 px 可在 1.2～2.0 间验证 |
 | `threshold` | DN | 原始灰度下限；与 centroid 的局部对比度阈值不同 |
 | `deriv_thresh` | — | 亮脊线法向二阶导数绝对值下限 |
 | `roi_margin` | px | 自动检测条纹带后的扩展量，需覆盖地面与障碍物高度差 |
 | `roi_max_height` | px | Hessian 计算带最大宽度，限制内存和耗时 |
 | `scan_axis` | — | 水平条纹 `column`，竖直条纹 `row` |
 
-在当前 `150.tif` 上，默认 Steger 参数提取 2381 点，centroid 提取 2424 点；
-Steger 预热后约 125 ms，centroid 约 50 ms。具体速度随 CPU、SciPy 版本和
-条纹带高度变化，首次使用还包含 SciPy 导入开销。
+标定与在线测量均调用 `calibration/src/realtime_steger.py`；具体点数和速度
+会随 CPU、SciPy 版本、曝光和条纹带高度变化，首次使用还包含 SciPy 导入开销。
 
 ### 5.3 重建、测量与输出
 

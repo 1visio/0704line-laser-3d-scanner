@@ -11,6 +11,7 @@ from laser.backends import (
     _load_shared_steger_module,
     centroid_backend,
     create_extraction_params,
+    shared_steger_backend,
     steger_backend,
 )
 from laser.laser_extractor import extract_laser_center
@@ -152,6 +153,12 @@ class CreateExtractionParamsTest(unittest.TestCase):
 
 
 class StegerBackendTest(unittest.TestCase):
+    def test_shared_name_is_an_exact_realtime_alias(self) -> None:
+        image, _ = _horizontal_stripe_image(slope=0.0, intercept=40.25)
+        realtime = steger_backend(image, _STEGER_OPTIONS)
+        alias = shared_steger_backend(image, _STEGER_OPTIONS)
+        np.testing.assert_array_equal(alias, realtime)
+
     def test_recovers_exactly_horizontal_subpixel_stripe(self) -> None:
         image, truth = _horizontal_stripe_image(
             slope=0.0, intercept=40.25, sigma=2.0

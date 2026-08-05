@@ -19,11 +19,14 @@ class ReconstructionInputError(ValueError):
 
 @dataclass(frozen=True, slots=True)
 class ReconstructionParams:
-    """射线-平面求交的数值与工作距离约束。"""
+    """射线-平面求交的数值、工作距离与可选图像 ROI 约束。"""
 
     parallel_epsilon: float = 1.0e-9
     min_camera_depth_mm: float = 100.0
     max_camera_depth_mm: float = 1500.0
+    # 固定姿态下的棋盘格内部多边形，坐标为原始图像像素 (u, v)。
+    # None 表示不启用图像 ROI，保持历史全幅重建行为。
+    image_roi_polygon: tuple[tuple[float, float], ...] | None = None
 
     def __post_init__(self) -> None:
         if self.parallel_epsilon <= 0.0:
@@ -32,6 +35,37 @@ class ReconstructionParams:
             raise ReconstructionInputError(
                 "工作距离必须满足 0 <= min_camera_depth_mm < max_camera_depth_mm"
             )
+        if self.image_roi_polygon is None:
+            return
+        try:
+            polygon = np.asarray(self.image_roi_polygon, dtype=np.float64)
+        except (TypeError, ValueError) as error:
+            raise ReconstructionInputError(
+                "image_roi_polygon 必须是至少 3 个 (u, v) 像素坐标"
+            ) from error
+        if (
+            polygon.ndim != 2
+            or polygon.shape[1] != 2
+            or polygon.shape[0] < 3
+            or not np.isfinite(polygon).all()
+        ):
+            raise ReconstructionInputError(
+                "image_roi_polygon 必须是至少 3 个有限的 (u, v) 像素坐标"
+            )
+        # 拒绝退化多边形，避免 ROI 开关打开后静默保留/丢弃全部点。
+        area_twice = float(
+            np.sum(
+                polygon[:, 0] * np.roll(polygon[:, 1], -1)
+                - polygon[:, 1] * np.roll(polygon[:, 0], -1)
+            )
+        )
+        if abs(area_twice) <= np.finfo(np.float64).eps:
+            raise ReconstructionInputError("image_roi_polygon 不能是退化多边形")
+        object.__setattr__(
+            self,
+            "image_roi_polygon",
+            tuple((float(u), float(v)) for u, v in polygon),
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,6 +142,46 @@ def _compensation_z_offset(compensation: Mapping[str, Any]) -> float:
     return float(value.reshape(-1)[0])
 
 
+def _points_inside_polygon(
+    points_uv: np.ndarray,
+    polygon: tuple[tuple[float, float], ...],
+) -> np.ndarray:
+    """返回像素点是否在简单多边形内；边界点也算 ROI 内。"""
+    points = np.asarray(points_uv, dtype=np.float64)
+    vertices = np.asarray(polygon, dtype=np.float64)
+    x = points[:, 0, None]
+    y = points[:, 1, None]
+    x0 = vertices[:, 0][None, :]
+    y0 = vertices[:, 1][None, :]
+    x1 = np.roll(vertices[:, 0], -1)[None, :]
+    y1 = np.roll(vertices[:, 1], -1)[None, :]
+
+    # Ray crossing；水平边不产生 crossing，除以零只在屏蔽位置发生。
+    crosses = (y0 > y) != (y1 > y)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        x_at_y = x0 + (y - y0) * (x1 - x0) / (y1 - y0)
+    inside = np.count_nonzero(crosses & (x < x_at_y), axis=1) % 2 == 1
+
+    # 对边界做显式包含，避免棋盘格边缘的亚像素中心被误删。
+    cross_product = (x - x0) * (y1 - y0) - (y - y0) * (x1 - x0)
+    scale = np.maximum(
+        1.0,
+        np.maximum(
+            np.maximum(np.abs(x0), np.abs(y0)),
+            np.maximum(np.abs(x1), np.abs(y1)),
+        ),
+    )
+    on_line = np.abs(cross_product) <= 1.0e-9 * scale
+    on_segment = (
+        on_line
+        & (x >= np.minimum(x0, x1) - 1.0e-9)
+        & (x <= np.maximum(x0, x1) + 1.0e-9)
+        & (y >= np.minimum(y0, y1) - 1.0e-9)
+        & (y <= np.maximum(y0, y1) + 1.0e-9)
+    )
+    return inside | np.any(on_segment, axis=1)
+
+
 def reconstruct_uv_to_ground(
     pixels_uv: np.ndarray,
     calibration: Mapping[str, Any],
@@ -128,6 +202,7 @@ def reconstruct_uv_to_ground(
         "negative_depth": 0,
         "outside_working_distance": 0,
         "non_finite": 0,
+        "outside_image_roi": 0,
     }
     if points.size == 0:
         empty = np.empty((0, 2), dtype=np.float64)
@@ -141,6 +216,18 @@ def reconstruct_uv_to_ground(
         raise ReconstructionInputError("pixels_uv 必须是形状为 (N, 2) 的数组")
     if not np.isfinite(points).all():
         raise ReconstructionInputError("pixels_uv 包含 NaN 或无穷值")
+
+    if params.image_roi_polygon is not None:
+        inside_roi = _points_inside_polygon(points, params.image_roi_polygon)
+        empty_filtered["outside_image_roi"] = int(np.count_nonzero(~inside_roi))
+        points = points[inside_roi]
+        if points.size == 0:
+            return ReconstructionResult(
+                pixels_uv=np.empty((0, 2), dtype=np.float64),
+                points_camera=np.empty((0, 3), dtype=np.float64),
+                points_ground=np.empty((0, 3), dtype=np.float64),
+                filtered=empty_filtered,
+            )
 
     K = np.asarray(calibration["K"], dtype=np.float64)
     D = np.asarray(calibration["D"], dtype=np.float64)
@@ -177,6 +264,7 @@ def reconstruct_uv_to_ground(
             np.count_nonzero(stable & finite & positive & ~within_distance)
         ),
         "non_finite": int(np.count_nonzero(stable & ~finite)),
+        "outside_image_roi": empty_filtered["outside_image_roi"],
     }
 
     points_camera = points_camera[valid]

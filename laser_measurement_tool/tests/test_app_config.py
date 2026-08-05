@@ -100,7 +100,8 @@ class LoadAppConfigTest(unittest.TestCase):
 
     def test_default_config_and_calibration_are_self_contained(self) -> None:
         config = load_app_config(DEFAULT_CONFIG_PATH)
-        self.assertEqual(config.extraction_method, "centroid")
+        self.assertEqual(config.extraction_method, "steger")
+        self.assertEqual(config.extraction_options["sigma"], 1.5)
         tool_directory = DEFAULT_CONFIG_PATH.parent.parent.resolve()
         paths = (
             config.calibration.intrinsics,

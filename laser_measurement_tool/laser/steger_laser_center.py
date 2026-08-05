@@ -16,7 +16,7 @@ from scipy.signal import find_peaks
 
 @dataclass(frozen=True)
 class StegerSettings:
-    sigma_px: float = 1.2
+    sigma_px: float = 1.5
     max_offset_px: float = 0.75
     min_normal_y: float = 0.5
     min_response_ratio: float = 0.0005
@@ -25,6 +25,7 @@ class StegerSettings:
     min_prominence_ratio: float = 0.010
     profile_smoothing_sigma_px: float = 0.8
     sensor_max_value: float | None = None
+    scan_axis: str = "column"
 
 
 @dataclass(frozen=True)
@@ -474,7 +475,37 @@ def settings_from_args(args: argparse.Namespace) -> StegerSettings:
 
 def settings_metadata(settings: StegerSettings, post_filters: list[str]) -> dict[str, Any]:
     return {
-        "method": "steger_2d_shared",
-        **asdict(settings),
+        "method": "steger_realtime",
+        "sigma": float(settings.sigma_px),
+        "threshold": 30.0,
+        "deriv_thresh": 0.5,
+        "roi_margin": 120,
+        "roi_max_height": 512,
+        "scan_axis": getattr(settings, "scan_axis", "column"),
         "post_filters": post_filters,
     }
+
+
+# 兼容旧的 ``laser.steger_laser_center`` API；实际中心定位统一委托给
+# calibration/src/realtime_steger.py，避免在线工具再维护第二套 Hessian 公式。
+def _load_realtime_steger():
+    import importlib
+    import sys
+    from pathlib import Path
+
+    source_dir = Path(__file__).resolve().parents[3] / "calibration" / "src"
+    if str(source_dir) not in sys.path:
+        sys.path.insert(0, str(source_dir))
+    return importlib.import_module("realtime_steger")
+
+
+def extract_steger_columns(gray: np.ndarray, settings: StegerSettings):
+    options = {
+        "sigma": float(settings.sigma_px),
+        "threshold": 30.0,
+        "deriv_thresh": 0.5,
+        "roi_margin": 120,
+        "roi_max_height": 512,
+        "scan_axis": getattr(settings, "scan_axis", "column"),
+    }
+    return _load_realtime_steger().extract_steger_columns(gray, options)

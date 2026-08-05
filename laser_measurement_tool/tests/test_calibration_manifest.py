@@ -46,6 +46,28 @@ class CalibrationManifestTests(unittest.TestCase):
             package = load_calibration_package(destination / "manifest.yaml")
             self.assertEqual(package.camera_model, "MV-CS050-60GM")
 
+    def test_realtime_steger_algorithm_name_is_accepted(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary) / "calibration"
+            shutil.copytree(PACKAGE_DIR, destination)
+            path = destination / "manifest.yaml"
+            document = yaml.safe_load(path.read_text(encoding="utf-8"))
+            document["extractor"]["algorithm"] = "steger"
+            path.write_text(yaml.safe_dump(document), encoding="utf-8")
+            package = load_calibration_package(path)
+            self.assertEqual(package.algorithm, "steger")
+
+    def test_null_ground_compensation_is_accepted_for_smoke_test(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary) / "calibration"
+            shutil.copytree(PACKAGE_DIR, destination)
+            path = destination / "manifest.yaml"
+            document = yaml.safe_load(path.read_text(encoding="utf-8"))
+            document["files"]["ground_u_compensation"] = None
+            path.write_text(yaml.safe_dump(document), encoding="utf-8")
+            package = load_calibration_package(path)
+            self.assertIsNone(package.calibration["ground_u_compensation"])
+
     def test_parent_path_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             destination = Path(temporary) / "calibration"

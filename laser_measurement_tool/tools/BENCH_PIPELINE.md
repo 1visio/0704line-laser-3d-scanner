@@ -54,10 +54,10 @@ Set-Location "G:\dev\projects\0704linescan\laser_measurement_tool"
 
 | 参数 | 默认 | 说明 |
 |---|---|---|
-| `--method {centroid,steger}` | centroid | 提取算法；Steger 使用 Hessian 亚像素定位 |
+| `--method {centroid,steger}` | steger | 提取算法；当前默认使用统一实时 Steger |
 | `--background-kernel N` | 51 | 背景抑制高斯核，必须为 ≥3 的奇数。与 `configs/measure_tool.yaml` 同名字段含义一致 |
 | `--min-local-contrast-dn F` | 20.0 | 峰值最低局部对比度（DN，按源位深）。Mono12 图像需按位深放大 |
-| `--steger-sigma F` | 3.0 | Steger 高斯导数尺度 |
+| `--steger-sigma F` | 1.5 | 统一实时 Steger 高斯导数尺度；FWHM 2～3 px 可在 1.2～2.0 间验证 |
 | `--steger-threshold F` | 30.0 | Steger 原始灰度下限（DN） |
 | `--steger-deriv-thresh F` | 0.5 | Steger 法向二阶导数阈值 |
 | `--steger-roi-margin N` | 120 | Steger 自动条纹带扩展量 |

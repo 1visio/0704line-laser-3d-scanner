@@ -151,8 +151,25 @@ def _parse_extraction(
     method = method.strip()
 
     options_by_method: dict[str, dict[str, Any]] = {}
+    profile_options: dict[str, Any] = {}
+    profile_value = section.get("profile")
+    if profile_value not in (None, ""):
+        if not isinstance(profile_value, str):
+            raise AppConfigError("extraction.profile 必须是路径字符串")
+        profile_path = (path.resolve().parent / profile_value).resolve()
+        try:
+            profile_document = yaml.safe_load(profile_path.read_text(encoding="utf-8")) or {}
+        except (OSError, UnicodeError, yaml.YAMLError) as error:
+            raise AppConfigError(f"无法读取 extraction.profile {profile_path}: {error}") from error
+        if not isinstance(profile_document, Mapping):
+            raise AppConfigError(f"extraction.profile 根节点必须是映射: {profile_path}")
+        profile_options = profile_document.get("steger", profile_document.get("options", {}))
+        if not isinstance(profile_options, Mapping):
+            raise AppConfigError(f"extraction.profile 缺少 steger 映射: {profile_path}")
+        profile_options = dict(profile_options)
+
     for key, value in section.items():
-        if key == "method":
+        if key in {"method", "profile"}:
             continue
         if value is None:
             options_by_method[str(key)] = {}
@@ -160,6 +177,21 @@ def _parse_extraction(
             options_by_method[str(key)] = dict(value)
         else:
             raise AppConfigError(f"extraction.{key} 必须是参数映射")
+
+    if profile_options:
+        merged = dict(profile_options)
+        merged.update(options_by_method.get("steger", {}))
+        options_by_method["steger"] = merged
+
+        # ``shared_steger`` 是旧名称。存在 profile 时强制把它归一化为
+        # 同一组实时参数，旧配置中的 sigma_px 仍可作为 sigma 覆盖项。
+        shared_inline = options_by_method.get("shared_steger", {})
+        shared = dict(profile_options)
+        for key, value in shared_inline.items():
+            canonical = "sigma" if key == "sigma_px" else key
+            if canonical in profile_options:
+                shared[canonical] = value
+        options_by_method["shared_steger"] = shared
 
     options = options_by_method.get(method, {})
     return method, dict(options), options_by_method

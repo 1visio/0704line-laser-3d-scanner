@@ -17,17 +17,19 @@ extractor:
     profile_smoothing_sigma_px: 0.8
 files:
   intrinsics:
-    path: calibration_result.yaml
-    sha256: f19e5a223a9e31799fe5df2346d521a433d059b08ab8b81a38b98fb4c9b5ff13
+    path: camera_intrinsics.yaml
+    sha256: 8e17d1c86085e406568172cd89a6115888b9beeded829b18334e3564fb15976a
   laser_plane:
     path: laser_plane.yaml
-    sha256: 83521cebebb7d5d65829e0e929baadf2430345e8cdff687da4e7ca57594ba047
+    sha256: b08b88abcd1793fcd25b73ba703d303deb6209e27386b17e76d90a3b0aa39054
   extrinsics:
     path: camera_ground_extrinsics.yaml
-    sha256: e8e9479a83b4cf20fc65ed110303883c8df9fcad2a2c96e4d5aaaeca6fe40c07
-  ground_u_compensation: null
+    sha256: ef80ef2c4adf111366da1dce647bb27f80087947d51e3c95ab521aad87b7bc18
+  ground_u_compensation:
+    path: ground_u_compensation.csv
+    sha256: 4b14655a4d0fa0d9acafdd13dc27683bcfc3106f26da34639729ac69a1ffdbc5
 quality:
-  intrinsics_rms_px: 0.101893779
-  laser_plane_rmse_mm: 0.148929
-  laser_plane_p95_mm: 0.321439
+  intrinsics_rms_px: 0.109626
+  laser_plane_rmse_mm: 0.142713
+  laser_plane_p95_mm: 0.271260
   camera_height_mm: 711.942

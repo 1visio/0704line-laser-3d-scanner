@@ -336,7 +336,7 @@ def build_parser() -> argparse.ArgumentParser:
     extraction = parser.add_argument_group("提取参数")
     extraction.add_argument(
         "--method",
-        default="centroid",
+        default="steger",
         choices=sorted(k for k, v in AVAILABLE_METHODS.items() if v is not None),
         help="提取算法",
     )
@@ -347,7 +347,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--min-local-contrast-dn", type=float, default=20.0, help="峰值最低局部对比度"
     )
     extraction.add_argument(
-        "--steger-sigma", type=float, default=3.0, help="Steger 高斯导数尺度"
+        "--steger-sigma", type=float, default=1.5, help="Steger 高斯导数尺度"
     )
     extraction.add_argument(
         "--steger-threshold", type=float, default=30.0, help="Steger 原始灰度阈值"

@@ -97,6 +97,28 @@ class ReconstructUvToGroundTest(unittest.TestCase):
         )
         self.assertEqual(result.point_count, 0)
 
+    def test_image_roi_keeps_board_interior_and_counts_outside_points(self) -> None:
+        calibration = _synthetic_calibration()
+        params = ReconstructionParams(
+            image_roi_polygon=(
+                (300.0, 200.0),
+                (500.0, 200.0),
+                (500.0, 400.0),
+                (300.0, 400.0),
+            )
+        )
+        pixels = np.array([[320.0, 240.0], [499.999, 399.999], [250.0, 240.0]])
+        result = reconstruct_uv_to_ground(pixels, calibration, params)
+        self.assertEqual(result.point_count, 2)
+        self.assertEqual(result.filtered["outside_image_roi"], 1)
+        np.testing.assert_allclose(result.pixels_uv, pixels[:2], atol=1e-6)
+
+    def test_degenerate_image_roi_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ReconstructionInputError, "退化多边形"):
+            ReconstructionParams(
+                image_roi_polygon=((0.0, 0.0), (1.0, 1.0), (2.0, 2.0))
+            )
+
     def test_reconstruction_applies_interpolated_ground_u_bias(self) -> None:
         calibration = _synthetic_calibration()
         pixels = np.array([[300.0, 240.0], [350.0, 240.0], [450.0, 240.0]])

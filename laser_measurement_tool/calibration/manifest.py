@@ -56,15 +56,22 @@ def load_calibration_package(manifest_path: str | Path) -> CalibrationPackage:
     if not isinstance(extractor, dict):
         raise CalibrationManifestError("标定清单缺少 extractor")
     algorithm = _required_text(extractor, "algorithm")
-    if algorithm != "shared_steger":
+    if algorithm not in {"steger", "shared_steger"}:
         raise CalibrationManifestError(
-            f"生产标定包必须使用 shared_steger，实际为 {algorithm!r}"
+            f"生产标定包必须使用实时 Steger（steger/shared_steger），实际为 {algorithm!r}"
         )
 
     files = document.get("files")
-    required = ("intrinsics", "laser_plane", "extrinsics", "ground_u_compensation")
-    if not isinstance(files, dict) or any(name not in files for name in required):
-        raise CalibrationManifestError(f"标定清单 files 必须包含 {required}")
+    required = ("intrinsics", "laser_plane", "extrinsics")
+    if (
+        not isinstance(files, dict)
+        or any(name not in files for name in required)
+        or "ground_u_compensation" not in files
+    ):
+        raise CalibrationManifestError(
+            "标定清单 files 必须包含 intrinsics、laser_plane、extrinsics、"
+            "ground_u_compensation；补偿项可显式设为 null 用于无补偿试跑"
+        )
     resolved: dict[str, Path] = {}
     for name in required:
         entry = files[name]
@@ -91,11 +98,48 @@ def load_calibration_package(manifest_path: str | Path) -> CalibrationPackage:
             )
         resolved[name] = file_path
 
+    # 生产包通常提供真实补偿表；显式 null 允许在几何标定完成后先做
+    # smoke test，而不需要伪造一张“已验收”的补偿 LUT。
+    ground_entry = files["ground_u_compensation"]
+    if ground_entry is None:
+        ground_u_path: Path | None = None
+    else:
+        if not isinstance(ground_entry, dict):
+            raise CalibrationManifestError(
+                "files.ground_u_compensation 必须是映射或 null"
+            )
+        relative = Path(_required_text(ground_entry, "path"))
+        if relative.is_absolute() or ".." in relative.parts:
+            raise CalibrationManifestError(
+                "files.ground_u_compensation.path 必须是包内相对路径"
+            )
+        file_path = (path.parent / relative).resolve()
+        try:
+            file_path.relative_to(path.parent)
+        except ValueError as error:
+            raise CalibrationManifestError(
+                "files.ground_u_compensation.path 越出标定包"
+            ) from error
+        expected_hash = _required_text(ground_entry, "sha256").lower()
+        if len(expected_hash) != 64:
+            raise CalibrationManifestError(
+                "files.ground_u_compensation.sha256 格式错误"
+            )
+        if not file_path.is_file():
+            raise CalibrationManifestError(f"标定文件不存在: {file_path}")
+        actual_hash = sha256_file(file_path)
+        if actual_hash != expected_hash:
+            raise CalibrationManifestError(
+                f"标定文件哈希不匹配: {file_path.name}\n"
+                f"期望 {expected_hash}\n实际 {actual_hash}"
+            )
+        ground_u_path = file_path
+
     calibration = load_calibration_files(
         resolved["intrinsics"],
         resolved["laser_plane"],
         resolved["extrinsics"],
-        resolved["ground_u_compensation"],
+        ground_u_path,
     )
     return CalibrationPackage(
         manifest_path=path,

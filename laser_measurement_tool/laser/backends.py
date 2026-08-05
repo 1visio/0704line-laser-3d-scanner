@@ -13,6 +13,9 @@
 
 from collections.abc import Mapping
 from dataclasses import dataclass, fields
+from importlib import import_module
+from pathlib import Path
+import sys
 from typing import Any
 
 import cv2
@@ -61,7 +64,7 @@ class CentroidParams:
 class StegerParams:
     """Steger 条纹中心提取参数。"""
 
-    sigma: float = 3.0
+    sigma: float = 1.5
     threshold: float = 30.0
     deriv_thresh: float = 0.5
     roi_margin: int = 120
@@ -87,7 +90,7 @@ class StegerParams:
 class SharedStegerParams:
     """Shared Steger extractor parameters aligned with calibration V4."""
 
-    sigma_px: float = 1.2
+    sigma_px: float = 1.5
     max_offset_px: float = 0.75
     min_normal_y: float = 0.5
     min_response_ratio: float = 0.0005
@@ -300,6 +303,7 @@ def _detect_steger_band(
     return top, bottom
 
 
+# 历史实现保留用于旧 import；公开 backend 已统一委托 realtime_steger。
 def _extract_steger_columnwise(
     gray: np.ndarray, params: StegerParams
 ) -> np.ndarray:
@@ -396,17 +400,15 @@ def steger_backend(
     image: np.ndarray, options: Mapping[str, Any]
 ) -> np.ndarray:
     """Steger/Hessian 亚像素中心提取，返回 ``(N, 2)`` 的 ``(u, v)``。"""
-    params = steger_params_from_options(options)
-    gray = np.ascontiguousarray(image)
-    if params.scan_axis == "column":
-        return _extract_steger_columnwise(gray, params)
+    return _load_realtime_steger_module().steger_backend(image, options)
 
-    transposed = _extract_steger_columnwise(
-        np.ascontiguousarray(gray.T), params
-    )
-    if transposed.size == 0:
-        return transposed
-    return np.ascontiguousarray(transposed[:, ::-1])
+
+def _load_realtime_steger_module() -> Any:
+    """加载标定与在线共用的实时 Steger 源码。"""
+    source_dir = Path(__file__).resolve().parents[3] / "calibration" / "src"
+    if str(source_dir) not in sys.path:
+        sys.path.insert(0, str(source_dir))
+    return import_module("realtime_steger")
 
 
 def _load_shared_steger_module() -> Any:
@@ -447,18 +449,18 @@ def _extract_shared_steger_columnwise(
 def shared_steger_backend(
     image: np.ndarray, options: Mapping[str, Any]
 ) -> np.ndarray:
-    """Shared V4 Steger extraction, returning ``(N, 2)`` pixel centres."""
-    params = shared_steger_params_from_options(options)
-    gray = np.ascontiguousarray(image)
-    if params.scan_axis == "column":
-        return _extract_shared_steger_columnwise(gray, params)
-
-    transposed = _extract_shared_steger_columnwise(
-        np.ascontiguousarray(gray.T), params
-    )
-    if transposed.size == 0:
-        return transposed
-    return np.ascontiguousarray(transposed[:, ::-1])
+    """兼容旧名称；实际调用统一的实时 Steger extractor。"""
+    realtime = dict(options)
+    if "sigma" not in realtime:
+        realtime = {
+            "sigma": realtime.get("sigma_px", 1.5),
+            "threshold": realtime.get("threshold", 30.0),
+            "deriv_thresh": realtime.get("deriv_thresh", 0.5),
+            "roi_margin": realtime.get("roi_margin", 120),
+            "roi_max_height": realtime.get("roi_max_height", 512),
+            "scan_axis": realtime.get("scan_axis", "column"),
+        }
+    return _load_realtime_steger_module().steger_backend(image, realtime)
 
 
 #: 界面与配置可选的提取算法。
@@ -483,7 +485,10 @@ def create_extraction_params(
     elif method == "steger":
         steger_params_from_options(resolved_options)
     elif method == "shared_steger":
-        shared_steger_params_from_options(resolved_options)
+        if "sigma" in resolved_options:
+            steger_params_from_options(resolved_options)
+        else:
+            shared_steger_params_from_options(resolved_options)
     return LaserExtractionParams(
         method=method,
         backend=AVAILABLE_METHODS[method],

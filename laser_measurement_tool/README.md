@@ -20,6 +20,20 @@ $env:PYTHONPATH="$PWD;$PWD\.."
 python -m unittest discover -s tests
 ```
 
+### 在线实时工具的单帧分析
+
+运行 `online_camera.py`（或在主窗口点击“在线相机”）后，实时窗口保留原有
+图像快照和定长录制功能，并新增：
+
+- “导出当前点云/CSV”：保存当前帧的 `laser_center.csv`、`full_points.csv`、
+  `full_laser_ground.ply`、`overlay.png` 和 `result.json` 到
+  `output/online_measurements/`；
+- “单帧测量与区域选择”：打开与离线工具相同的分析界面，可框选基准区域、一个或
+  多个障碍物区域，执行三维恢复与高度/长度测量，再用“保存结果”输出完整测量文件。
+
+实时相机的 ROI 偏移会自动转换回标定使用的全幅像素坐标；分析窗口中的框选仍以
+当前相机 ROI 图像坐标显示。
+
 ## 目录
 
 - `configs/calibration/`：当前设备对应的运行标定与补偿数据。

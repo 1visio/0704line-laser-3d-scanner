@@ -79,6 +79,9 @@ class MainWindow(QMainWindow):
         self._calibration: dict[str, Any] | None = None
         self._image: np.ndarray | None = None
         self._image_path: Path | None = None
+        # 实时相机通常输出传感器 ROI。图像/ROI 仍使用 ROI 局部坐标，
+        # 重建时再加回该偏移以匹配标定文件中的全幅像素坐标。
+        self._image_offset = (0, 0)
         self._laser_centers = np.empty((0, 2), dtype=np.float64)
         self._laser_extraction_params: LaserExtractionParamsInput = (
             self._extraction_params_from_config(
@@ -133,6 +136,11 @@ class MainWindow(QMainWindow):
         return self._laser_centers
 
     @property
+    def current_laser_centers_full(self) -> np.ndarray:
+        """返回按标定全幅像素坐标表示的最近中心点。"""
+        return self._centers_in_calibration_coordinates(self._laser_centers)
+
+    @property
     def last_laser_csv_path(self) -> Path | None:
         """返回最近一次成功保存的中心点 CSV 路径。"""
         return self._last_laser_csv_path
@@ -171,22 +179,120 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "加载失败", str(error))
             return
 
-        self._image = image
-        self._image_path = Path(file_path)
-        self._laser_centers = np.empty((0, 2), dtype=np.float64)
+        self._set_frame_data(
+            image,
+            Path(file_path),
+            np.empty((0, 2), dtype=np.float64),
+            image_offset=(0, 0),
+        )
+        height, width = image.shape
+        self.statusBar().showMessage(
+            f"已加载 {self._image_path.name} | {width} × {height} | {image.dtype}"
+        )
+
+    def load_external_frame(
+        self,
+        image: np.ndarray,
+        centers_uv_full: np.ndarray,
+        *,
+        image_name: str | Path = "online_frame.tiff",
+        image_offset: tuple[int, int] = (0, 0),
+    ) -> None:
+        """加载实时窗口传入的单帧，并保留其全幅标定坐标。
+
+        ``image`` 是相机 ROI 图像，``centers_uv_full`` 使用原始传感器
+        坐标；ROI 框选在局部图像上进行，三维恢复时自动加回
+        ``image_offset``。
+        """
+        frame = np.asarray(image)
+        if frame.ndim != 2 or frame.dtype not in (np.uint8, np.uint16):
+            raise ValueError("实时帧必须是二维 uint8/uint16 灰度图")
+        centers = np.asarray(centers_uv_full, dtype=np.float64)
+        if centers.ndim != 2 or centers.shape[1] != 2:
+            raise ValueError("中心点必须是形状为 (N, 2) 的数组")
+        if not np.isfinite(centers).all():
+            raise ValueError("中心点包含 NaN 或无穷值")
+        try:
+            raw_offset = tuple(image_offset)
+            if len(raw_offset) != 2:
+                raise ValueError
+            offset = tuple(int(value) for value in raw_offset)
+        except (TypeError, ValueError, OverflowError) as error:
+            raise ValueError("image_offset 必须是两个整数坐标") from error
+        if min(offset) < 0:
+            raise ValueError("图像偏移不能为负数")
+        local_centers = centers - np.asarray(offset, dtype=np.float64)
+        height, width = frame.shape
+        if len(local_centers):
+            if (
+                np.min(local_centers[:, 0]) < -0.5
+                or np.max(local_centers[:, 0]) >= width + 0.5
+                or np.min(local_centers[:, 1]) < -0.5
+                or np.max(local_centers[:, 1]) >= height + 0.5
+            ):
+                raise ValueError("实时中心点超出相机 ROI 范围")
+        self._set_frame_data(
+            frame,
+            Path(image_name),
+            local_centers,
+            image_offset=offset,
+        )
+        self.statusBar().showMessage(
+            f"已加载实时帧 | {width} × {height} | 中心点 {len(local_centers)} | "
+            f"Offset ({offset[0]}, {offset[1]})"
+        )
+
+    def load_frame(
+        self,
+        image: np.ndarray,
+        centers_uv_full: np.ndarray,
+        *,
+        image_name: str | Path = "online_frame.tiff",
+        image_offset: tuple[int, int] = (0, 0),
+    ) -> None:
+        """``load_external_frame`` 的简短别名，便于实时控制器调用。"""
+        self.load_external_frame(
+            image,
+            centers_uv_full,
+            image_name=image_name,
+            image_offset=image_offset,
+        )
+
+    def _set_frame_data(
+        self,
+        image: np.ndarray,
+        image_path: Path,
+        centers_local: np.ndarray,
+        *,
+        image_offset: tuple[int, int],
+    ) -> None:
+        self._image = np.ascontiguousarray(image)
+        self._image_path = image_path
+        self._image_offset = tuple(int(value) for value in image_offset)
+        self._laser_centers = np.ascontiguousarray(
+            np.asarray(centers_local, dtype=np.float64).reshape(-1, 2)
+        )
         self._last_laser_csv_path = None
         self._roi_manager.clear()
         self._update_roi_points()
-        self.image_view.set_image(image)
+        self.image_view.set_image(self._image)
+        if len(self._laser_centers):
+            self.image_view.set_laser_centers(self._laser_centers)
         self.point_cloud_view.clear()
         self.section_view.clear()
         self._show_image_view()
         self._set_image_actions_enabled(True)
-        self.point_cloud_button.setEnabled(False)
-        self.section_view_button.setEnabled(False)
-        height, width = image.shape
-        self.statusBar().showMessage(
-            f"已加载 {self._image_path.name} | {width} × {height} | {image.dtype}"
+        self.point_cloud_button.setEnabled(len(self._laser_centers) > 0)
+        self.section_view_button.setEnabled(len(self._laser_centers) > 0)
+
+    def _centers_in_calibration_coordinates(
+        self, centers_local: np.ndarray
+    ) -> np.ndarray:
+        points = np.asarray(centers_local, dtype=np.float64).reshape(-1, 2)
+        if not len(points) or self._image_offset == (0, 0):
+            return np.ascontiguousarray(points)
+        return np.ascontiguousarray(
+            points + np.asarray(self._image_offset, dtype=np.float64)
         )
 
     def _build_central_widget(self) -> QWidget:
@@ -543,16 +649,22 @@ class MainWindow(QMainWindow):
             baseline_recon = None
             if has_baseline_roi:
                 baseline_recon = reconstruct_uv_to_ground(
-                    self._baseline_points, calibration, config.reconstruction
+                    self._centers_in_calibration_coordinates(self._baseline_points),
+                    calibration,
+                    config.reconstruction,
                 )
             obstacle_recons = [
                 reconstruct_uv_to_ground(
-                    points, calibration, config.reconstruction
+                    self._centers_in_calibration_coordinates(points),
+                    calibration,
+                    config.reconstruction,
                 )
                 for points in self._obstacle_point_groups
             ]
             full_recon = reconstruct_uv_to_ground(
-                self._laser_centers, calibration, config.reconstruction
+                self._centers_in_calibration_coordinates(self._laser_centers),
+                calibration,
+                config.reconstruction,
             )
             measurements = measure_height_lines(
                 (
@@ -671,7 +783,7 @@ class MainWindow(QMainWindow):
 
         if self._last_full_reconstruction is None:
             self._last_full_reconstruction = reconstruct_uv_to_ground(
-                self._laser_centers,
+                self._centers_in_calibration_coordinates(self._laser_centers),
                 calibration,
                 config.reconstruction,
             )
@@ -706,6 +818,8 @@ class MainWindow(QMainWindow):
                 endpoints_ground, calibration
             )
             if np.isfinite(pixels).all():
+                # 测量叠加绘制在 ROI 局部图像上，投影坐标则属于全幅标定图像。
+                pixels = pixels - np.asarray(self._image_offset, dtype=np.float64)
                 segments.append((kind, pixels))
         return segments
 
@@ -802,7 +916,8 @@ class MainWindow(QMainWindow):
         payload = self._measurement_payload(self._last_measurements)
         try:
             laser_csv_path = save_laser_centers_csv(
-                target_dir / "laser_center.csv", self._laser_centers
+                target_dir / "laser_center.csv",
+                self._centers_in_calibration_coordinates(self._laser_centers),
             )
             self._last_laser_csv_path = laser_csv_path
             save_measurement_json(target_dir / "result.json", payload)
@@ -935,7 +1050,7 @@ class MainWindow(QMainWindow):
 
     def _common_result_payload(self, measurement_performed: bool) -> dict[str, Any]:
         config = self._app_config
-        return {
+        payload = {
             "image": str(self._image_path),
             "config": str(config.config_path) if config else None,
             "calibration": (
@@ -960,6 +1075,12 @@ class MainWindow(QMainWindow):
             "measurement_performed": measurement_performed,
             "laser_center_csv": "laser_center.csv",
         }
+        if self._image_offset != (0, 0):
+            payload["image_offset"] = {
+                "u": int(self._image_offset[0]),
+                "v": int(self._image_offset[1]),
+            }
+        return payload
 
     @staticmethod
     def _measurement_values(

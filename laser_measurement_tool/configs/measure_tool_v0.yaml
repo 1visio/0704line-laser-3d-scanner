@@ -8,13 +8,13 @@ schema_version: 1
 calibration:
   manifest: calibration/manifest.yaml
   # 相机内参：需含 camera_matrix(3x3) 与 dist_coeffs(4/5/8/12/14 个)
-  intrinsics: calibration/calibration_result.yaml
+  intrinsics: calibration/camera_intrinsics.yaml
   # 激光平面（相机系，mm）：支持 coefficients/plane/plane_abcd 三种写法
   laser_plane: calibration/laser_plane.yaml
   # 地面外参：支持 R+t 或 T_ground_from_camera(4x4)
   extrinsics: calibration/camera_ground_extrinsics.yaml
   # 可选 U 补偿：支持 validation v2 的 CSV，关闭时改为 null
-  ground_u_compensation: null
+  ground_u_compensation: calibration/ground_u_compensation.csv
 
 extraction:
   # 标定与在线统一使用实时 Steger；参数集中在 calibration/config/realtime_steger.yaml
