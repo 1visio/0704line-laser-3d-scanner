@@ -107,7 +107,6 @@ class LoadAppConfigTest(unittest.TestCase):
             config.calibration.intrinsics,
             config.calibration.laser_plane,
             config.calibration.extrinsics,
-            config.calibration.ground_u_compensation,
             config.calibration.manifest,
         )
         for path in paths:
@@ -122,9 +121,10 @@ class LoadAppConfigTest(unittest.TestCase):
             config.calibration.ground_u_compensation,
         )
         self.assertEqual(calibration["K"].shape, (3, 3))
-        self.assertEqual(calibration["plane_abcd"].shape, (4,))
+        self.assertEqual(calibration["laser_model"]["model_type"], "circular_cone")
+        self.assertNotIn("plane_abcd", calibration)
         self.assertEqual(calibration["R"].shape, (3, 3))
-        self.assertEqual(len(calibration["ground_u_compensation"]["bias_mm"]), 2448)
+        self.assertIsNone(calibration["ground_u_compensation"])
 
 
 if __name__ == "__main__":

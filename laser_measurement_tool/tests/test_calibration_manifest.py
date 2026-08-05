@@ -26,7 +26,7 @@ class CalibrationManifestTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             destination = Path(temporary) / "calibration"
             shutil.copytree(PACKAGE_DIR, destination)
-            with (destination / "camera_intrinsics.yaml").open("a", encoding="utf-8") as stream:
+            with (destination / "circular_cone.yaml").open("a", encoding="utf-8") as stream:
                 stream.write("\n# modified\n")
             with self.assertRaisesRegex(CalibrationManifestError, "哈希不匹配"):
                 load_calibration_package(destination / "manifest.yaml")
@@ -39,6 +39,8 @@ class CalibrationManifestTests(unittest.TestCase):
                 (destination / "manifest.yaml").read_text(encoding="utf-8")
             )
             for entry in manifest["files"].values():
+                if entry is None:
+                    continue
                 path = destination / entry["path"]
                 lf_data = path.read_bytes().replace(b"\r\n", b"\n")
                 path.write_bytes(lf_data.replace(b"\n", b"\r\n"))

@@ -26,13 +26,23 @@ class AppConfigError(ValueError):
 
 @dataclass(frozen=True, slots=True)
 class CalibrationPaths:
-    """三个必需标定文件与可选 U 补偿文件的绝对路径。"""
+    """相机内参、激光表面模型、地面外参与可选 U 补偿的绝对路径。
+
+    为兼容旧代码，成员名仍保留为 ``laser_plane``；文件内容现在可以是
+    global_plane、quadratic_graph 或 circular_cone。推荐使用配置键
+    ``calibration.laser_model``，旧键 ``calibration.laser_plane`` 仍可读取。
+    """
 
     intrinsics: Path
     laser_plane: Path
     extrinsics: Path
     ground_u_compensation: Path | None = None
     manifest: Path | None = None
+
+    @property
+    def laser_model(self) -> Path:
+        """激光表面模型文件路径（新名称）。"""
+        return self.laser_plane
 
 
 @dataclass(frozen=True, slots=True)
@@ -114,12 +124,29 @@ def _parse_calibration(
         raise AppConfigError(f"{path} 缺少 calibration 段")
     ground_u_value = section.get("ground_u_compensation")
     manifest_value = section.get("manifest")
+    laser_model_value = section.get("laser_model")
+    legacy_laser_plane_value = section.get("laser_plane")
+    if (
+        laser_model_value not in (None, "")
+        and legacy_laser_plane_value not in (None, "")
+        and str(laser_model_value).strip()
+        != str(legacy_laser_plane_value).strip()
+    ):
+        raise AppConfigError(
+            "calibration.laser_model 与 calibration.laser_plane 同时存在且不一致；"
+            "请只保留一个"
+        )
+    selected_laser_model = (
+        laser_model_value
+        if laser_model_value not in (None, "")
+        else legacy_laser_plane_value
+    )
     return CalibrationPaths(
         intrinsics=_resolve_path(
             section.get("intrinsics"), base_dir, "calibration.intrinsics"
         ),
         laser_plane=_resolve_path(
-            section.get("laser_plane"), base_dir, "calibration.laser_plane"
+            selected_laser_model, base_dir, "calibration.laser_model"
         ),
         extrinsics=_resolve_path(
             section.get("extrinsics"), base_dir, "calibration.extrinsics"

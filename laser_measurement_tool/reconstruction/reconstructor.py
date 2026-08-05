@@ -1,8 +1,9 @@
-"""亚像素图像点到地面坐标系三维点的重建。
+"""亚像素激光中心点到地面坐标系三维点的多模型重建。
 
-算法与 ``reconstruct_ground_pointcloud_v3.py`` 保持一致：
-去畸变得到归一化射线 → 射线与激光平面求交（相机系）→ 用地面外参
-``T_ground_from_camera`` 变换到地面系。所有长度单位为 mm。
+支持 ``global_plane``、``quadratic_graph`` 和 ``circular_cone`` 三种
+相机坐标系激光表面。统一流程是去畸变得到相机射线、与激光表面求交，
+再用 ``T_ground_from_camera`` 变换到地面系；所有长度单位为 mm。
+没有 ``laser_model`` 时仍兼容旧格式 ``plane_abcd``。
 """
 
 from collections.abc import Mapping
@@ -19,11 +20,14 @@ class ReconstructionInputError(ValueError):
 
 @dataclass(frozen=True, slots=True)
 class ReconstructionParams:
-    """射线-平面求交的数值、工作距离与可选图像 ROI 约束。"""
+    """射线-激光表面求交的数值、工作距离与可选图像 ROI 约束。"""
 
     parallel_epsilon: float = 1.0e-9
+    quadratic_epsilon: float = 1.0e-12
     min_camera_depth_mm: float = 100.0
     max_camera_depth_mm: float = 1500.0
+    # 模型自身 z_valid_range_mm 的边界外扩，避免边界噪声误删。
+    model_range_margin_mm: float = 50.0
     # 固定姿态下的棋盘格内部多边形，坐标为原始图像像素 (u, v)。
     # None 表示不启用图像 ROI，保持历史全幅重建行为。
     image_roi_polygon: tuple[tuple[float, float], ...] | None = None
@@ -31,6 +35,10 @@ class ReconstructionParams:
     def __post_init__(self) -> None:
         if self.parallel_epsilon <= 0.0:
             raise ReconstructionInputError("parallel_epsilon 必须为正数")
+        if self.quadratic_epsilon <= 0.0:
+            raise ReconstructionInputError("quadratic_epsilon 必须为正数")
+        if self.model_range_margin_mm < 0.0:
+            raise ReconstructionInputError("model_range_margin_mm 不能为负数")
         if not 0.0 <= self.min_camera_depth_mm < self.max_camera_depth_mm:
             raise ReconstructionInputError(
                 "工作距离必须满足 0 <= min_camera_depth_mm < max_camera_depth_mm"
@@ -142,6 +150,302 @@ def _compensation_z_offset(compensation: Mapping[str, Any]) -> float:
     return float(value.reshape(-1)[0])
 
 
+def _axis_index(name: str) -> int:
+    lookup = {"X": 0, "Y": 1, "Z": 2}
+    try:
+        return lookup[str(name).upper()]
+    except KeyError as error:
+        raise ReconstructionInputError(f"不支持的坐标轴名称：{name!r}") from error
+
+
+def _model_z_range(model: Mapping[str, Any]) -> tuple[float, float] | None:
+    value = model.get("z_valid_range_mm")
+    if value is None:
+        return None
+    try:
+        arr = np.asarray(value, dtype=np.float64).reshape(-1)
+    except (TypeError, ValueError) as error:
+        raise ReconstructionInputError(
+            "z_valid_range_mm 必须是递增的两个有限数值"
+        ) from error
+    if arr.size != 2 or not np.isfinite(arr).all() or arr[0] >= arr[1]:
+        raise ReconstructionInputError("z_valid_range_mm 必须是递增的两个有限数值")
+    return float(arr[0]), float(arr[1])
+
+
+def _solve_quadratic_all(
+    a: np.ndarray,
+    b: np.ndarray,
+    c: np.ndarray,
+    epsilon: float,
+) -> np.ndarray:
+    """逐行求 a*x^2+b*x+c=0 的实根；无实根位置为 NaN。"""
+    aa, bb, cc = np.broadcast_arrays(
+        np.asarray(a, dtype=np.float64),
+        np.asarray(b, dtype=np.float64),
+        np.asarray(c, dtype=np.float64),
+    )
+    roots = np.full((aa.size, 2), np.nan, dtype=np.float64)
+    af, bf, cf = aa.reshape(-1), bb.reshape(-1), cc.reshape(-1)
+
+    linear = np.abs(af) < epsilon
+    valid_linear = linear & (np.abs(bf) >= epsilon)
+    roots[valid_linear, 0] = -cf[valid_linear] / bf[valid_linear]
+
+    quadratic = ~linear
+    discriminant = bf * bf - 4.0 * af * cf
+    # 浮点舍入可能把理论上的切线根算成极小负数，按相对尺度容忍。
+    discriminant_scale = np.maximum(
+        1.0, np.maximum(np.abs(bf * bf), np.abs(4.0 * af * cf))
+    )
+    valid_quadratic = quadratic & (
+        discriminant >= -epsilon * discriminant_scale
+    )
+    if np.any(valid_quadratic):
+        sqrt_disc = np.sqrt(np.maximum(discriminant[valid_quadratic], 0.0))
+        bq = bf[valid_quadratic]
+        aq = af[valid_quadratic]
+        cq = cf[valid_quadratic]
+        # 比直接 (-b +- sqrt(D))/(2a) 更稳定的形式。
+        q = -0.5 * (bq + np.copysign(sqrt_disc, bq))
+        r1 = q / aq
+        r2 = np.where(
+            np.abs(q) >= epsilon,
+            cq / q,
+            (-bq - sqrt_disc) / (2.0 * aq),
+        )
+        roots[valid_quadratic, 0] = r1
+        roots[valid_quadratic, 1] = r2
+    return roots
+
+
+def _choose_roots(
+    roots: np.ndarray,
+    rays: np.ndarray,
+    params: ReconstructionParams,
+    z_range: tuple[float, float] | None,
+    apex: np.ndarray | None = None,
+    axis: np.ndarray | None = None,
+) -> np.ndarray:
+    """从两个实根中选择物理有效根。
+
+    归一化射线第三分量恒为 1，因此 lambda 就是相机深度 Zc。
+    """
+    chosen = np.full(len(rays), np.nan, dtype=np.float64)
+    lo = params.min_camera_depth_mm
+    hi = params.max_camera_depth_mm
+    if z_range is not None:
+        model_lo = z_range[0] - params.model_range_margin_mm
+        model_hi = z_range[1] + params.model_range_margin_mm
+        lo = max(lo, model_lo)
+        hi = min(hi, model_hi)
+        hint = 0.5 * (z_range[0] + z_range[1])
+    else:
+        hint = 0.5 * (lo + hi)
+    if lo > hi:
+        return chosen
+
+    for index, candidates in enumerate(roots):
+        valid = (
+            np.isfinite(candidates)
+            & (candidates > 0.0)
+            & (candidates >= lo)
+            & (candidates <= hi)
+        )
+        candidates = candidates[valid]
+        if candidates.size == 0:
+            continue
+        if apex is not None and axis is not None:
+            points = candidates[:, None] * rays[index][None, :]
+            forward = ((points - apex[None, :]) @ axis) >= 0.0
+            if not np.any(forward):
+                continue
+            candidates = candidates[forward]
+        chosen[index] = candidates[np.argmin(np.abs(candidates - hint))]
+    return chosen
+
+
+def _intersect_global_plane(
+    rays: np.ndarray,
+    model: Mapping[str, Any],
+    params: ReconstructionParams,
+) -> tuple[np.ndarray, np.ndarray]:
+    try:
+        normal = np.asarray(model["normal"], dtype=np.float64).reshape(3)
+        d = float(model["d_mm"])
+    except (KeyError, TypeError, ValueError) as error:
+        raise ReconstructionInputError(
+            "global_plane 需要 normal(3) 和 d_mm"
+        ) from error
+    norm = float(np.linalg.norm(normal))
+    if norm <= np.finfo(np.float64).eps:
+        raise ReconstructionInputError("global_plane.normal 不能为零向量")
+    normal = normal / norm
+    d /= norm
+    denominator = rays @ normal
+    stable = np.abs(denominator) > params.parallel_epsilon
+    lam = np.full(len(rays), np.nan, dtype=np.float64)
+    lam[stable] = -d / denominator[stable]
+    lam[~np.isfinite(lam)] = np.nan
+    return lam, stable
+
+
+def _intersect_quadratic_graph(
+    rays: np.ndarray,
+    model: Mapping[str, Any],
+    params: ReconstructionParams,
+) -> tuple[np.ndarray, np.ndarray]:
+    try:
+        dep_axis = _axis_index(str(model["dependent_axis"]))
+        ind_names = list(model["independent_axes"])
+        if len(ind_names) != 2:
+            raise ValueError("independent_axes 长度必须为 2")
+        ind_axes = (_axis_index(ind_names[0]), _axis_index(ind_names[1]))
+        center = np.asarray(
+            model["normalization"]["independent_center_mm"],
+            dtype=np.float64,
+        ).reshape(2)
+        scale = np.asarray(
+            model["normalization"]["independent_scale_mm"],
+            dtype=np.float64,
+        ).reshape(2)
+        beta = np.asarray(model["coefficients"], dtype=np.float64).reshape(6)
+    except (KeyError, TypeError, ValueError) as error:
+        raise ReconstructionInputError("quadratic_graph 模型参数不完整") from error
+
+    if dep_axis in ind_axes or len({dep_axis, *ind_axes}) != 3:
+        raise ReconstructionInputError(
+            "dependent_axis 与 independent_axes 必须覆盖 X/Y/Z"
+        )
+    if (
+        not np.isfinite(center).all()
+        or not np.isfinite(scale).all()
+        or not np.isfinite(beta).all()
+    ):
+        raise ReconstructionInputError("quadratic_graph 参数包含 NaN 或无穷值")
+    if np.any(scale <= 0.0):
+        raise ReconstructionInputError("independent_scale_mm 必须为正数")
+
+    rp = rays[:, ind_axes[0]]
+    rq = rays[:, ind_axes[1]]
+    rd = rays[:, dep_axis]
+    ap = rp / scale[0]
+    aq = rq / scale[1]
+    bp = -center[0] / scale[0]
+    bq = -center[1] / scale[1]
+    b0, b1, b2, b3, b4, b5 = beta
+
+    quad_rhs = b3 * ap * ap + b4 * ap * aq + b5 * aq * aq
+    linear_rhs = (
+        b1 * ap
+        + b2 * aq
+        + 2.0 * b3 * ap * bp
+        + b4 * (ap * bq + aq * bp)
+        + 2.0 * b5 * aq * bq
+    )
+    const_rhs = (
+        b0
+        + b1 * bp
+        + b2 * bq
+        + b3 * bp * bp
+        + b4 * bp * bq
+        + b5 * bq * bq
+    )
+
+    aa = -quad_rhs
+    bb = rd - linear_rhs
+    cc = np.full(len(rays), -const_rhs, dtype=np.float64)
+    roots = _solve_quadratic_all(aa, bb, cc, params.quadratic_epsilon)
+    lam = _choose_roots(roots, rays, params, _model_z_range(model))
+    return lam, np.isfinite(lam)
+
+
+def _intersect_circular_cone(
+    rays: np.ndarray,
+    model: Mapping[str, Any],
+    params: ReconstructionParams,
+) -> tuple[np.ndarray, np.ndarray]:
+    try:
+        axis = np.asarray(model["axis_unit_camera"], dtype=np.float64).reshape(3)
+        apex = np.asarray(model["apex_camera_mm"], dtype=np.float64).reshape(3)
+        alpha_deg = float(model["half_apex_angle_deg"])
+    except (KeyError, TypeError, ValueError) as error:
+        raise ReconstructionInputError("circular_cone 模型参数不完整") from error
+
+    axis_norm = float(np.linalg.norm(axis))
+    if axis_norm <= np.finfo(np.float64).eps:
+        raise ReconstructionInputError("axis_unit_camera 不能为零向量")
+    axis = axis / axis_norm
+    if not np.isfinite(apex).all() or not np.isfinite(alpha_deg):
+        raise ReconstructionInputError("circular_cone 参数包含 NaN 或无穷值")
+    if not 0.0 < alpha_deg < 90.0:
+        raise ReconstructionInputError("half_apex_angle_deg 必须位于 (0, 90) 度")
+
+    cos2 = float(np.cos(np.deg2rad(alpha_deg)) ** 2)
+    ray_axis = rays @ axis
+    apex_axis = float(apex @ axis)
+    # ((lambda*r-C)·a)^2 - cos(alpha)^2 ||lambda*r-C||^2 = 0
+    aa = ray_axis * ray_axis - cos2 * np.sum(rays * rays, axis=1)
+    bb = -2.0 * ray_axis * apex_axis + 2.0 * cos2 * (rays @ apex)
+    cc_value = apex_axis * apex_axis - cos2 * float(apex @ apex)
+    cc = np.full(len(rays), cc_value, dtype=np.float64)
+
+    roots = _solve_quadratic_all(aa, bb, cc, params.quadratic_epsilon)
+    lam = _choose_roots(
+        roots,
+        rays,
+        params,
+        _model_z_range(model),
+        apex=apex,
+        axis=axis,
+    )
+    return lam, np.isfinite(lam)
+
+
+def _legacy_plane_model(calibration: Mapping[str, Any]) -> Mapping[str, Any]:
+    """把旧 plane_abcd 转成新的 global_plane 模型映射。"""
+    try:
+        plane = np.asarray(calibration["plane_abcd"], dtype=np.float64).reshape(4)
+    except (KeyError, TypeError, ValueError) as error:
+        raise ReconstructionInputError(
+            "calibration 需要 laser_model，或旧格式 plane_abcd"
+        ) from error
+    norm = float(np.linalg.norm(plane[:3]))
+    if norm <= np.finfo(np.float64).eps:
+        raise ReconstructionInputError("激光平面法向量长度不能为零")
+    plane = plane / norm
+    return {
+        "model_type": "global_plane",
+        "normal": plane[:3],
+        "d_mm": float(plane[3]),
+    }
+
+
+def _intersect_laser_surface(
+    rays: np.ndarray,
+    calibration: Mapping[str, Any],
+    params: ReconstructionParams,
+) -> tuple[np.ndarray, np.ndarray, str]:
+    raw_model = calibration.get("laser_model")
+    if raw_model is None:
+        model = _legacy_plane_model(calibration)
+    elif not isinstance(raw_model, Mapping):
+        raise ReconstructionInputError("calibration['laser_model'] 必须是 Mapping")
+    else:
+        model = raw_model
+
+    model_type = str(model.get("model_type", "global_plane")).lower()
+    if model_type == "global_plane":
+        lam, stable = _intersect_global_plane(rays, model, params)
+    elif model_type == "quadratic_graph":
+        lam, stable = _intersect_quadratic_graph(rays, model, params)
+    elif model_type == "circular_cone":
+        lam, stable = _intersect_circular_cone(rays, model, params)
+    else:
+        raise ReconstructionInputError(f"不支持的激光表面模型：{model_type}")
+    return lam, stable, model_type
+
+
 def _points_inside_polygon(
     points_uv: np.ndarray,
     polygon: tuple[tuple[float, float], ...],
@@ -190,8 +494,9 @@ def reconstruct_uv_to_ground(
     """把 ``(N, 2)`` 亚像素 ``(u, v)`` 重建为地面系三维点。
 
     ``calibration`` 使用 ``calibration.config_loader`` 返回的字典，
-    至少包含 ``K``、``D``、``plane_abcd``、``R``、``t``。
-    无效点（近平行、负深度、超出工作距离、非有限值）被剔除并计数。
+    至少包含 ``K``、``D``、``laser_model``、``R``、``t``；也兼容旧
+    ``plane_abcd``。无效点（近平行、无交点、负深度、超出工作距离、
+    非有限值）被剔除并计数。
     """
     if params is None:
         params = ReconstructionParams()
@@ -202,6 +507,7 @@ def reconstruct_uv_to_ground(
         "negative_depth": 0,
         "outside_working_distance": 0,
         "non_finite": 0,
+        "no_valid_intersection": 0,
         "outside_image_roi": 0,
     }
     if points.size == 0:
@@ -231,11 +537,6 @@ def reconstruct_uv_to_ground(
 
     K = np.asarray(calibration["K"], dtype=np.float64)
     D = np.asarray(calibration["D"], dtype=np.float64)
-    plane = np.asarray(calibration["plane_abcd"], dtype=np.float64).reshape(4)
-    normal_norm = float(np.linalg.norm(plane[:3]))
-    if normal_norm <= np.finfo(np.float64).eps:
-        raise ReconstructionInputError("激光平面法向量长度不能为零")
-    plane = plane / normal_norm
     transform = build_ground_transform(calibration["R"], calibration["t"])
 
     normalized = cv2.undistortPoints(
@@ -244,10 +545,9 @@ def reconstruct_uv_to_ground(
     rays = np.column_stack(
         [normalized, np.ones(len(normalized), dtype=np.float64)]
     )
-    denominator = rays @ plane[:3]
-    stable = np.abs(denominator) > params.parallel_epsilon
-    scale = np.full(len(rays), np.nan, dtype=np.float64)
-    scale[stable] = -plane[3] / denominator[stable]
+    scale, stable, model_type = _intersect_laser_surface(
+        rays, calibration, params
+    )
     points_camera = rays * scale[:, None]
 
     finite = np.isfinite(points_camera).all(axis=1) & np.isfinite(scale)
@@ -257,13 +557,17 @@ def reconstruct_uv_to_ground(
         & (points_camera[:, 2] <= params.max_camera_depth_mm)
     )
     valid = stable & finite & positive & within_distance
+    no_intersection = ~np.isfinite(scale)
     filtered = {
-        "near_parallel": int(np.count_nonzero(~stable)),
-        "negative_depth": int(np.count_nonzero(stable & finite & ~positive)),
-        "outside_working_distance": int(
-            np.count_nonzero(stable & finite & positive & ~within_distance)
+        "near_parallel": (
+            int(np.count_nonzero(~stable)) if model_type == "global_plane" else 0
         ),
-        "non_finite": int(np.count_nonzero(stable & ~finite)),
+        "negative_depth": int(np.count_nonzero(finite & ~positive)),
+        "outside_working_distance": int(
+            np.count_nonzero(finite & positive & ~within_distance)
+        ),
+        "non_finite": int(np.count_nonzero(~finite & ~no_intersection)),
+        "no_valid_intersection": int(np.count_nonzero(no_intersection)),
         "outside_image_roi": empty_filtered["outside_image_roi"],
     }
 

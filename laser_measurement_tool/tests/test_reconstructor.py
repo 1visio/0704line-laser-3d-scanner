@@ -26,6 +26,24 @@ def _synthetic_calibration() -> dict:
     return {"K": K, "D": D, "plane_abcd": plane_abcd, "R": R, "t": t}
 
 
+def _synthetic_cone_calibration() -> dict:
+    """轴向为 Z 的圆锥，便于验证前向根筛选。"""
+    return {
+        "K": np.array(
+            [[1000.0, 0.0, 320.0], [0.0, 1000.0, 240.0], [0.0, 0.0, 1.0]]
+        ),
+        "D": np.zeros(5),
+        "laser_model": {
+            "model_type": "circular_cone",
+            "axis_unit_camera": np.array([0.0, 0.0, 1.0]),
+            "apex_camera_mm": np.array([0.0, 0.0, 200.0]),
+            "half_apex_angle_deg": 45.0,
+        },
+        "R": np.eye(3),
+        "t": np.zeros(3),
+    }
+
+
 class ReconstructUvToGroundTest(unittest.TestCase):
     def test_principal_point_reconstructs_on_axis(self) -> None:
         calibration = _synthetic_calibration()
@@ -152,6 +170,22 @@ class ReconstructUvToGroundTest(unittest.TestCase):
             raw.points_ground[:, 2] - corrected.points_ground[:, 2],
             [11.0, 13.0],
         )
+
+    def test_circular_cone_selects_forward_intersection(self) -> None:
+        result = reconstruct_uv_to_ground(
+            np.array([[820.0, 240.0]]), _synthetic_cone_calibration()
+        )
+        self.assertEqual(result.point_count, 1)
+        np.testing.assert_allclose(
+            result.points_camera[0], [200.0, 0.0, 400.0],
+            atol=1.0e-9,
+        )
+
+    def test_circular_cone_rejects_invalid_half_angle(self) -> None:
+        calibration = _synthetic_cone_calibration()
+        calibration["laser_model"]["half_apex_angle_deg"] = 90.0
+        with self.assertRaisesRegex(ReconstructionInputError, "half_apex_angle_deg"):
+            reconstruct_uv_to_ground(np.array([[320.0, 240.0]]), calibration)
 
 
 class GroundUCompensationTest(unittest.TestCase):

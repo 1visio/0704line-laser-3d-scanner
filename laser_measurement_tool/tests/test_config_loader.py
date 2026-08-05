@@ -153,6 +153,52 @@ class ConfigLoaderTests(unittest.TestCase):
             np.array([0, 0, 1, -200], dtype=np.float64),
         )
 
+    def test_circular_cone_model_is_loaded_without_plane_alias(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            directory = Path(temporary_directory)
+            self._write_valid_required_files(directory)
+            self._write_yaml(
+                directory / "circular_cone.yaml",
+                {
+                    "model_type": "circular_cone",
+                    "units": "mm",
+                    "axis_unit_camera": [0.0, 0.0, 2.0],
+                    "apex_camera_mm": [1.0, 2.0, 200.0],
+                    "half_apex_angle_deg": 45.0,
+                    "fit_success": True,
+                },
+            )
+            self._write_extrinsics(directory)
+
+            calibration = load_calibration_files(
+                intrinsics=directory / "camera_intrinsics.yaml",
+                laser_plane=directory / "circular_cone.yaml",
+                extrinsics=directory / "camera_ground_extrinsics.yaml",
+            )
+
+        self.assertEqual(calibration["laser_model"]["model_type"], "circular_cone")
+        np.testing.assert_allclose(
+            calibration["laser_model"]["axis_unit_camera"], [0.0, 0.0, 1.0]
+        )
+        self.assertNotIn("plane_abcd", calibration)
+
+    def test_circular_cone_fit_failure_is_rejected(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            directory = Path(temporary_directory)
+            self._write_valid_required_files(directory)
+            self._write_yaml(
+                directory / "laser_plane.yaml",
+                {
+                    "model_type": "circular_cone",
+                    "axis_unit_camera": [0.0, 0.0, 1.0],
+                    "apex_camera_mm": [0.0, 0.0, 200.0],
+                    "half_apex_angle_deg": 45.0,
+                    "fit_success": False,
+                },
+            )
+            with self.assertRaisesRegex(CalibrationConfigError, "fit_success=false"):
+                load_calibration(directory)
+
     def test_missing_required_file_is_reported(self) -> None:
         with TemporaryDirectory() as temporary_directory:
             with self.assertRaisesRegex(

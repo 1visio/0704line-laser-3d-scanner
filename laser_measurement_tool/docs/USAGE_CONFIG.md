@@ -65,7 +65,7 @@ python -m unittest discover -s tests -v
 ```yaml
 calibration:
   intrinsics: calibration/camera_intrinsics.yaml
-  laser_plane: calibration/laser_plane.yaml
+  laser_model: calibration/circular_cone.yaml
   extrinsics: calibration/camera_ground_extrinsics.yaml
   ground_u_compensation: calibration/ground_u_compensation.csv
 ```
@@ -75,12 +75,14 @@ calibration:
 | 文件 | 必需字段 | 兼容写法 |
 | --- | --- | --- |
 | 内参 | 3×3 矩阵 + 畸变(4/5/8/12/14 个) | `camera_matrix`/`K`，`dist_coeffs`/`D` |
-| 激光平面 | a,b,c,d（相机系，mm） | `coefficients: {a,b,c,d}`、`plane: {a,b,c,d}`、`plane_abcd: [a,b,c,d]` |
+| 激光表面模型 | 相机系参数（mm） | 旧平面 `coefficients/plane/plane_abcd`；或 `model_type: global_plane`、`quadratic_graph`、`circular_cone` |
 | 地面外参 | 旋转+平移（mm） | `R`(3×3)+`t`(3) 或 `T_ground_from_camera`(4×4) |
 | 地面 U 补偿 | `column_u_px`, `bias_mm` | validation v2 的 `ground_bias_table.csv`，或 YAML `sample_table: [[u,bias], ...]` |
 
-即：标定脚本产出的 `calibration_result.yaml`、`laser_plane.yaml`、
-`camera_ground_extrinsics.yaml` **无需任何改动**，直接填路径即可。
+圆锥模型至少包含 `axis_unit_camera`、`apex_camera_mm`、
+`half_apex_angle_deg`；本实时包的默认文件是
+`calibration/circular_cone.yaml`。旧的 `laser_plane` 配置键仍可读取，
+便于回放历史平面标定。
 
 补偿在重建到地面坐标后按 `Zg_corrected = Zg_raw - bias(u)` 应用。
 表内缺失列按相邻采样线性插值，表范围外使用最近端点值。关闭补偿时将
@@ -118,8 +120,10 @@ GUI 下拉框切换算法只对当前会话生效；要改变启动默认值，�
 
 ```yaml
 reconstruction:
-  min_camera_depth_mm: 100.0    # 工作距离窗口（相机系 Zc）；换支架高度时调整
-  max_camera_depth_mm: 1500.0
+  quadratic_epsilon: 1.0e-12  # 二次求交判据
+  min_camera_depth_mm: 600.0    # 当前圆锥标定工作范围（相机系 Zc）
+  max_camera_depth_mm: 725.0
+  model_range_margin_mm: 10.0   # 模型 z_valid_range_mm 的边界外扩
   image_roi_polygon: null       # 可选：固定姿态棋盘格内部像素四边形 [[u,v], ...]
 measurement:
   outlier_sigma_multiplier: 2.0 # 残差>该倍数稳健σ的点剔除；想更宽松调大
@@ -134,7 +138,7 @@ output:
 ```
 
 `image_roi_polygon` 是在线重建前的像素门控。启用时，只有多边形内部的激光
-中心点才会进入射线-平面求交，结果中的 `filtered.outside_image_roi` 会记录
+中心点才会进入射线-激光表面求交，结果中的 `filtered.outside_image_roi` 会记录
 被丢弃的点数。它适合棋盘格姿态固定、需要只观察棋盘格内部的验证场景，例如：
 原始提取 overlay 仍保留全线用于诊断，但三维点、测量结果和完整 PLY 只包含
 ROI 内且通过重建约束的点。

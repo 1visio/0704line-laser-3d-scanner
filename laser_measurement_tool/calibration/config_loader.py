@@ -10,9 +10,12 @@ import yaml
 
 
 _CAMERA_FILE = "camera_intrinsics.yaml"
-_LASER_PLANE_FILE = "laser_plane.yaml"
+_CALIBRATION_RESULT_FILE = "calibration_result.yaml"
+_LASER_MODEL_FILE = "circular_cone.yaml"
+_LEGACY_LASER_MODEL_FILE = "laser_plane.yaml"
 _EXTRINSICS_FILE = "camera_ground_extrinsics.yaml"
 _GROUND_U_FILE = "ground_u_compensation.yaml"
+_GROUND_U_CSV_FILE = "ground_u_compensation.csv"
 _DISTORTION_LENGTHS = frozenset({4, 5, 8, 12, 14})
 _UNIT_ALIASES = {
     "px": "px",
@@ -44,16 +47,30 @@ class CalibrationUnitError(CalibrationConfigError):
 
 
 def load_calibration(config_dir: str | Path) -> dict[str, Any]:
-    """读取标定目录（固定文件名），返回统一使用 NumPy 数组的标定字典。"""
+    """读取标定目录；优先使用 circular_cone.yaml，兼容旧 laser_plane.yaml。"""
     directory = Path(config_dir)
     if not directory.is_dir():
         raise CalibrationFileNotFoundError(f"标定目录不存在: {directory}")
 
+    intrinsics_path = directory / _CAMERA_FILE
+    calibration_result_path = directory / _CALIBRATION_RESULT_FILE
+    if not intrinsics_path.is_file() and calibration_result_path.is_file():
+        # 当前随工具发布的内参文件名来自标定脚本输出。
+        intrinsics_path = calibration_result_path
+    model_path = directory / _LASER_MODEL_FILE
+    if not model_path.is_file():
+        # 旧标定目录仍只提供 laser_plane.yaml。
+        model_path = directory / _LEGACY_LASER_MODEL_FILE
+    ground_u_path = directory / _GROUND_U_FILE
+    if not ground_u_path.is_file():
+        csv_path = directory / _GROUND_U_CSV_FILE
+        if csv_path.is_file():
+            ground_u_path = csv_path
     return load_calibration_files(
-        intrinsics=directory / _CAMERA_FILE,
-        laser_plane=directory / _LASER_PLANE_FILE,
+        intrinsics=intrinsics_path,
+        laser_plane=model_path,
         extrinsics=directory / _EXTRINSICS_FILE,
-        ground_u_compensation=directory / _GROUND_U_FILE,
+        ground_u_compensation=ground_u_path,
         ground_u_optional=True,
     )
 
@@ -66,15 +83,17 @@ def load_calibration_files(
     *,
     ground_u_optional: bool = False,
 ) -> dict[str, Any]:
-    """按显式路径读取三个（外加可选 U 补偿）标定文件。
+    """按显式路径读取相机、激光表面模型、地面外参与可选 U 补偿。
 
-    这是换新标定时推荐使用的接口：文件可以放在任意位置、使用任意文件名，
-    只要内容格式满足本模块的校验规则（见 docs/USAGE_CONFIG.md）。
-    返回字典固定包含 ``K``、``D``、``plane_abcd``、``R``、``t``、
-    ``ground_u_compensation``。
+    参数名 ``laser_plane`` 为旧接口兼容名；传入文件可包含旧式平面参数，
+    或 ``model_type`` 为 ``global_plane``、``quadratic_graph``、
+    ``circular_cone`` 的激光表面模型。
+
+    返回字典固定包含 ``K``、``D``、``laser_model``、``R``、``t``、
+    ``ground_u_compensation``。全局平面额外保留 ``plane_abcd``，兼容旧调用方。
     """
     camera = _load_camera_intrinsics(Path(intrinsics))
-    plane = _load_laser_plane(Path(laser_plane))
+    laser_model = _load_laser_model(Path(laser_plane))
     pose = _load_camera_ground_extrinsics(Path(extrinsics))
 
     ground_u: dict[str, Any] | None = None
@@ -86,14 +105,20 @@ def load_calibration_files(
             )
         ground_u = _load_optional_ground_u(ground_u_path)
 
-    return {
+    result: dict[str, Any] = {
         "K": camera["K"],
         "D": camera["D"],
-        "plane_abcd": plane,
+        "laser_model": laser_model,
         "R": pose["R"],
         "t": pose["t"],
         "ground_u_compensation": ground_u,
     }
+    if laser_model["model_type"] == "global_plane":
+        result["plane_abcd"] = np.ascontiguousarray(
+            np.r_[laser_model["normal"], laser_model["d_mm"]],
+            dtype=np.float64,
+        )
+    return result
 
 
 def _load_camera_intrinsics(path: Path) -> dict[str, np.ndarray]:
@@ -112,10 +137,37 @@ def _load_camera_intrinsics(path: Path) -> dict[str, np.ndarray]:
     return {"K": K, "D": D}
 
 
-def _load_laser_plane(path: Path) -> np.ndarray:
+def _load_laser_model(path: Path) -> dict[str, Any]:
+    """读取并规范化三类激光表面模型；兼容旧平面 YAML。"""
     document = _load_required_yaml(path)
-    _validate_units(document, path, ("units", "coordinate_unit"), {"mm"})
+    model_type_raw = document.get("model_type")
 
+    if model_type_raw is None:
+        plane = _parse_legacy_plane_document(document, path)
+        return {
+            "model_type": "global_plane",
+            "normal": plane[:3],
+            "d_mm": float(plane[3]),
+            "source_path": str(path.resolve()),
+        }
+
+    model_type = str(model_type_raw).strip().lower()
+    if model_type == "global_plane":
+        return _parse_global_plane_model(document, path)
+    if model_type == "quadratic_graph":
+        return _parse_quadratic_graph_model(document, path)
+    if model_type == "circular_cone":
+        return _parse_circular_cone_model(document, path)
+    raise CalibrationConfigError(
+        f"{path.name} 的 model_type={model_type_raw!r} 不受支持；"
+        "应为 global_plane / quadratic_graph / circular_cone"
+    )
+
+
+def _parse_legacy_plane_document(
+    document: Mapping[str, Any], path: Path
+) -> np.ndarray:
+    _validate_units(document, path, ("units", "coordinate_unit"), {"mm"})
     coordinate_system = document.get("coordinate_system")
     if coordinate_system is not None and str(coordinate_system).lower() != "camera":
         raise CalibrationConfigError(
@@ -134,13 +186,198 @@ def _load_laser_plane(path: Path) -> np.ndarray:
         ]
     else:
         raise CalibrationConfigError(
-            f"{path.name} 缺少 plane_abcd / plane / coefficients"
+            f"{path.name} 缺少 model_type，且没有 plane_abcd / plane / coefficients"
         )
 
     plane_abcd = _vector(raw_plane, path, "plane_abcd", expected_length=4)
-    if np.linalg.norm(plane_abcd[:3]) <= np.finfo(np.float64).eps:
+    normal_norm = float(np.linalg.norm(plane_abcd[:3]))
+    if normal_norm <= np.finfo(np.float64).eps:
         raise CalibrationConfigError(f"{path.name} 的平面法向量不能为零")
-    return plane_abcd
+    # 保留旧格式的原始比例，兼容既有 plane_abcd 调用方；求交时会再归一化。
+    return np.ascontiguousarray(plane_abcd)
+
+
+def _parse_global_plane_model(
+    document: Mapping[str, Any], path: Path
+) -> dict[str, Any]:
+    _validate_units(document, path, ("units", "coordinate_unit"), {"mm"})
+    normal = _vector(
+        _required_value(document, ("normal",), path, "normal"),
+        path,
+        "normal",
+        expected_length=3,
+    )
+    d_mm = _numeric_scalar(
+        _required_value(document, ("d_mm",), path, "d_mm"),
+        path,
+        "d_mm",
+    )
+    norm = float(np.linalg.norm(normal))
+    if norm <= np.finfo(np.float64).eps:
+        raise CalibrationConfigError(f"{path.name} 的 normal 不能为零向量")
+    result: dict[str, Any] = {
+        "model_type": "global_plane",
+        "normal": np.ascontiguousarray(normal / norm),
+        "d_mm": float(d_mm / norm),
+        "source_path": str(path.resolve()),
+    }
+    z_range = _optional_z_valid_range(document, path)
+    if z_range is not None:
+        result["z_valid_range_mm"] = z_range
+    return result
+
+
+def _parse_quadratic_graph_model(
+    document: Mapping[str, Any], path: Path
+) -> dict[str, Any]:
+    _validate_units(document, path, ("units", "coordinate_unit"), {"mm"})
+    dependent_axis = str(
+        _required_value(document, ("dependent_axis",), path, "dependent_axis")
+    ).strip().upper()
+    raw_independent = _required_value(
+        document, ("independent_axes",), path, "independent_axes"
+    )
+    if not isinstance(raw_independent, (list, tuple)) or len(raw_independent) != 2:
+        raise CalibrationDimensionError(
+            f"{path.name} 的 independent_axes 应为两个坐标轴名称"
+        )
+    independent_axes = [str(value).strip().upper() for value in raw_independent]
+    if {dependent_axis, *independent_axes} != {"X", "Y", "Z"}:
+        raise CalibrationConfigError(
+            f"{path.name} 的 dependent_axis 与 independent_axes 必须恰好覆盖 X/Y/Z"
+        )
+
+    normalization = document.get("normalization")
+    if not isinstance(normalization, Mapping):
+        raise CalibrationConfigError(f"{path.name} 缺少 normalization 映射")
+    center = _vector(
+        _required_value(
+            normalization,
+            ("independent_center_mm",),
+            path,
+            "normalization.independent_center_mm",
+        ),
+        path,
+        "normalization.independent_center_mm",
+        expected_length=2,
+    )
+    scale = _vector(
+        _required_value(
+            normalization,
+            ("independent_scale_mm",),
+            path,
+            "normalization.independent_scale_mm",
+        ),
+        path,
+        "normalization.independent_scale_mm",
+        expected_length=2,
+    )
+    if np.any(scale <= 0.0):
+        raise CalibrationConfigError(
+            f"{path.name} 的 independent_scale_mm 必须全部为正数"
+        )
+    coefficients = _vector(
+        _required_value(document, ("coefficients",), path, "coefficients"),
+        path,
+        "coefficients",
+        expected_length=6,
+    )
+    result: dict[str, Any] = {
+        "model_type": "quadratic_graph",
+        "dependent_axis": dependent_axis,
+        "independent_axes": independent_axes,
+        "normalization": {
+            "independent_center_mm": center,
+            "independent_scale_mm": scale,
+        },
+        "coefficients": coefficients,
+        "source_path": str(path.resolve()),
+    }
+    z_range = _optional_z_valid_range(document, path)
+    if z_range is not None:
+        result["z_valid_range_mm"] = z_range
+    return result
+
+
+def _parse_circular_cone_model(
+    document: Mapping[str, Any], path: Path
+) -> dict[str, Any]:
+    _validate_units(document, path, ("units", "coordinate_unit"), {"mm"})
+    if document.get("fit_success") is False:
+        raise CalibrationConfigError(
+            f"{path.name} 标记 fit_success=false，不能用于正式重建"
+        )
+    axis = _vector(
+        _required_value(
+            document, ("axis_unit_camera",), path, "axis_unit_camera"
+        ),
+        path,
+        "axis_unit_camera",
+        expected_length=3,
+    )
+    apex = _vector(
+        _required_value(document, ("apex_camera_mm",), path, "apex_camera_mm"),
+        path,
+        "apex_camera_mm",
+        expected_length=3,
+    )
+    half_angle = _numeric_scalar(
+        _required_value(
+            document, ("half_apex_angle_deg",), path, "half_apex_angle_deg"
+        ),
+        path,
+        "half_apex_angle_deg",
+    )
+    norm = float(np.linalg.norm(axis))
+    if norm <= np.finfo(np.float64).eps:
+        raise CalibrationConfigError(
+            f"{path.name} 的 axis_unit_camera 不能为零向量"
+        )
+    if not 0.0 < half_angle < 90.0:
+        raise CalibrationConfigError(
+            f"{path.name} 的 half_apex_angle_deg 必须位于 (0, 90)"
+        )
+    result: dict[str, Any] = {
+        "model_type": "circular_cone",
+        "axis_unit_camera": np.ascontiguousarray(axis / norm),
+        "apex_camera_mm": apex,
+        "half_apex_angle_deg": float(half_angle),
+        "source_path": str(path.resolve()),
+    }
+    z_range = _optional_z_valid_range(document, path)
+    if z_range is not None:
+        result["z_valid_range_mm"] = z_range
+    return result
+
+
+def _optional_z_valid_range(
+    document: Mapping[str, Any], path: Path
+) -> np.ndarray | None:
+    if "z_valid_range_mm" not in document:
+        return None
+    values = _vector(
+        document["z_valid_range_mm"],
+        path,
+        "z_valid_range_mm",
+        expected_length=2,
+    )
+    if values[0] >= values[1]:
+        raise CalibrationConfigError(
+            f"{path.name} 的 z_valid_range_mm 必须严格递增"
+        )
+    return values
+
+
+def _load_laser_plane(path: Path) -> np.ndarray:
+    """旧私有接口兼容：仅接受可转换为 global_plane 的文件。"""
+    model = _load_laser_model(path)
+    if model["model_type"] != "global_plane":
+        raise CalibrationConfigError(
+            f"{path.name} 是 {model['model_type']}，不能按旧激光平面接口读取"
+        )
+    return np.ascontiguousarray(
+        np.r_[model["normal"], model["d_mm"]], dtype=np.float64
+    )
 
 
 def _load_camera_ground_extrinsics(path: Path) -> dict[str, np.ndarray]:

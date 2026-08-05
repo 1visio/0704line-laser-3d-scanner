@@ -1056,6 +1056,8 @@ class MainWindow(QMainWindow):
             "calibration": (
                 {
                     "intrinsics": str(config.calibration.intrinsics),
+                    "laser_model": str(config.calibration.laser_model),
+                    # 兼容旧结果读取器。
                     "laser_plane": str(config.calibration.laser_plane),
                     "extrinsics": str(config.calibration.extrinsics),
                     "ground_u_compensation": (

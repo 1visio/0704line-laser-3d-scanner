@@ -9,8 +9,8 @@ calibration:
   manifest: calibration/manifest.yaml
   # 相机内参：需含 camera_matrix(3x3) 与 dist_coeffs(4/5/8/12/14 个)
   intrinsics: calibration/calibration_result.yaml
-  # 激光平面（相机系，mm）：支持 coefficients/plane/plane_abcd 三种写法
-  laser_plane: calibration/laser_plane.yaml
+  # 激光表面模型（相机系，mm）：当前生产包使用圆锥面模型
+  laser_model: calibration/circular_cone.yaml
   # 地面外参：支持 R+t 或 T_ground_from_camera(4x4)
   extrinsics: calibration/camera_ground_extrinsics.yaml
   # 可选 U 补偿：支持 validation v2 的 CSV，关闭时改为 null
@@ -36,9 +36,11 @@ extraction:
     {}                              # 历史名称兼容别名，实际参数来自同一 profile
 
 reconstruction:
-  parallel_epsilon: 1.0e-9           # 射线与激光平面近平行判据
-  min_camera_depth_mm: 100.0         # 工作距离下限（相机系 Zc，mm）
-  max_camera_depth_mm: 1500.0        # 工作距离上限（相机系 Zc，mm）
+  parallel_epsilon: 1.0e-9           # 射线与全局平面近平行判据
+  quadratic_epsilon: 1.0e-12         # 二次曲面/圆锥求交退化判据
+  min_camera_depth_mm: 600.0         # 当前标定工作范围下限（相机系 Zc，mm）
+  max_camera_depth_mm: 725.0         # 当前标定工作范围上限（相机系 Zc，mm）
+  model_range_margin_mm: 10.0        # 模型有效深度范围外扩
   # 可选固定姿态棋盘格 ROI，填写原始图像像素四边形：[[u1,v1], ...]。
   # null 表示全幅重建；仅在棋盘格姿态固定时启用，动态姿态不要复用该多边形。
   image_roi_polygon: null
