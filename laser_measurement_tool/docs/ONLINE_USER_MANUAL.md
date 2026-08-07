@@ -1,7 +1,7 @@
 # 在线线激光三维截面测量工具用户手册
 
 > 适用目录：`0704line-laser-3d-scanner/laser_measurement_tool`  
-> 适用入口：`online_camera.py`，也可以从离线主窗口点击“在线相机”打开  
+> 适用入口：`online_camera.py`（大恒使用 `--camera-backend daheng`）；也可以从离线主窗口点击“在线相机”打开（该入口默认海康 MVS）
 > 当前默认：`Mono8`、曝光 `600 μs`、增益 `0 dB`、硬件 ROI `2448 × 300`、`Offset X=0`、`Offset Y=880`  
 > 坐标和结果单位：毫米（mm）；像素坐标遵循 OpenCV 的 `(u, v)` 约定
 
@@ -13,7 +13,7 @@
 
 当前链路包括：
 
-1. 海康 MVS 相机或 synthetic 模拟相机取流；
+1. 海康 MVS、大恒 Galaxy USB3 相机或 synthetic 模拟相机取流；
 2. `centroid`、`steger`、`shared_steger` 三种激光中心提取后端；
 3. 相机内参去畸变、激光圆锥面求交、地面坐标转换；
 4. 三维点云、二维 `Xg-Zg` 截面和地面/障碍物区域测量；
@@ -45,7 +45,7 @@ cd D:\Docs\linelaserscan\0704line-laser-3d-scanner
 ..\.venv\Scripts\python.exe -m pip install -r .\laser_measurement_tool\requirements.txt
 ```
 
-依赖包括 PySide6、OpenCV、NumPy、SciPy、PyYAML、Matplotlib、pyqtgraph 和 PyOpenGL。真实相机还需要正确安装海康 MVS SDK，并保证 Python 能加载对应的 MVS 运行库。
+依赖包括 PySide6、OpenCV、NumPy、SciPy、PyYAML、Matplotlib、pyqtgraph 和 PyOpenGL。真实相机还需要正确安装对应 backend 的 SDK：海康使用 MVS，大恒使用 Galaxy SDK 随附的 `gxipy`。
 
 ### 2.2 启动真实相机
 
@@ -70,7 +70,7 @@ laser_measurement_tool/configs/measure_tool.yaml
 
 ### 2.3 使用模拟相机检查界面
 
-没有相机或暂时不想加载 MVS SDK 时：
+没有相机或暂时不想加载真实相机 SDK 时：
 
 ```powershell
 ..\.venv\Scripts\python.exe .\laser_measurement_tool\online_camera.py --simulate
@@ -78,9 +78,41 @@ laser_measurement_tool/configs/measure_tool.yaml
 
 模拟模式用于检查界面、线程、录制和输出路径，不用于验证真实相机的曝光、成像质量或最终测量精度。
 
-### 2.4 启动前检查
+### 2.4 启动大恒 Galaxy USB3 相机
 
-- 关闭 MVS 客户端、相机厂商调试软件和其他可能占用设备的程序；
+大恒 backend 使用 Galaxy SDK 自带的 Python `gxipy` wrapper，不需要编译 C++ SDK。默认 SDK 目录为：
+
+```text
+C:\Program Files\Daheng Imaging\GalaxySDK
+```
+
+如果 SDK 安装在其他位置，可设置 `DAHENG_GALAXY_ROOT`；如果 Python wrapper 不在默认示例目录，可设置 `DAHENG_GALAXY_PYTHON_PATH`。程序会自动配置 `GALAXY_GENICAM_ROOT`、`GENICAM_GENTL64_PATH` 和 Windows DLL 搜索路径。
+
+先用厂商示例或以下命令验证 Python 解释器：
+
+```powershell
+$galaxy = "C:\Program Files\Daheng Imaging\GalaxySDK"
+$env:DAHENG_GALAXY_ROOT = $galaxy
+$env:DAHENG_GALAXY_PYTHON_PATH = "$galaxy\Development\Samples\Python"
+$env:PYTHONPATH = "$galaxy\Development\Samples\Python;$env:PYTHONPATH"
+python -c "import gxipy; print(gxipy.__file__); print(gxipy.__version__)"
+```
+
+启动大恒 backend：
+
+```powershell
+..\.venv\Scripts\python.exe .\laser_measurement_tool\online_camera.py `
+  --camera-backend daheng `
+  --config .\laser_measurement_tool\configs\measure_tool.yaml
+```
+
+程序只显示 Galaxy SDK 枚举结果中的 USB3 (`U3V`) 设备，并按序列号打开。应先关闭 GalaxyView 或其他占用相机的程序。
+
+当前仓库内置的在线标定 manifest 是海康 `2448×2048` 配置；大恒 ME2P-1230 常用全幅为 `4096×3000`。接入大恒后必须使用与大恒相机、镜头和安装姿态匹配的独立标定 manifest，不能直接把海康标定用于正式测量。现有静态采集配置中的 `4096×512、OffsetY=1244` 只能作为设备验证起点，仍需以相机节点实际范围和标定结果为准。
+
+### 2.5 启动前检查
+
+- 关闭 MVS 客户端、GalaxyView、相机厂商调试软件和其他可能占用设备的程序；
 - 确认相机与电脑网络或 USB 连接正常；
 - 确认 `configs/measure_tool.yaml` 引用的标定文件存在；
 - 确认 `calibration.manifest` 与引用文件的哈希一致；
@@ -306,7 +338,7 @@ laser_measurement_tool/output/online_recordings/recording_YYYYMMDD_HHMMSS/
 
 ### 7.3 硬件 ROI 图像的坐标规则
 
-当前在线相机默认只输出传感器中的 `2448 × 300` 硬件 ROI，左上角是全幅坐标 `(0, 880)`。图像界面中的框选坐标是 ROI 局部坐标，但三维恢复时会自动加回 `(OffsetX, OffsetY)`，再交给全幅标定模型。
+当前默认配置只输出传感器中的 `2448 × 300` 硬件 ROI，左上角是全幅坐标 `(0, 880)`。大恒 ME2P-1230 等型号可以配置更大的传感器 ROI；图像界面中的框选坐标始终是 ROI 局部坐标，但三维恢复时会自动加回 `(OffsetX, OffsetY)`，再交给全幅标定模型。
 
 从外部加载裁剪图时，按以下优先级恢复偏移：
 
@@ -315,7 +347,7 @@ laser_measurement_tool/output/online_recordings/recording_YYYYMMDD_HHMMSS/
 3. 当前目录 `frames.csv` 中与文件名匹配的行；
 4. 如果都没有，弹窗要求输入 `Offset X/Offset Y`。对当前默认 ROI，`OffsetY` 通常是 `880`，但这只是提示默认值，必须按实际采集设置确认。
 
-全幅 `2448 × 2048` 图像不需要偏移。裁剪图尺寸不能超过标定全幅，否则工具会拒绝按当前标定重建。
+全幅图像不需要偏移。裁剪图尺寸不能超过当前标定 manifest 的全幅尺寸，否则工具会拒绝按当前标定重建。海康 `2448 × 2048` 与大恒常见的 `4096 × 3000` 必须使用不同标定包。
 
 ### 7.4 结果面板字段
 
@@ -507,7 +539,7 @@ GUI 相关测试需要 PySide6、pyqtgraph 和可用的 OpenGL/Qt 环境；在�
 ### 10.3 最小现场验收
 
 1. 用 `--simulate` 启动界面，确认三个视图和按钮可用；
-2. 连接真实相机，确认型号、序列号、Mono8、曝光和 ROI；
+2. 分别用默认 MVS 或 `--camera-backend daheng` 连接真实相机，确认型号、序列号、Mono8、曝光和 ROI；
 3. 保存一帧，检查同名 `.json` 是否记录 `image_offset`；
 4. 导出一帧，检查 `result.json` 中的标定包 ID、哈希和点数；
 5. 使用平面样件和已知高度样件完成一次单帧区域测量；
@@ -517,7 +549,7 @@ GUI 相关测试需要 PySide6、pyqtgraph 和可用的 OpenGL/Qt 环境；在�
 
 ### 11.1 “SDK 不可用”或找不到相机
 
-先关闭 MVS 客户端，确认 SDK 位数与 Python 环境一致，再点击“刷新”。如果模拟模式正常而真机模式失败，优先检查 SDK、网卡/USB、相机权限和序列号筛选。
+先关闭 MVS 客户端或 GalaxyView，确认 SDK 位数与 Python 环境一致，再点击“刷新”。大恒还需确认 `DAHENG_GALAXY_ROOT` 或默认 Galaxy SDK 路径可用。如果模拟模式正常而真机模式失败，优先检查 SDK、网卡/USB、相机权限和序列号筛选。
 
 ### 11.2 原始图像正常但激光中心很少
 
@@ -540,7 +572,7 @@ GUI 相关测试需要 PySide6、pyqtgraph 和可用的 OpenGL/Qt 环境；在�
 
 ### 11.5 硬 ROI 图像恢复结果明显错误
 
-如果图像尺寸是 `2448 × 300`，加载时应确认 `OffsetY=880`（或输入实际值）；不能把局部 `v` 直接当成全幅 `v`。在线“保存当前帧”会自动生成 sidecar JSON，推荐使用该 JSON 配套加载。
+如果图像尺寸是 `2448 × 300`，加载时应确认 `OffsetY=880`（或输入实际值）；大恒 ROI 应填写真实回读的 Offset。不能把局部 `v` 直接当成全幅 `v`。在线“保存当前帧”会自动生成 sidecar JSON，推荐使用该 JSON 配套加载。
 
 ### 11.6 标定加载失败或 manifest 不匹配
 

@@ -23,6 +23,17 @@ $env:PYTHONPATH="$PWD;$PWD\.."
 python -m unittest discover -s tests
 ```
 
+在线实时工具支持海康 MVS（默认）、大恒 Galaxy USB3 和模拟相机：
+
+```powershell
+python online_camera.py --camera-backend daheng
+python online_camera.py --simulate
+```
+
+大恒 backend 会从 `C:\Program Files\Daheng Imaging\GalaxySDK` 或
+`DAHENG_GALAXY_ROOT` 加载 SDK 随附的 `gxipy`。切换到大恒相机后，应使用独立的
+大恒标定 manifest；当前内置海康标定不能直接用于大恒正式测量。
+
 ### 在线实时工具的单帧分析
 
 运行 `online_camera.py`（或在主窗口点击“在线相机”）后，实时窗口保留原有

@@ -2,7 +2,7 @@
 
 本仓库是 0704 线激光三维截面测量系统的第一阶段工程，当前重点是：
 
-- 海康 MVS 相机或模拟相机实时取流；
+- 海康 MVS、大恒 Galaxy USB3 相机或模拟相机实时取流；
 - 线激光中心提取（`centroid`、`steger`、`shared_steger`）；
 - 相机坐标、激光模型和地面坐标之间的三维恢复；
 - 实时三维点云、二维 `Xg-Zg` 截面和障碍物高度测量；
@@ -33,7 +33,11 @@ py -3.11 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r .\laser_measurement_tool\requirements.txt
 ```
 
-真实相机还需要单独安装海康 MVS SDK，并确保 SDK 的 Python 绑定和运行库可用。没有相机时可以先使用模拟模式检查界面和线程链路。
+真实相机还需要安装对应厂商 SDK，并确保 Python 绑定和运行库可用。没有相机时可以先使用模拟模式检查界面和线程链路。
+
+大恒 USB3 相机使用 Galaxy SDK 随附的 `gxipy` Python wrapper。启动时增加
+`--camera-backend daheng`；程序会从 `C:\Program Files\Daheng Imaging\GalaxySDK`
+或 `DAHENG_GALAXY_ROOT` 加载 SDK。大恒相机必须使用与实际相机、镜头和安装姿态匹配的独立标定数据，不能直接复用海康标定。
 
 ### 2. 使用模拟相机
 
@@ -47,6 +51,13 @@ py -3.11 -m venv .venv
 
 ```powershell
 .\.venv\Scripts\python.exe .\laser_measurement_tool\online_camera.py
+```
+
+大恒 Galaxy USB3：
+
+```powershell
+.\.venv\Scripts\python.exe .\laser_measurement_tool\online_camera.py `
+  --camera-backend daheng
 ```
 
 默认读取 `laser_measurement_tool/configs/measure_tool.yaml`。也可以显式指定配置和提取算法：

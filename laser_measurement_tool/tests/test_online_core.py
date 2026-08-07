@@ -195,6 +195,13 @@ class OnlineCoreTests(unittest.TestCase):
         self.assertEqual(args.method, "steger")
         self.assertTrue(args.simulate)
 
+    def test_online_cli_can_select_daheng_backend(self) -> None:
+        args = build_parser().parse_args(
+            ["--camera-backend", "daheng", "--simulate"]
+        )
+        self.assertEqual(args.camera_backend, "daheng")
+        self.assertTrue(args.simulate)
+
     def test_recorder_writes_lossless_frames_and_gap_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             recorder = FrameRecorder(queue_capacity=4)
