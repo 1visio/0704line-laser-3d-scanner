@@ -67,7 +67,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--warmup", type=_non_negative_int, default=5)
     parser.add_argument("--pixel-format", choices=("Mono8", "Mono12"), default="Mono8")
-    parser.add_argument("--exposure-us", type=_positive_float, default=1200.0)
+    parser.add_argument("--exposure-us", type=_positive_float, default=600.0)
     parser.add_argument("--gain-db", type=float, default=0.0)
     parser.add_argument("--offset-x", type=_non_negative_int, default=0)
     parser.add_argument("--offset-y", type=_non_negative_int, default=880)

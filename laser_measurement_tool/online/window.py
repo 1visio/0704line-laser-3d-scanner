@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import threading
 import time
 from collections import deque
@@ -64,6 +65,7 @@ from utils.result_io import (
 
 
 pg.setConfigOptions(imageAxisOrder="row-major")
+DISPLAY_FPS_WINDOW_S = 1.0
 
 
 class PointCloudGLViewWidget(gl.GLViewWidget):
@@ -240,6 +242,9 @@ class OnlineCameraWindow(QMainWindow):
         self._trail: deque[tuple[float, np.ndarray]] = deque(maxlen=30)
         self._displayed_frames = 0
         self._display_started = time.monotonic()
+        self._display_rate_history: deque[tuple[float, int]] = deque(
+            [(self._display_started, 0)]
+        )
         self._last_render_at = 0.0
         self._raw_view_shape: tuple[int, int] | None = None
         self._extracted_view_shape: tuple[int, int] | None = None
@@ -1135,7 +1140,7 @@ class OnlineCameraWindow(QMainWindow):
         self.pixel_format.addItems(["Mono8", "Mono12"])
         self.exposure = QDoubleSpinBox(self.camera_settings_group)
         self.exposure.setRange(1.0, 1_000_000.0)
-        self.exposure.setValue(1200.0)
+        self.exposure.setValue(600.0)
         self.exposure.setSuffix(" μs")
         self.gain = QDoubleSpinBox(self.camera_settings_group)
         self.gain.setRange(-20.0, 40.0)
@@ -1456,6 +1461,8 @@ class OnlineCameraWindow(QMainWindow):
             self._reset_section_view()
             self._displayed_frames = 0
             self._display_started = time.monotonic()
+            self._display_rate_history.clear()
+            self._display_rate_history.append((self._display_started, 0))
             self._last_render_at = 0.0
             self._controller.start(self._session, self._pipeline, self._recorder)
             self._set_online_state(OnlineState.STREAMING)
@@ -1517,8 +1524,47 @@ class OnlineCameraWindow(QMainWindow):
             f"frame_{self._last_result.frame.camera_frame_number:06d}{default_suffix}",
             "图像 (*.png *.tif *.tiff)",
         )
-        if path and not cv2.imwrite(path, self._last_result.frame.image):
+        if not path:
+            return
+        if not cv2.imwrite(path, self._last_result.frame.image):
             self._show_error(f"无法保存图像: {path}")
+            return
+
+        frame = self._last_result.frame
+        metadata = {
+            "schema_version": 1,
+            "source": "online_snapshot",
+            "image": {
+                "filename": Path(path).name,
+                "width": int(frame.image.shape[1]),
+                "height": int(frame.image.shape[0]),
+                "dtype": str(frame.image.dtype),
+            },
+            "image_offset": {
+                "u": int(frame.offset_x),
+                "v": int(frame.offset_y),
+            },
+            "frame": {
+                "camera_frame_number": int(frame.camera_frame_number),
+                "camera_timestamp_ticks": (
+                    None
+                    if frame.camera_timestamp_ticks is None
+                    else int(frame.camera_timestamp_ticks)
+                ),
+                "host_timestamp_ns": int(frame.host_timestamp_ns),
+            },
+        }
+        try:
+            Path(path).with_suffix(".json").write_text(
+                json.dumps(metadata, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+        except OSError as error:
+            QMessageBox.warning(
+                self,
+                "元数据保存失败",
+                f"图像已保存，但无法保存硬件 ROI 偏移元数据：{error}",
+            )
 
     def export_current_frame(self) -> Path:
         """导出当前实时帧的中心点、重建点云和地面系 PLY。
@@ -1742,8 +1788,18 @@ class OnlineCameraWindow(QMainWindow):
     def _show_stats(self, stats: dict[str, float | int]) -> None:
         self.capture_fps_label.setText(f"{float(stats['capture_fps']):.1f}")
         self.process_fps_label.setText(f"{float(stats['process_fps']):.1f}")
-        elapsed = max(time.monotonic() - self._display_started, 1e-9)
-        self.display_fps_label.setText(f"{self._displayed_frames / elapsed:.1f}")
+        now = time.monotonic()
+        self._display_rate_history.append((now, self._displayed_frames))
+        cutoff = now - DISPLAY_FPS_WINDOW_S
+        while (
+            len(self._display_rate_history) > 1
+            and self._display_rate_history[1][0] <= cutoff
+        ):
+            self._display_rate_history.popleft()
+        base_time, base_count = self._display_rate_history[0]
+        elapsed = max(now - base_time, 1e-9)
+        display_fps = max(self._displayed_frames - base_count, 0) / elapsed
+        self.display_fps_label.setText(f"{display_fps:.1f}")
         self.processing_ms_label.setText(f"{float(stats['processing_ms']):.1f} ms")
         self.drop_label.setText(
             f"{int(stats['camera_gaps'])} / {int(stats['queue_overwrites'])}"

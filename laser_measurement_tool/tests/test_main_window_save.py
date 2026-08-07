@@ -69,6 +69,31 @@ class MainWindowSaveTests(unittest.TestCase):
             )
             window.close()
 
+    def test_hardware_roi_metadata_restores_full_image_offset(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            directory = Path(temporary_directory)
+            image_path = directory / "frame_000001.tiff"
+            (directory / "frames.csv").write_text(
+                "filename,offset_x,offset_y\n"
+                "frame_000001.tiff,0,880\n",
+                encoding="utf-8",
+            )
+            window = MainWindow(load_app_config())
+            try:
+                offset = window._resolve_loaded_image_offset(
+                    image_path,
+                    np.zeros((300, 2448), dtype=np.uint8),
+                )
+                self.assertEqual(offset, (0, 880))
+                window._image_offset = offset or (0, 0)
+                local = np.array([[100.0, 145.25]], dtype=np.float64)
+                np.testing.assert_allclose(
+                    window._centers_in_calibration_coordinates(local),
+                    np.array([[100.0, 1025.25]], dtype=np.float64),
+                )
+            finally:
+                window.close()
+
 
 if __name__ == "__main__":
     unittest.main()

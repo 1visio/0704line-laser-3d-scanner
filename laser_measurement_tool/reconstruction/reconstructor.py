@@ -231,6 +231,9 @@ def _choose_roots(
 
     归一化射线第三分量恒为 1，因此 lambda 就是相机深度 Zc。
     """
+    # ``roots`` is normally an ``(N, 2)`` array from ``_solve_quadratic_all``.
+    # Keep the selection fully vectorized: the previous implementation walked
+    # every ray in Python and performed the same masking/argmin work N times.
     chosen = np.full(len(rays), np.nan, dtype=np.float64)
     lo = params.min_camera_depth_mm
     hi = params.max_camera_depth_mm
@@ -245,23 +248,27 @@ def _choose_roots(
     if lo > hi:
         return chosen
 
-    for index, candidates in enumerate(roots):
-        valid = (
-            np.isfinite(candidates)
-            & (candidates > 0.0)
-            & (candidates >= lo)
-            & (candidates <= hi)
-        )
-        candidates = candidates[valid]
-        if candidates.size == 0:
-            continue
-        if apex is not None and axis is not None:
-            points = candidates[:, None] * rays[index][None, :]
-            forward = ((points - apex[None, :]) @ axis) >= 0.0
-            if not np.any(forward):
-                continue
-            candidates = candidates[forward]
-        chosen[index] = candidates[np.argmin(np.abs(candidates - hint))]
+    root_values = np.asarray(roots, dtype=np.float64)
+    valid = (
+        np.isfinite(root_values)
+        & (root_values > 0.0)
+        & (root_values >= lo)
+        & (root_values <= hi)
+    )
+    if apex is not None and axis is not None:
+        # For a candidate point lambda*r, the forward test is
+        # ((lambda*r - apex) · axis) >= 0.  Computing the two dot products
+        # once avoids allocating an (N, 2, 3) temporary for every frame.
+        ray_axis = rays @ axis
+        apex_axis = float(np.asarray(apex, dtype=np.float64) @ axis)
+        valid &= (root_values * ray_axis[:, None] - apex_axis) >= 0.0
+
+    distance = np.where(valid, np.abs(root_values - hint), np.inf)
+    best_index = np.argmin(distance, axis=1)
+    chosen = np.take_along_axis(
+        root_values, best_index[:, None], axis=1
+    )[:, 0]
+    chosen[~np.any(valid, axis=1)] = np.nan
     return chosen
 
 

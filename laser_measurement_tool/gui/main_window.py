@@ -1,5 +1,7 @@
 """图像视图与控制面板组成的应用主窗口。"""
 
+import csv
+import json
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -13,6 +15,7 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QMainWindow,
     QMessageBox,
@@ -61,6 +64,12 @@ from utils.result_io import (
     save_measurement_json,
     save_reconstructed_points_csv,
 )
+
+
+# The online camera defaults to this hardware ROI. It is only a prompt
+# default; the user can enter the actual OffsetX/OffsetY, and sidecar metadata
+# takes precedence when available.
+_DEFAULT_HARD_ROI_OFFSET = (0, 880)
 
 
 class MainWindow(QMainWindow):
@@ -179,16 +188,164 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "加载失败", str(error))
             return
 
+        image_path = Path(file_path)
+        image_offset = self._resolve_loaded_image_offset(image_path, image)
+        if image_offset is None:
+            return
         self._set_frame_data(
             image,
-            Path(file_path),
+            image_path,
             np.empty((0, 2), dtype=np.float64),
-            image_offset=(0, 0),
+            image_offset=image_offset,
         )
         height, width = image.shape
+        offset_suffix = (
+            f" | Offset ({image_offset[0]}, {image_offset[1]})"
+            if image_offset != (0, 0)
+            else ""
+        )
         self.statusBar().showMessage(
             f"已加载 {self._image_path.name} | {width} × {height} | {image.dtype}"
+            f"{offset_suffix}"
         )
+
+    def _calibration_image_size(self) -> tuple[int, int] | None:
+        """返回标定包的全幅尺寸；无法读取时不阻断图像加载。"""
+        if self._app_config is None or self._app_config.calibration.manifest is None:
+            return None
+        try:
+            package = load_calibration_package(
+                self._app_config.calibration.manifest
+            )
+        except (
+            CalibrationConfigError,
+            CalibrationFileNotFoundError,
+            OSError,
+            ValueError,
+        ):
+            return None
+        return package.image_width, package.image_height
+
+    @staticmethod
+    def _offset_from_mapping(mapping: object) -> tuple[int, int] | None:
+        """从常见的结果/帧元数据映射中读取硬件 ROI 偏移。"""
+        if not isinstance(mapping, Mapping):
+            return None
+        for x_name, y_name in (
+            ("offset_x", "offset_y"),
+            ("offset_x_px", "offset_y_px"),
+            ("u", "v"),
+        ):
+            if x_name not in mapping or y_name not in mapping:
+                continue
+            try:
+                x = int(mapping[x_name])
+                y = int(mapping[y_name])
+            except (TypeError, ValueError, OverflowError):
+                continue
+            if x >= 0 and y >= 0:
+                return x, y
+        return None
+
+    @classmethod
+    def _read_image_offset_metadata(cls, image_path: Path) -> tuple[int, int] | None:
+        """读取录制 CSV、在线导出 JSON 或相邻 JSON 中的 ROI 偏移。"""
+        for metadata_path in (
+            image_path.with_suffix(".json"),
+            image_path.parent / "result.json",
+        ):
+            if not metadata_path.is_file():
+                continue
+            try:
+                payload = json.loads(metadata_path.read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, json.JSONDecodeError):
+                continue
+            candidates = [payload]
+            if isinstance(payload, Mapping):
+                candidates.extend(
+                    (payload.get("image_offset"), payload.get("frame"))
+                )
+            for candidate in candidates:
+                offset = cls._offset_from_mapping(candidate)
+                if offset is not None:
+                    return offset
+
+        frames_csv = image_path.parent / "frames.csv"
+        if frames_csv.is_file():
+            try:
+                with frames_csv.open(
+                    "r", encoding="utf-8-sig", newline=""
+                ) as stream:
+                    for row in csv.DictReader(stream):
+                        if row.get("filename") != image_path.name:
+                            continue
+                        offset = cls._offset_from_mapping(row)
+                        if offset is not None:
+                            return offset
+            except (OSError, UnicodeError, csv.Error):
+                pass
+        return None
+
+    def _resolve_loaded_image_offset(
+        self, image_path: Path, image: np.ndarray
+    ) -> tuple[int, int] | None:
+        """为独立图像恢复硬件 ROI 到标定全幅的坐标偏移。"""
+        full_size = self._calibration_image_size()
+        if full_size is None:
+            return (0, 0)
+
+        width, height = int(image.shape[1]), int(image.shape[0])
+        full_width, full_height = full_size
+        if (width, height) == (full_width, full_height):
+            return (0, 0)
+        if width > full_width or height > full_height:
+            QMessageBox.warning(
+                self,
+                "图像尺寸不匹配",
+                f"当前图像为 {width} × {height}，超过标定全幅 "
+                f"{full_width} × {full_height}，无法按当前标定重建。",
+            )
+            return None
+
+        max_offset_x = full_width - width
+        max_offset_y = full_height - height
+        metadata_offset = self._read_image_offset_metadata(image_path)
+        if metadata_offset is not None:
+            offset_x, offset_y = metadata_offset
+            if offset_x <= max_offset_x and offset_y <= max_offset_y:
+                return metadata_offset
+
+        default_x = min(_DEFAULT_HARD_ROI_OFFSET[0], max_offset_x)
+        default_y = min(_DEFAULT_HARD_ROI_OFFSET[1], max_offset_y)
+        prompt = (
+            f"当前图像为 {width} × {height}，标定全幅为 "
+            f"{full_width} × {full_height}。\n"
+            "这是硬件 ROI 或软件裁剪图，请输入它在全幅图中的左上角偏移。\n"
+            "若图像来自当前在线相机默认 ROI，OffsetY 通常为 880。"
+        )
+        offset_x, accepted = QInputDialog.getInt(
+            self,
+            "设置图像坐标偏移",
+            f"{prompt}\nOffset X:",
+            default_x,
+            0,
+            max_offset_x,
+            1,
+        )
+        if not accepted:
+            return None
+        offset_y, accepted = QInputDialog.getInt(
+            self,
+            "设置图像坐标偏移",
+            f"{prompt}\nOffset Y:",
+            default_y,
+            0,
+            max_offset_y,
+            1,
+        )
+        if not accepted:
+            return None
+        return int(offset_x), int(offset_y)
 
     def load_external_frame(
         self,

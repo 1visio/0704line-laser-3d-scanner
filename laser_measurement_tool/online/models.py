@@ -23,7 +23,7 @@ class CameraDeviceInfo:
 
 @dataclass(frozen=True, slots=True)
 class CameraConfig:
-    exposure_us: float = 1200.0
+    exposure_us: float = 600.0
     gain_db: float = 0.0
     pixel_format: str = "Mono8"
     offset_x: int = 0

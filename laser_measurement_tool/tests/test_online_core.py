@@ -41,7 +41,7 @@ class OnlineCoreTests(unittest.TestCase):
     def test_camera_config_validation(self) -> None:
         defaults = CameraConfig()
         self.assertEqual(defaults.pixel_format, "Mono8")
-        self.assertEqual(defaults.exposure_us, 1200.0)
+        self.assertEqual(defaults.exposure_us, 600.0)
         self.assertEqual(
             (defaults.width, defaults.height, defaults.offset_x, defaults.offset_y),
             (2448, 300, 0, 880),

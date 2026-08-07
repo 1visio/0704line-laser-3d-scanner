@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import threading
 import time
+from collections import deque
 
 from PySide6.QtCore import QObject, Signal
 
@@ -15,6 +16,7 @@ from .runtime import LatestFrameSlot
 
 RESULT_EMIT_INTERVAL_S = 0.075
 STATS_EMIT_INTERVAL_S = 0.25
+FPS_WINDOW_S = 1.0
 
 
 class OnlineController(QObject):
@@ -44,6 +46,7 @@ class OnlineController(QObject):
         self._last_result_emit_at = 0.0
         self._last_stats_emit_at = 0.0
         self._stats_lock = threading.Lock()
+        self._stats_history: deque[tuple[float, int, int]] = deque()
         self._started_at = 0.0
         self._last_result: FrameResult | None = None
 
@@ -80,6 +83,9 @@ class OnlineController(QObject):
         self._last_stats_emit_at = 0.0
         self._last_result = None
         self._started_at = time.monotonic()
+        with self._stats_lock:
+            self._stats_history.clear()
+            self._stats_history.append((self._started_at, 0, 0))
         try:
             session.start()
             self._acquisition_thread = threading.Thread(
@@ -201,14 +207,33 @@ class OnlineController(QObject):
             if not force and now - self._last_stats_emit_at < STATS_EMIT_INTERVAL_S:
                 return
             self._last_stats_emit_at = now
+            captured = self._captured
+            processed = self._processed
+            self._stats_history.append((now, captured, processed))
+            cutoff = now - FPS_WINDOW_S
+            while (
+                len(self._stats_history) > 1
+                and self._stats_history[1][0] <= cutoff
+            ):
+                self._stats_history.popleft()
+            base_time, base_captured, base_processed = self._stats_history[0]
+            window_elapsed = max(now - base_time, 1.0e-9)
+            capture_fps = max(captured - base_captured, 0) / window_elapsed
+            process_fps = max(processed - base_processed, 0) / window_elapsed
         elapsed = max(now - self._started_at, 1e-9)
         result = self._last_result
         self.stats_updated.emit(
             {
-                "capture_fps": self._captured / elapsed,
-                "process_fps": self._processed / elapsed,
-                "captured": self._captured,
-                "processed": self._processed,
+                # The displayed rates are a one-second rolling rate. The
+                # cumulative values remain available for diagnostics and no
+                # longer make startup/warm-up changes look like throughput
+                # changes several seconds later.
+                "capture_fps": capture_fps,
+                "process_fps": process_fps,
+                "capture_fps_avg": captured / elapsed,
+                "process_fps_avg": processed / elapsed,
+                "captured": captured,
+                "processed": processed,
                 "camera_gaps": self._camera_gaps,
                 "queue_overwrites": self._slot.overwritten if self._slot else 0,
                 "processing_ms": result.total_ms if result is not None else 0.0,

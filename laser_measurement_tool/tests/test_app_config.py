@@ -102,6 +102,7 @@ class LoadAppConfigTest(unittest.TestCase):
         config = load_app_config(DEFAULT_CONFIG_PATH)
         self.assertEqual(config.extraction_method, "steger")
         self.assertEqual(config.extraction_options["sigma"], 1.5)
+        self.assertEqual(config.extraction_options["roi_margin"], 48)
         tool_directory = DEFAULT_CONFIG_PATH.parent.parent.resolve()
         paths = (
             config.calibration.intrinsics,
