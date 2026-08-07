@@ -70,6 +70,7 @@ class FramePipeline:
         return FrameResult(
             frame=frame,
             centers_uv_full=np.ascontiguousarray(centers_full),
+            points_camera=reconstructed.points_camera,
             points_ground=points,
             section_xz=section,
             extraction_ms=extraction_ms,

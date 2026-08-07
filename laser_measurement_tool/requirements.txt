@@ -6,3 +6,4 @@ PyYAML
 scipy
 pyqtgraph
 PyOpenGL
+pytest
