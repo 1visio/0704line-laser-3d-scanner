@@ -1,111 +1,198 @@
-# 线激光静态扫描头最小工程
+# 0704 线激光三维截面实时测量工具
 
-本工程依据 `final/08线激光静态扫描头研发计划与验收标准.md` 搭建，目标是先固定数据契约和流水线边界，便于后续逐个迁入相机采集、激光条纹提取、标定和点云转换代码。
+本仓库是 0704 线激光三维截面测量系统的第一阶段工程，当前重点是：
 
-当前版本只提供可运行的合成数据闭环，不是计量验收程序。`calibration/demo.json` 是演示参数，禁止用于真实测量。
+- 海康 MVS 相机或模拟相机实时取流；
+- 线激光中心提取（`centroid`、`steger`、`shared_steger`）；
+- 相机坐标、激光模型和地面坐标之间的三维恢复；
+- 实时三维点云、二维 `Xg-Zg` 截面和障碍物高度测量；
+- 单帧区域选择、点云/CSV/图像/JSON 导出和定长录制；
+- 标定配置、硬件 ROI 和结果元数据的可追溯管理。
 
-## 快速运行
+> 当前版本是可运行的第一阶段实时测量工具。正式计量使用前，必须使用与实际相机、镜头、激光器、安装姿态、曝光和 ROI 完全匹配的标定数据完成独立验证。
 
-无需安装工程，PowerShell 中执行：
+## 文档入口
+
+| 文档 | 内容 |
+|---|---|
+| [在线实时工具用户手册](laser_measurement_tool/docs/ONLINE_USER_MANUAL.md) | 安装启动、界面操作、相机参数、曝光/ROI、FPS、单帧测量、标定配置、导出和故障排查 |
+| [实时工具模块说明](laser_measurement_tool/README.md) | 实时处理模块、配置字段、测试和开发说明 |
+| [标定工具仓库](https://github.com/1visio/calibration_tool) | 相机内参、外参、激光模型和地面补偿配置的生成与验证 |
+
+第一次使用时请先阅读[在线实时工具用户手册](laser_measurement_tool/docs/ONLINE_USER_MANUAL.md)，不要直接根据旧工程文档配置真实设备。
+
+## 快速启动
+
+### 1. 创建环境并安装依赖
+
+在仓库根目录执行 PowerShell 命令：
 
 ```powershell
-$env:PYTHONPATH="$PWD\src"
-python -m line_laser_static --config configs/demo.json
-python -m unittest discover -s tests -v
+cd D:\Docs\linelaserscan\0704line-laser-3d-scanner
+py -3.11 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r .\laser_measurement_tool\requirements.txt
 ```
 
-运行结果写入 `outputs/demo/<运行编号>/`，包含 CSV、PLY 和 `run_summary.json`。
+真实相机还需要单独安装海康 MVS SDK，并确保 SDK 的 Python 绑定和运行库可用。没有相机时可以先使用模拟模式检查界面和线程链路。
 
-## 450 nm 黑白相机条纹提取预设
-
-`configs/me2p_1230_450nm_preset.json` 对应 ME2P-1230-23U3M 的 4096 × 3000、
-Mono8 调参起点。当前采集源仍是同分辨率合成图，用于先验证算法和数据契约：
+### 2. 使用模拟相机
 
 ```powershell
-$env:PYTHONPATH="$PWD\src"
-python -m line_laser_static --config configs/me2p_1230_450nm_preset.json
+.\.venv\Scripts\python.exe .\laser_measurement_tool\online_camera.py --simulate
 ```
 
-新 `mono` 提取器输出逐列亚像素中心、峰值、对比度、SNR、FWHM、饱和与有效标志；
-单帧质量统计写入 `run_summary.json`。`calibration/me2p_1230_450nm_preset.json`
-中的内参来自 25 mm 名义焦距和 3.45 µm 名义像元，畸变及激光平面均为占位值；完成
-HALCON 标定前禁止用于测量。接入 Mono12 时需同步把提取阈值按 12 bit 灰度量程重新标定。
+模拟模式可以验证窗口、实时状态、录制和导出流程，但不能代表真实相机的曝光、传输性能或测量精度。
 
-## 代码流程
+### 3. 连接真实相机
+
+```powershell
+.\.venv\Scripts\python.exe .\laser_measurement_tool\online_camera.py
+```
+
+默认读取 `laser_measurement_tool/configs/measure_tool.yaml`。也可以显式指定配置和提取算法：
+
+```powershell
+.\.venv\Scripts\python.exe .\laser_measurement_tool\online_camera.py `
+  --config .\laser_measurement_tool\configs\measure_tool.yaml `
+  --method steger
+```
+
+## 当前默认采集参数
+
+| 参数 | 默认值 | 说明 |
+|---|---:|---|
+| 像素格式 | `Mono8` | 必须与标定和验证数据保持一致 |
+| 曝光 | `600 μs` | 停流后应用；正式测量应记录并固定 |
+| 增益 | `0 dB` | 建议优先通过曝光和光学条件改善信噪比 |
+| Offset X | `0` | 硬件 ROI 横向偏移 |
+| Offset Y | `880` | 硬件 ROI 纵向偏移 |
+| 宽度 | `2448` | 当前硬件 ROI 宽度 |
+| 高度 | `300` | 当前硬件 ROI 高度 |
+| 提取算法 | `steger` | 当前实时链路推荐算法 |
+
+修改像素格式、Offset、宽度或高度前必须停止取流，并确认对应标定文件仍然有效。硬件 ROI 图像的保存结果会附带 JSON sidecar，用于记录 ROI 偏移并支持后续单帧测量坐标还原。
+
+## 实时处理链路
 
 ```mermaid
 flowchart LR
-    A["FrameSource<br/>图像采集"] --> B["StripeExtractor<br/>亚像素中心"]
-    B --> C["ProfileReconstructor<br/>射线-平面求交"]
-    C --> D["CSV / PLY"]
-    A --> E["run_summary.json"]
-    B --> E
-    C --> E
+    A[相机 / 模拟相机] --> B[采集线程]
+    B --> C[激光中心提取]
+    C --> D[相机内参去畸变]
+    D --> E[激光模型求交]
+    E --> F[地面坐标与补偿]
+    F --> G[三维点云 / 二维截面]
+    G --> H[测量、显示和导出]
 ```
 
-图例：`FrameSource`、`StripeExtractor`、`ProfileReconstructor` 是三个稳定替换点；数据模型和输出字段是模块间契约。
+实时状态中的 `采集 fps`、`处理 fps`、`显示 fps` 和 `丢帧/覆盖` 含义不同。判断处理能力时优先看处理 fps、单帧耗时和丢帧计数，详细解释见[用户手册的 FPS 章节](laser_measurement_tool/docs/ONLINE_USER_MANUAL.md#5-fps处理耗时与丢帧解释)。
 
-## 目录说明
+## 主要操作
+
+1. 点击“刷新”发现相机，选择设备后点击“连接”；
+2. 停流状态下确认像素格式、曝光、增益和硬件 ROI；
+3. 点击“开始”，确认状态为“取流中”；
+4. 在“原始图像”和“激光中心提取”视图检查激光线连续性；
+5. 使用“保存当前帧”保存原图和 JSON sidecar；
+6. 使用“导出当前点云/CSV”保存当前帧结果；
+7. 使用“单帧测量与区域选择”添加地面基准区和障碍物区；
+8. 需要采集数据集时使用“定长录制”；
+9. 结束时先点击“停止”，再点击“断开”。
+
+完整按钮说明、区域选择规则、测量阈值和异常处理请以[在线实时工具用户手册](laser_measurement_tool/docs/ONLINE_USER_MANUAL.md)为准。
+
+## 配置与标定
+
+实时工具默认使用：
 
 ```text
-calibration/                 标定文件；演示文件与真实标定必须区分
-configs/                     单次运行配置
-data/raw/calibration/        相机和激光平面标定原始数据
-data/raw/tuning/             调参数据
-data/raw/validation/         正式验证数据
-data/raw/blind_test/         盲测数据
-data/metadata/               实验元数据
-outputs/                     CSV、PLY 和运行摘要
-references/legacy_0324/      旧工程算法参考副本；不进入默认运行链路
-src/line_laser_static/       工程代码
-tests/                       最小闭环测试
-reports/                     设计和变更说明
+laser_measurement_tool/configs/measure_tool.yaml
+laser_measurement_tool/configs/calibration/manifest.yaml
 ```
 
-## 迁入旧代码
+标定 manifest 会关联相机内参、相机到地面外参、激光模型、地面补偿和文件哈希。替换标定文件后，应重新检查 manifest，并用固定验证图像确认：
 
-建议按以下顺序逐段替换，每次替换后先运行测试和一组固定原始图像：
+- 激光中心位置和有效点比例；
+- 地面 `Zg` 基准和噪声；
+- 已知障碍物高度；
+- ROI 偏移、图像坐标和三维坐标方向；
+- 与当前提取算法、曝光和像素格式的一致性。
 
-1. 相机采集：新增类实现 `FrameSource.capture() -> Frame`，在 `bootstrap.py` 中增加对应配置分支。厂商 SDK 的打开、关闭和异常处理留在适配器内部。
-2. 条纹提取：把旧算法封装为 `StripeExtractor.extract(Frame) -> StripeProfile`。输出必须保留逐点 `intensity`、`confidence` 和 `valid`。
-3. 三维转换：把旧标定/重建代码封装为 `ProfileReconstructor.reconstruct(StripeProfile) -> PointCloud`。坐标统一为毫米，无效坐标写 `NaN` 且 `valid=False`。
-4. 真实配置：复制 `configs/demo.json` 和 `calibration/demo.json` 后改名，写入真实硬件、机械配置和唯一标定版本；不要覆盖演示文件。
+标定配置的字段说明和替换流程见[用户手册的标定配置章节](laser_measurement_tool/docs/ONLINE_USER_MANUAL.md#8-标定配置与修改)。不要把旧设备的内参、激光平面、地面外参或 ROI 直接用于新设备。
 
-## 旧工程参考代码
+## 输出目录
 
-已将 G:/dev/projects/0324line_3d 中两条经过旧数据验证的链路原样复制到
-<code>references/legacy_0324/</code>：
+实时运行产生的文件默认位于：
 
-- 激光平面标定：<code>laser_plane_calibration.py</code>，以及
-  <code>laser_stripe_subpixel_module_v2.py</code>、<code>src/red_filter_preprocess_v3_reusable.py</code>。
-- ROI 中心线与单帧点云：<code>ablation_v1_runner.py</code> 中的
-  <code>LaserLineExtractorROI</code>，底层为 <code>src/linelaser0319_reusable.py</code>。
-- 批量入口：<code>export_v1_roi_centerline_batch.py</code>。
+```text
+laser_measurement_tool/output/online_measurements/
+laser_measurement_tool/output/online_recordings/
+```
 
-详细来源、哈希、适配限制和使用顺序见
-[参考代码说明](references/legacy_0324/README.md)。原始复用分析来自
-G:/dev/projects/0514_ruanzhu/新线激光系统可复用代码分析.md。
+典型结果包括：
 
-参考副本刻意不包含旧设备 config_plane_* 配置，因此不能直接作为新设备默认入口。
-完成新相机内参后，应使用新的 K/D 和新采集的标定图像生成激光平面；不得沿用副本中的
-默认内参、畸变、激光平面、机器人安装参数、ROI、阈值和 flip_robot_y。
+- `laser_center.csv`：逐列激光中心；
+- `full_points.csv`：像素、相机坐标和地面坐标对应关系；
+- `full_laser_ground.ply`：地面坐标系点云，单位为 mm；
+- `overlay.png`：激光中心叠加图；
+- `result.json`：帧信息、算法、标定包 ID/哈希和过滤统计；
+- 图像文件及其 JSON sidecar：包含硬件 ROI 偏移、帧号和时间戳。
 
-新设备是 450 nm 蓝光配黑白相机，旧代码的 R-G/红光增强预处理不能直接用于 Mono8
-图像。建议保留 ROI、Steger 亚像素中心和射线-平面求交，仅把预处理替换为黑白强度或
-暗场差分。若同一批新图像上的有效率、断线、重复性和三维误差达到验收门槛，就没有必要
-重新设计整套条纹提取算法。
+不同标定版本或不同算法产生的结果不要混放在同一个实验目录中。
 
-Windows 下安装参考代码所需的可选依赖：
+## 目录结构
 
-~~~powershell
-python -m pip install -e ".[legacy-reference]"
-~~~
+```text
+laser_measurement_tool/
+├─ online_camera.py             实时工具入口
+├─ online/                      相机、队列、处理和录制运行时
+├─ gui/                         在线窗口、图像和点云视图
+├─ laser/                       激光中心提取后端
+├─ reconstruction/              三维恢复和地面坐标转换
+├─ measurement/                 单帧区域和高度测量
+├─ configs/                     测量参数和标定 manifest
+├─ docs/                        用户手册及界面图
+├─ tests/                       单元测试和集成测试
+└─ output/                      本地运行输出，不应提交实验大文件
 
-参考副本不会随 line-laser-static 默认 CLI 导入，所以核心最小工程仍只依赖 NumPy。
+calibration/                    仓库内标定样例和历史配置
+configs/                        静态/离线链路配置
+laser_pretest_dataset/          激光条纹预采集和离线分析工具
+reports/                        性能、算法和阶段性报告
+src/line_laser_static/           静态链路和基础数据契约
+tests/                           仓库级静态链路测试
+```
+
+## 测试
+
+实时工具测试：
+
+```powershell
+cd D:\Docs\linelaserscan\0704line-laser-3d-scanner\laser_measurement_tool
+..\.venv\Scripts\python.exe -m pytest -q
+```
+
+如果只验证实时核心和配置加载：
+
+```powershell
+..\.venv\Scripts\python.exe -m pytest -q `
+  tests/test_online_core.py `
+  tests/test_app_config.py `
+  tests/test_backends.py `
+  tests/test_reconstructor.py `
+  tests/test_calibration_manifest.py
+```
+
+测试相机链路前无需连接真实设备；真实设备验证仍需单独记录相机型号、曝光、ROI、标定包和测试图像。
 
 ## 当前边界
 
-- 已有：单帧输入、亚像素重心示例、射线-平面重建、固定结果字段、运行追溯摘要、合成闭环测试。
-- 已归档待适配：旧激光平面标定、ROI/Steger 中心线、射线-平面求交和批量导出参考代码。
-- 待实现：大恒 SDK、黑白图暗场/背景差分、真实相机内参标定、参考代码薄适配和验收指标计算。
-- 不在本阶段：俯仰运动、编码器同步、多轮廓融合、机器人手眼标定、产品化 C++ 实时软件。
+- 当前工具是单条激光线的实时三维截面测量，不是编码器同步的完整机器人扫描系统；
+- 显示 fps 不等于相机采集 fps 或算法处理 fps；
+- 模拟相机不能验证真实曝光、传输和计量精度；
+- 任何相机、镜头、激光器、安装姿态、像素格式、曝光或 ROI 改变都可能使原标定失效；
+- 正式使用前必须完成独立精度、重复性、有效点率和丢帧验证。
+
+## 版本提交建议
+
+提交实时工具改动时，应同时提交必要的配置、测试和文档；相机采集原图、录制目录、运行输出和个人标定数据应保留在本地实验目录，不要直接提交到仓库。发布第一阶段版本前，建议确认 `main` 分支测试通过，并为对应的标定包和配置建立可追溯版本号。
