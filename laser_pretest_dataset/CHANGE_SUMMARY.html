@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>线激光预调分析工具改动摘要</title>
+  <style>
+    body{font-family:"Microsoft YaHei",Arial,sans-serif;margin:0;background:#f4f7fb;color:#162033}
+    main{max-width:1080px;margin:28px auto;padding:0 24px 36px}
+    h1{margin-bottom:6px} .sub{color:#607089;margin-top:0}
+    section{background:#fff;border:1px solid #dde5ef;border-radius:12px;padding:22px;margin:18px 0;box-shadow:0 4px 16px #18324d0d}
+    .flow{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    .node{padding:10px 14px;border-radius:8px;background:#eaf2ff;border:1px solid #9bbef5;font-weight:600}
+    .arrow{color:#61738d;font-size:22px}.legend{display:grid;grid-template-columns:24px 1fr;gap:12px 10px;align-items:center}
+    .swatch{height:4px;border-radius:4px}.cyan{background:#00b8cc}.blue{background:#8da0cb}.red{background:#d62728}.green{border-top:3px dashed #2ca02c}.purple{background:#9467bd}
+    code{background:#eef2f7;padding:2px 5px;border-radius:4px} li{margin:7px 0}
+  </style>
+</head>
+<body><main>
+  <h1>线激光预调实验离线分析工具</h1>
+  <p class="sub">改动摘要 · 原始灰度计量 · 多帧重复性 · PPT 级科研图</p>
+  <section><h2>主要改动</h2><ul>
+    <li>metadata 驱动的多实验、多帧离线批处理 CLI。</li>
+    <li>原位深峰值、亚像素灰度重心、FWHM 和跨帧重复性计算。</li>
+    <li>每组六张科研图、逐帧与组级指标、全局汇总表。</li>
+    <li>严格输入校验、单组错误隔离、示例配置和自动化测试。</li>
+  </ul></section>
+  <section><h2>代码流程图</h2><div class="flow">
+    <div class="node">metadata + config</div><div class="arrow">→</div>
+    <div class="node">原位深读取</div><div class="arrow">→</div>
+    <div class="node">ROI / 峰值定位</div><div class="arrow">→</div>
+    <div class="node">重心 / FWHM</div><div class="arrow">→</div>
+    <div class="node">重复性统计</div><div class="arrow">→</div>
+    <div class="node">PNG + CSV</div>
+  </div></section>
+  <section><h2>图例</h2><div class="legend">
+    <div class="swatch cyan"></div><div>有效亚像素中心线</div>
+    <div class="swatch blue"></div><div>各帧逐列 FWHM</div>
+    <div class="swatch red"></div><div>跨帧平均 FWHM</div>
+    <div class="swatch green"></div><div>FWHM 有效上下限</div>
+    <div class="swatch purple"></div><div>中心重复性标准差</div>
+  </div></section>
+  <section><h2>数据原则</h2><p>高斯滤波只用于峰值定位。峰值 DN、灰度重心和 FWHM 均使用未归一化原始灰度；绘图采用配置的固定显示范围。</p></section>
+</main></body></html>

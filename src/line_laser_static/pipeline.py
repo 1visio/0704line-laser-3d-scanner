@@ -8,6 +8,7 @@ from typing import Any
 
 from .exporters import write_csv, write_ply
 from .interfaces import FrameSource, ProfileReconstructor, StripeExtractor
+from .metrics import summarize_profile_quality
 
 
 @dataclass(frozen=True)
@@ -47,11 +48,7 @@ class StaticProfilePipeline:
             "generated_at_utc": now.isoformat(),
             "context": context,
             "frame": asdict(frame.metadata),
-            "profile": {
-                "point_count": int(profile.u_px.size),
-                "valid_count": int(profile.valid.sum()),
-                "valid_ratio": float(profile.valid.mean()) if profile.valid.size else 0.0,
-            },
+            "profile": summarize_profile_quality(profile),
             "point_cloud": {
                 "point_count": cloud.size,
                 "valid_count": int(cloud.valid.sum()),

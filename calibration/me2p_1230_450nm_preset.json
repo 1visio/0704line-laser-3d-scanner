@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "calibration_version": "ME2P-1230-25MM-NOMINAL-PRESET-V1",
+  "status": "PRESET_INTRINSICS_AND_PLACEHOLDER_LASER_PLANE_NOT_FOR_MEASUREMENT",
+  "image_size": [4096, 3000],
+  "camera_matrix": [
+    [7246.376811594203, 0.0, 2047.5],
+    [0.0, 7246.376811594203, 1499.5],
+    [0.0, 0.0, 1.0]
+  ],
+  "distortion": [0.0, 0.0, 0.0, 0.0, 0.0],
+  "camera_intrinsics_preset": {
+    "camera_model": "Daheng Imaging ME2P-1230-23U3M",
+    "sensor": "Sony IMX304",
+    "lens_model": "HN-P-2524-20M-C1.1/1",
+    "nominal_focal_length_mm": 25.0,
+    "nominal_pixel_size_um": [3.45, 3.45],
+    "formula": "f_px = nominal_focal_length_mm / pixel_size_mm",
+    "principal_point_rule": "image center",
+    "replacement_required": "Replace camera_matrix and distortion with HALCON calibration results at 4096x3000 before measurement."
+  },
+  "laser_plane": {
+    "normal": [0.0, 0.0, 1.0],
+    "offset": -1000.0
+  },
+  "coordinate_system": "camera: +X right, +Y down, +Z forward",
+  "unit": "mm",
+  "mechanical_config_id": "UNSET-BEFORE-INSTALLATION-COMPARISON",
+  "dataset_id": "NO-REAL-CALIBRATION-DATA",
+  "notes": [
+    "The camera intrinsics are nominal startup presets, not HALCON calibration output.",
+    "The zero distortion and laser plane are placeholders and must not be used for metrology.",
+    "Changing camera position, laser position, focus or optical elements invalidates the laser-plane calibration."
+  ]
+}

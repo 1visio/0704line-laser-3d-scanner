@@ -11,3 +11,16 @@ data/raw/*/*
 !data/raw/*/.gitkeep
 outputs/**
 !outputs/.gitkeep
+
+# Pretest acquisition data and generated reports stay local.
+laser_pretest_dataset/metadata.csv
+laser_pretest_dataset/metadata.xlsx
+laser_pretest_dataset/raw/**
+laser_pretest_dataset/results/**
+
+# Online measurement tool: keep source/configuration in Git, but leave bulky
+# acquisition datasets and runtime recordings on the experiment workstation.
+laser_measurement_tool/data/
+laser_measurement_tool/output/
+laser_measurement_tool/outputs/
+laser_measurement_tool/recordings/

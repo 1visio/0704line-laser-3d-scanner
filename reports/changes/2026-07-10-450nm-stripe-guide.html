@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>450 nm 黑白相机条纹提取文档交付说明</title>
+  <style>
+    :root{--ink:#18324a;--blue:#1976a8;--pale:#edf7fb;--line:#cbdde7;--amber:#b7791f;--green:#2f855a}
+    *{box-sizing:border-box} body{margin:0;background:#f5f8fa;color:var(--ink);font:15px/1.65 "Segoe UI","Microsoft YaHei",sans-serif}
+    main{max-width:1060px;margin:28px auto;padding:38px 44px;background:#fff;border:1px solid #dce8ee;border-radius:16px;box-shadow:0 12px 32px rgba(24,50,74,.08)}
+    h1{margin:0 0 6px;font-size:29px} h2{margin-top:30px;border-bottom:2px solid var(--line);padding-bottom:6px}
+    .meta{color:#60788a}.badges{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0}.badge{background:var(--blue);color:#fff;padding:4px 10px;border-radius:999px;font-size:13px}.warn{background:var(--amber)}
+    .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.card{padding:15px;border:1px solid var(--line);border-radius:11px;background:#fbfdfe}
+    .flow{overflow:auto;border:1px solid var(--line);border-radius:12px;padding:14px;background:#fbfdfe}
+    table{width:100%;border-collapse:collapse}th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top}th{background:var(--pale)}
+    .note{border-left:5px solid var(--amber);background:#fff8e8;padding:12px 16px;margin-top:18px}.ok{border-left-color:var(--green);background:#edf9f2}
+    @media(max-width:760px){main{margin:0;padding:24px;border-radius:0}.cards{grid-template-columns:1fr}}
+  </style>
+</head>
+<body><main>
+  <h1>450 nm 黑白相机条纹提取文档交付说明</h1>
+  <div class="meta">2026-07-10 · 仅新增说明文档，不修改算法代码</div>
+  <div class="badges"><span class="badge">算法步骤与公式</span><span class="badge">输入/输出契约</span><span class="badge">运行与调参</span><span class="badge warn">真实设备边界已标注</span></div>
+
+  <div class="cards">
+    <div class="card"><strong>主交付</strong><br>详细 Markdown 指南，覆盖背景估计、亚像素重心、SNR、FWHM、质量门和置信度。</div>
+    <div class="card"><strong>使用说明</strong><br>包含 CLI、测试命令、直接输入 NumPy 图像及多帧重复性示例。</div>
+    <div class="card"><strong>边界说明</strong><br>明确当前 CLI 是合成源，三维标定是占位值，真实 SDK/暗场/畸变仍待接入。</div>
+  </div>
+
+  <h2>代码流程图</h2>
+  <div class="flow">
+    <svg viewBox="0 0 1020 270" width="100%" role="img" aria-label="450 nm Mono 条纹提取流程">
+      <defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8z" fill="#1976a8"/></marker></defs>
+      <g fill="#edf7fb" stroke="#1976a8" stroke-width="2">
+        <rect x="20" y="35" width="130" height="56" rx="9"/><rect x="185" y="35" width="145" height="56" rx="9"/><rect x="365" y="35" width="130" height="56" rx="9"/>
+        <rect x="530" y="35" width="130" height="56" rx="9"/><rect x="695" y="15" width="140" height="56" rx="9"/><rect x="695" y="90" width="140" height="56" rx="9"/>
+        <rect x="870" y="53" width="130" height="62" rx="9"/><rect x="870" y="185" width="130" height="56" rx="9"/>
+      </g>
+      <g fill="none" stroke="#1976a8" stroke-width="2" marker-end="url(#arrow)">
+        <path d="M150 63H185"/><path d="M330 63H365"/><path d="M495 63H530"/><path d="M660 63H695"/><path d="M660 63C680 63 675 118 695 118"/>
+        <path d="M835 43C855 43 850 72 870 77"/><path d="M835 118C855 118 850 95 870 91"/><path d="M935 115V185"/>
+      </g>
+      <g fill="#18324a" font-size="13" text-anchor="middle">
+        <text x="85" y="59">二维 Mono 帧<tspan x="85" dy="18">图像 + 元数据</tspan></text><text x="257" y="59">ROI / 量程<tspan x="257" dy="18">输入校验</tspan></text>
+        <text x="430" y="59">列背景估计<tspan x="430" dy="18">正残差</tspan></text><text x="595" y="59">轻量滤波<tspan x="595" dy="18">候选峰</tspan></text>
+        <text x="765" y="38">局部灰度重心<tspan x="765" dy="18">亚像素中心</tspan></text><text x="765" y="113">SNR / FWHM<tspan x="765" dy="18">饱和诊断</tspan></text>
+        <text x="935" y="77">联合质量门<tspan x="935" dy="18">valid/confidence</tspan></text><text x="935" y="208">StripeProfile<tspan x="935" dy="18">质量/重复性</tspan></text>
+      </g>
+    </svg>
+  </div>
+  <p><strong>图例：</strong>上支路负责亚像素定位；下支路负责质量诊断；联合质量门决定有效性。滤波只用于找峰，中心计算使用未平滑的背景抑制信号。</p>
+
+  <h2>文档新增内容</h2>
+  <table><thead><tr><th>模块</th><th>说明</th></tr></thead><tbody>
+    <tr><td>算法原理</td><td>逐列背景分位数、1-2-1 滤波、灰度重心、MAD-SNR、半高线性插值和饱和判断。</td></tr>
+    <tr><td>输入契约</td><td>二维 Mono8/Mono12 NumPy 图像、FrameMetadata、量程与 ROI 约束。</td></tr>
+    <tr><td>输出契约</td><td>u/v、intensity、confidence、valid、contrast、snr、fwhm_px 和 saturated。</td></tr>
+    <tr><td>运行操作</td><td>合成 CLI、完整/专项测试、直接输入单帧以及 100 帧重复性统计示例。</td></tr>
+    <tr><td>调参与排错</td><td>参数表、冻结顺序、常见失败现象、HALCON 标定关系与真实图接入检查清单。</td></tr>
+  </tbody></table>
+
+  <div class="note"><strong>关键限制：</strong>当前 `profile.csv/.ply` 是三维 PointCloud 契约，不含逐列 SNR/FWHM；逐列诊断在内存的 StripeProfile 中，run_summary 只保存聚合统计。占位内参与激光平面禁止用于测量。</div>
+  <div class="note ok"><strong>本次范围：</strong>只增加技术说明和交付摘要，不改变、重排或格式化任何现有算法文件。</div>
+</main></body></html>

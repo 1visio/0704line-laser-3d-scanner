@@ -21,11 +21,27 @@ class SyntheticFrameSource:
         seed: int = 0,
         exposure_us: float = 2000.0,
         gain_db: float = 0.0,
+        offset_x_px: int = 0,
+        offset_y_px: int = 0,
+        full_width_px: int | None = None,
+        full_height_px: int | None = None,
     ) -> None:
         if width <= 0 or height <= 0:
             raise ValueError("合成图像宽高必须为正数")
         if sigma_px <= 0:
             raise ValueError("sigma_px 必须大于零")
+        resolved_full_width = (
+            offset_x_px + width if full_width_px is None else full_width_px
+        )
+        resolved_full_height = (
+            offset_y_px + height if full_height_px is None else full_height_px
+        )
+        if offset_x_px < 0 or offset_y_px < 0:
+            raise ValueError("合成相机 ROI 偏移不能为负数")
+        if offset_x_px + width > resolved_full_width:
+            raise ValueError("合成相机 ROI 在 x 方向超出完整图像")
+        if offset_y_px + height > resolved_full_height:
+            raise ValueError("合成相机 ROI 在 y 方向超出完整图像")
         self.width = width
         self.height = height
         self.stripe_row_px = stripe_row_px
@@ -36,6 +52,10 @@ class SyntheticFrameSource:
         self.noise_std = noise_std
         self.exposure_us = exposure_us
         self.gain_db = gain_db
+        self.offset_x_px = offset_x_px
+        self.offset_y_px = offset_y_px
+        self.full_width_px = resolved_full_width
+        self.full_height_px = resolved_full_height
         self._rng = np.random.default_rng(seed)
         self._frame_id = 0
 
@@ -62,6 +82,10 @@ class SyntheticFrameSource:
             camera_model="SYNTHETIC",
             serial_number="SYNTHETIC-000",
             sdk_version="none",
+            offset_x_px=self.offset_x_px,
+            offset_y_px=self.offset_y_px,
+            full_width_px=self.full_width_px,
+            full_height_px=self.full_height_px,
         )
         self._frame_id += 1
         return Frame(image=image_u8, metadata=metadata)

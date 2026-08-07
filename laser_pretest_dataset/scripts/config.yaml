@@ -1,0 +1,34 @@
+# Coordinates below use absolute pixels in the original image.
+roi:
+  x: 0
+  y: 0
+  width: null
+  height: null
+
+# Filtering is used only to locate the peak row. Measurements use raw pixels.
+gaussian_filter:
+  enabled: true
+  kernel_size: 5
+  sigma: 1.2
+
+extraction:
+  peak_window_radius: 5
+  min_peak_intensity: 30
+  fwhm_ratio: 0.5
+  min_fwhm_px: 1.0
+  max_fwhm_px: 30.0
+
+profiles:
+  x_positions: [1024, 2048, 3072]
+
+repeatability:
+  x_positions: [1024, 2048, 3072]
+
+plot:
+  dpi: 200
+  figsize: [10.0, 5.6]
+  display_min: 0
+  # Set an explicit sensor limit, such as 4095 for Mono12 stored in uint16.
+  # null uses the full range of the image dtype and never normalizes per image.
+  display_max: null
+  line_width: 1.2

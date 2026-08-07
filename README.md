@@ -16,6 +16,21 @@ python -m unittest discover -s tests -v
 
 运行结果写入 `outputs/demo/<运行编号>/`，包含 CSV、PLY 和 `run_summary.json`。
 
+## 450 nm 黑白相机条纹提取预设
+
+`configs/me2p_1230_450nm_preset.json` 对应 ME2P-1230-23U3M 的 4096 × 3000、
+Mono8 调参起点。当前采集源仍是同分辨率合成图，用于先验证算法和数据契约：
+
+```powershell
+$env:PYTHONPATH="$PWD\src"
+python -m line_laser_static --config configs/me2p_1230_450nm_preset.json
+```
+
+新 `mono` 提取器输出逐列亚像素中心、峰值、对比度、SNR、FWHM、饱和与有效标志；
+单帧质量统计写入 `run_summary.json`。`calibration/me2p_1230_450nm_preset.json`
+中的内参来自 25 mm 名义焦距和 3.45 µm 名义像元，畸变及激光平面均为占位值；完成
+HALCON 标定前禁止用于测量。接入 Mono12 时需同步把提取阈值按 12 bit 灰度量程重新标定。
+
 ## 代码流程
 
 ```mermaid
