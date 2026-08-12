@@ -232,6 +232,21 @@ class OnlineCameraWindow(QMainWindow):
         self._config = config
         self._simulate = simulate
         self._camera_backend: CameraBackend = get_camera_backend(camera_backend)
+        startup_camera = config.camera
+        self._initial_camera_config = (
+            CameraConfig(
+                exposure_us=startup_camera.exposure_us,
+                gain_db=startup_camera.gain_db,
+                pixel_format=startup_camera.pixel_format,
+                offset_x=startup_camera.offset_x,
+                offset_y=startup_camera.offset_y,
+                width=startup_camera.width,
+                height=startup_camera.height,
+                timeout_ms=startup_camera.timeout_ms,
+            )
+            if startup_camera is not None
+            else CameraConfig()
+        )
         self._initial_extraction_method = (
             extraction_method or config.extraction_method
         )
@@ -1140,19 +1155,29 @@ class OnlineCameraWindow(QMainWindow):
         form = QFormLayout(self.camera_settings_group)
         self.pixel_format = QComboBox(self.camera_settings_group)
         self.pixel_format.addItems(["Mono8", "Mono12"])
+        self.pixel_format.setCurrentText(self._initial_camera_config.pixel_format)
         self.exposure = QDoubleSpinBox(self.camera_settings_group)
         self.exposure.setRange(1.0, 1_000_000.0)
-        self.exposure.setValue(600.0)
+        self.exposure.setValue(self._initial_camera_config.exposure_us)
         self.exposure.setSuffix(" μs")
         self.gain = QDoubleSpinBox(self.camera_settings_group)
         self.gain.setRange(-20.0, 40.0)
+        self.gain.setValue(self._initial_camera_config.gain_db)
         # The SDK adapter performs the authoritative node-range/increment
         # validation.  These controls must also allow the 4096x3000 sensor
         # used by the Daheng ME2P-1230 profile.
-        self.offset_x = _spin(self.camera_settings_group, 0, 65535, 0)
-        self.offset_y = _spin(self.camera_settings_group, 0, 65535, 880)
-        self.roi_width = _spin(self.camera_settings_group, 1, 65535, 2448)
-        self.roi_height = _spin(self.camera_settings_group, 1, 65535, 300)
+        self.offset_x = _spin(
+            self.camera_settings_group, 0, 65535, self._initial_camera_config.offset_x
+        )
+        self.offset_y = _spin(
+            self.camera_settings_group, 0, 65535, self._initial_camera_config.offset_y
+        )
+        self.roi_width = _spin(
+            self.camera_settings_group, 1, 65535, self._initial_camera_config.width
+        )
+        self.roi_height = _spin(
+            self.camera_settings_group, 1, 65535, self._initial_camera_config.height
+        )
         form.addRow("像素格式", self.pixel_format)
         form.addRow("曝光", self.exposure)
         form.addRow("增益", self.gain)
@@ -1380,6 +1405,7 @@ class OnlineCameraWindow(QMainWindow):
             offset_y=self.offset_y.value(),
             width=self.roi_width.value(),
             height=self.roi_height.value(),
+            timeout_ms=self._initial_camera_config.timeout_ms,
         )
 
     def _sync_camera_config(self, config: CameraConfig) -> None:

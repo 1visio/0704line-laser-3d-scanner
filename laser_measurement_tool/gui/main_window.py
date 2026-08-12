@@ -592,6 +592,7 @@ class MainWindow(QMainWindow):
             centers = extract_laser_center(
                 self._image,
                 self._laser_extraction_params,
+                image_offset=self._image_offset,
             )
         except LaserAlgorithmNotConfiguredError as error:
             self.statusBar().showMessage(str(error))

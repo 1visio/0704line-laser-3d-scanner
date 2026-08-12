@@ -48,6 +48,8 @@ class LaserAlgorithmNotConfiguredError(LaserExtractionError):
 def extract_laser_center(
     image: np.ndarray,
     params: LaserExtractionParamsInput,
+    *,
+    image_offset: tuple[int, int] = (0, 0),
 ) -> LaserCenterArray:
     """调用已注入算法，返回形状为 ``(N, 2)`` 的亚像素 ``(u, v)`` 数组。"""
     grayscale = np.asarray(image)
@@ -64,8 +66,13 @@ def extract_laser_center(
     if not callable(configuration.backend):
         raise TypeError("params.backend 必须是可调用对象")
 
+    options = configuration.options
+    if "search_roi" in options:
+        options = dict(options)
+        options["_image_offset"] = image_offset
+
     try:
-        raw_centers = configuration.backend(grayscale, configuration.options)
+        raw_centers = configuration.backend(grayscale, options)
     except Exception as error:
         raise LaserExtractionError(
             f"{configuration.method} 激光中心提取失败: {error}"

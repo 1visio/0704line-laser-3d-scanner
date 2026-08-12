@@ -95,7 +95,7 @@ class OnlineExportTests(unittest.TestCase):
                 self.assertIsNotNone(window._analysis_window)
                 self.assertEqual(
                     window._analysis_window._image_offset,
-                    (0, 880),
+                    (0, 800),
                 )
             finally:
                 window.close()
