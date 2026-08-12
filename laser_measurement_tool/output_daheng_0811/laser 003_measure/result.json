@@ -1,0 +1,105 @@
+{
+  "image": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\obs\\.chessboard.inprogress\\fit\\laser 003.tif",
+  "config": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\configs\\measure_tool_daheng_0811.yaml",
+  "calibration": {
+    "intrinsics": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\configs\\calibration_daheng_0811\\calibration_result.yaml",
+    "laser_model": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\configs\\calibration_daheng_0811\\circular_cone.yaml",
+    "laser_plane": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\configs\\calibration_daheng_0811\\circular_cone.yaml",
+    "extrinsics": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\configs\\calibration_daheng_0811\\camera_ground_extrinsics.yaml",
+    "ground_u_compensation": null
+  },
+  "extraction_method": "steger",
+  "measurement_performed": true,
+  "laser_center_csv": "laser_center.csv",
+  "ground_reference_mode": "zg_zero",
+  "results_mm": {
+    "height_mean": 0.012810433652119061,
+    "height_median": -0.014099213674398925,
+    "height_std": 0.09391309395038967,
+    "length": 173.80882998773063,
+    "angle_with_baseline_deg": null,
+    "ground_baseline_zg": 0.0,
+    "ground_noise_sigma": null,
+    "ground_profile": null,
+    "height_line_fit_rmse": 0.051386498381407096,
+    "endpoints_ground": [
+      [
+        3.7289458092632,
+        -27.58173362463083,
+        0.012810433652119061
+      ],
+      [
+        6.338826654795668,
+        146.2075005174068,
+        0.012810433652119061
+      ]
+    ]
+  },
+  "obstacles": [
+    {
+      "index": 1,
+      "points_csv": "height_points.csv",
+      "results_mm": {
+        "height_mean": 0.012810433652119061,
+        "height_median": -0.014099213674398925,
+        "height_std": 0.09391309395038967,
+        "length": 173.80882998773063,
+        "angle_with_baseline_deg": null,
+        "ground_baseline_zg": 0.0,
+        "ground_noise_sigma": null,
+        "ground_profile": null,
+        "height_line_fit_rmse": 0.051386498381407096,
+        "endpoints_ground": [
+          [
+            3.7289458092632,
+            -27.58173362463083,
+            0.012810433652119061
+          ],
+          [
+            6.338826654795668,
+            146.2075005174068,
+            0.012810433652119061
+          ]
+        ]
+      },
+      "point_counts": {
+        "total": 1102,
+        "inliers": 971
+      },
+      "reconstruction_filtered": {
+        "near_parallel": 0,
+        "negative_depth": 0,
+        "outside_working_distance": 0,
+        "non_finite": 0,
+        "no_valid_intersection": 0,
+        "outside_image_roi": 0
+      }
+    }
+  ],
+  "point_counts": {
+    "laser_centers_2d": 1307,
+    "full_laser_reconstructed": 1243,
+    "baseline_total": 0,
+    "baseline_inliers": 0,
+    "height_total": 1102,
+    "height_inliers": 971
+  },
+  "reconstruction_filtered": {
+    "height": {
+      "near_parallel": 0,
+      "negative_depth": 0,
+      "outside_working_distance": 0,
+      "non_finite": 0,
+      "no_valid_intersection": 0,
+      "outside_image_roi": 0
+    }
+  },
+  "full_laser_reconstruction_filtered": {
+    "near_parallel": 0,
+    "negative_depth": 0,
+    "outside_working_distance": 0,
+    "non_finite": 0,
+    "no_valid_intersection": 64,
+    "outside_image_roi": 0
+  }
+}

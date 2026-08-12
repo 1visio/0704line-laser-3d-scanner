@@ -5,6 +5,16 @@
 
 schema_version: 1
 
+camera:
+  exposure_us: 600.0
+  gain_db: 0.0
+  pixel_format: Mono8
+  offset_x: 0
+  offset_y: 800
+  width: 2440
+  height: 300
+  timeout_ms: 2000
+
 calibration:
   manifest: calibration/manifest.yaml
   # 相机内参：需含 camera_matrix(3x3) 与 dist_coeffs(4/5/8/12/14 个)
@@ -31,7 +41,11 @@ extraction:
     correction_max_shift: 3.5        # 平滑允许的最大位移（像素）
     scan_axis: column                # column=条纹接近水平；row=条纹接近竖直
   steger:
-    {}                              # profile 提供实际参数；此处保留配置接口
+    search_roi:                     # 海康全幅传感器坐标中的算法搜索 ROI
+      offset_x: 0
+      offset_y: 800
+      width: 2440
+      height: 300
   shared_steger:
     {}                              # 历史名称兼容别名，实际参数来自同一 profile
 

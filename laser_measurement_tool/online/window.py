@@ -48,9 +48,9 @@ from app_config import AppConfig
 from laser.backends import AVAILABLE_METHODS
 
 from .controller import OnlineController
+from .camera_backend import CameraBackend, get_camera_backend
 from .fake_camera import SyntheticCameraSession
-from .models import CameraConfig, CameraDeviceInfo, CapturedFrame, FrameResult
-from .mvs_camera import MvsCameraSession, list_devices
+from .models import CameraConfig, CameraDeviceInfo, CameraSession, CapturedFrame, FrameResult
 from .pipeline import FramePipeline
 from .recording import FrameRecorder
 from reconstruction.reconstructor import reconstruct_uv_to_ground
@@ -225,18 +225,35 @@ class OnlineCameraWindow(QMainWindow):
         config: AppConfig,
         *,
         simulate: bool = False,
+        camera_backend: str = "mvs",
         extraction_method: str | None = None,
     ) -> None:
         super().__init__()
         self._config = config
         self._simulate = simulate
+        self._camera_backend: CameraBackend = get_camera_backend(camera_backend)
+        startup_camera = config.camera
+        self._initial_camera_config = (
+            CameraConfig(
+                exposure_us=startup_camera.exposure_us,
+                gain_db=startup_camera.gain_db,
+                pixel_format=startup_camera.pixel_format,
+                offset_x=startup_camera.offset_x,
+                offset_y=startup_camera.offset_y,
+                width=startup_camera.width,
+                height=startup_camera.height,
+                timeout_ms=startup_camera.timeout_ms,
+            )
+            if startup_camera is not None
+            else CameraConfig()
+        )
         self._initial_extraction_method = (
             extraction_method or config.extraction_method
         )
         self._pipeline = FramePipeline(config, self._initial_extraction_method)
         self._controller = OnlineController(self)
         self._recorder = FrameRecorder()
-        self._session: MvsCameraSession | SyntheticCameraSession | None = None
+        self._session: CameraSession | SyntheticCameraSession | None = None
         self._last_result: FrameResult | None = None
         self._analysis_window: QMainWindow | None = None
         self._trail: deque[tuple[float, np.ndarray]] = deque(maxlen=30)
@@ -264,7 +281,7 @@ class OnlineCameraWindow(QMainWindow):
         self._record_timer.setInterval(250)
         self._record_timer.timeout.connect(self._poll_recording)
         self._record_timer.start()
-        self.setWindowTitle("在线线激光三维截面 · MV-CS050-60GM")
+        self.setWindowTitle(f"在线线激光三维截面 · {self._camera_backend.display_name}")
         self.resize(1500, 900)
         self.refresh_devices()
 
@@ -1138,16 +1155,29 @@ class OnlineCameraWindow(QMainWindow):
         form = QFormLayout(self.camera_settings_group)
         self.pixel_format = QComboBox(self.camera_settings_group)
         self.pixel_format.addItems(["Mono8", "Mono12"])
+        self.pixel_format.setCurrentText(self._initial_camera_config.pixel_format)
         self.exposure = QDoubleSpinBox(self.camera_settings_group)
         self.exposure.setRange(1.0, 1_000_000.0)
-        self.exposure.setValue(600.0)
+        self.exposure.setValue(self._initial_camera_config.exposure_us)
         self.exposure.setSuffix(" μs")
         self.gain = QDoubleSpinBox(self.camera_settings_group)
         self.gain.setRange(-20.0, 40.0)
-        self.offset_x = _spin(self.camera_settings_group, 0, 2447, 0)
-        self.offset_y = _spin(self.camera_settings_group, 0, 2047, 880)
-        self.roi_width = _spin(self.camera_settings_group, 1, 2448, 2448)
-        self.roi_height = _spin(self.camera_settings_group, 1, 2048, 300)
+        self.gain.setValue(self._initial_camera_config.gain_db)
+        # The SDK adapter performs the authoritative node-range/increment
+        # validation.  These controls must also allow the 4096x3000 sensor
+        # used by the Daheng ME2P-1230 profile.
+        self.offset_x = _spin(
+            self.camera_settings_group, 0, 65535, self._initial_camera_config.offset_x
+        )
+        self.offset_y = _spin(
+            self.camera_settings_group, 0, 65535, self._initial_camera_config.offset_y
+        )
+        self.roi_width = _spin(
+            self.camera_settings_group, 1, 65535, self._initial_camera_config.width
+        )
+        self.roi_height = _spin(
+            self.camera_settings_group, 1, 65535, self._initial_camera_config.height
+        )
         form.addRow("像素格式", self.pixel_format)
         form.addRow("曝光", self.exposure)
         form.addRow("增益", self.gain)
@@ -1347,12 +1377,19 @@ class OnlineCameraWindow(QMainWindow):
             devices = (
                 [SyntheticCameraSession.device]
                 if self._simulate
-                else list_devices()
+                else self._camera_backend.list_devices()
             )
         except Exception as error:
             self._device_count = 0
-            self._set_online_state(OnlineState.ERROR, "SDK 不可用")
-            QMessageBox.warning(self, "相机 SDK", str(error))
+            self._set_online_state(
+                OnlineState.ERROR,
+                f"{self._camera_backend.display_name} SDK 不可用",
+            )
+            QMessageBox.warning(
+                self,
+                f"{self._camera_backend.display_name} SDK",
+                str(error),
+            )
             return
         for device in devices:
             self.device_combo.addItem(device.display_name, device)
@@ -1368,6 +1405,7 @@ class OnlineCameraWindow(QMainWindow):
             offset_y=self.offset_y.value(),
             width=self.roi_width.value(),
             height=self.roi_height.value(),
+            timeout_ms=self._initial_camera_config.timeout_ms,
         )
 
     def _sync_camera_config(self, config: CameraConfig) -> None:
@@ -1397,7 +1435,7 @@ class OnlineCameraWindow(QMainWindow):
                 self._session = (
                     SyntheticCameraSession(requested)
                     if self._simulate
-                    else MvsCameraSession.open(device.serial_number, requested)
+                    else self._camera_backend.open_session(device.serial_number, requested)
                 )
             except Exception as reopen_error:
                 raise RuntimeError(
@@ -1422,7 +1460,7 @@ class OnlineCameraWindow(QMainWindow):
             self._session = (
                 SyntheticCameraSession(config)
                 if self._simulate
-                else MvsCameraSession.open(device.serial_number, config)
+                else self._camera_backend.open_session(device.serial_number, config)
             )
         except Exception as error:
             self._session = None

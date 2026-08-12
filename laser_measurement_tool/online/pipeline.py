@@ -45,7 +45,11 @@ class FramePipeline:
         self._validate_frame_bounds(frame)
         total_start = time.perf_counter_ns()
         extraction_start = time.perf_counter_ns()
-        centers_local = extract_laser_center(frame.image, self.extraction_params)
+        centers_local = extract_laser_center(
+            frame.image,
+            self.extraction_params,
+            image_offset=(frame.offset_x, frame.offset_y),
+        )
         extraction_ms = (time.perf_counter_ns() - extraction_start) / 1e6
 
         centers_full = centers_local.copy()
@@ -70,6 +74,7 @@ class FramePipeline:
         return FrameResult(
             frame=frame,
             centers_uv_full=np.ascontiguousarray(centers_full),
+            points_camera=reconstructed.points_camera,
             points_ground=points,
             section_xz=section,
             extraction_ms=extraction_ms,

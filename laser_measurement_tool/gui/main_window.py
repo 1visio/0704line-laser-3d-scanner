@@ -1,7 +1,5 @@
 """图像视图与控制面板组成的应用主窗口。"""
 
-import csv
-import json
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -56,6 +54,10 @@ from reconstruction.reconstructor import (
     reconstruct_uv_to_ground,
 )
 from utils.image_io import load_grayscale_image
+from utils.image_metadata import (
+    offset_from_mapping,
+    read_image_offset_metadata,
+)
 from utils.result_io import (
     next_measurement_dir,
     save_image_png,
@@ -229,62 +231,12 @@ class MainWindow(QMainWindow):
     @staticmethod
     def _offset_from_mapping(mapping: object) -> tuple[int, int] | None:
         """从常见的结果/帧元数据映射中读取硬件 ROI 偏移。"""
-        if not isinstance(mapping, Mapping):
-            return None
-        for x_name, y_name in (
-            ("offset_x", "offset_y"),
-            ("offset_x_px", "offset_y_px"),
-            ("u", "v"),
-        ):
-            if x_name not in mapping or y_name not in mapping:
-                continue
-            try:
-                x = int(mapping[x_name])
-                y = int(mapping[y_name])
-            except (TypeError, ValueError, OverflowError):
-                continue
-            if x >= 0 and y >= 0:
-                return x, y
-        return None
+        return offset_from_mapping(mapping)
 
     @classmethod
     def _read_image_offset_metadata(cls, image_path: Path) -> tuple[int, int] | None:
         """读取录制 CSV、在线导出 JSON 或相邻 JSON 中的 ROI 偏移。"""
-        for metadata_path in (
-            image_path.with_suffix(".json"),
-            image_path.parent / "result.json",
-        ):
-            if not metadata_path.is_file():
-                continue
-            try:
-                payload = json.loads(metadata_path.read_text(encoding="utf-8"))
-            except (OSError, UnicodeError, json.JSONDecodeError):
-                continue
-            candidates = [payload]
-            if isinstance(payload, Mapping):
-                candidates.extend(
-                    (payload.get("image_offset"), payload.get("frame"))
-                )
-            for candidate in candidates:
-                offset = cls._offset_from_mapping(candidate)
-                if offset is not None:
-                    return offset
-
-        frames_csv = image_path.parent / "frames.csv"
-        if frames_csv.is_file():
-            try:
-                with frames_csv.open(
-                    "r", encoding="utf-8-sig", newline=""
-                ) as stream:
-                    for row in csv.DictReader(stream):
-                        if row.get("filename") != image_path.name:
-                            continue
-                        offset = cls._offset_from_mapping(row)
-                        if offset is not None:
-                            return offset
-            except (OSError, UnicodeError, csv.Error):
-                pass
-        return None
+        return read_image_offset_metadata(image_path)
 
     def _resolve_loaded_image_offset(
         self, image_path: Path, image: np.ndarray
@@ -640,6 +592,7 @@ class MainWindow(QMainWindow):
             centers = extract_laser_center(
                 self._image,
                 self._laser_extraction_params,
+                image_offset=self._image_offset,
             )
         except LaserAlgorithmNotConfiguredError as error:
             self.statusBar().showMessage(str(error))

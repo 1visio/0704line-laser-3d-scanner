@@ -1,4 +1,4 @@
-"""Measure or preview HIKROBOT acquisition without laser processing."""
+"""Measure or preview raw camera acquisition without laser processing."""
 
 from __future__ import annotations
 
@@ -15,8 +15,11 @@ _TOOL_ROOT = Path(__file__).resolve().parents[1]
 if str(_TOOL_ROOT) not in sys.path:
     sys.path.insert(0, str(_TOOL_ROOT))
 
-from online.models import CameraConfig, CapturedFrame  # noqa: E402
-from online.mvs_camera import MvsCameraSession, list_devices  # noqa: E402
+from online.camera_backend import (  # noqa: E402
+    available_camera_backends,
+    get_camera_backend,
+)
+from online.models import CameraConfig, CameraSession, CapturedFrame  # noqa: E402
 from online.runtime import LatestFrameSlot  # noqa: E402
 
 
@@ -54,6 +57,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--list", action="store_true", help="list cameras and exit")
     parser.add_argument(
+        "--camera-backend",
+        choices=available_camera_backends(),
+        default="mvs",
+        help="camera backend (mvs or daheng)",
+    )
+    parser.add_argument(
         "--preview",
         action="store_true",
         help="show a camera-only window; press Q or Esc to exit",
@@ -78,8 +87,8 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _print_devices() -> list[object]:
-    devices = list_devices()
+def _print_devices(backend) -> list[object]:
+    devices = backend.list_devices()
     print(f"Discovered cameras: {len(devices)}")
     for device in devices:
         print(
@@ -142,7 +151,7 @@ class _PreviewState:
 
 
 def _capture_preview_frames(
-    session: MvsCameraSession,
+    session: CameraSession,
     slot: LatestFrameSlot,
     state: _PreviewState,
     stop_event: threading.Event,
@@ -211,11 +220,11 @@ def _preview_canvas(
 
 
 def _run_preview(
-    session: MvsCameraSession, args: argparse.Namespace
+    session: CameraSession, args: argparse.Namespace
 ) -> tuple[np.ndarray | None, float]:
     import cv2
 
-    window_name = "HIKROBOT Camera Preview (raw frames only)"
+    window_name = f"{args.camera_backend} Camera Preview (raw frames only)"
     slot = LatestFrameSlot()
     stop_event = threading.Event()
     state = _PreviewState(started_at=time.perf_counter())
@@ -287,11 +296,12 @@ def _run_preview(
 
 
 def run(args: argparse.Namespace) -> int:
-    devices = _print_devices()
+    backend = get_camera_backend(args.camera_backend)
+    devices = _print_devices(backend)
     if args.list:
         return 0
     if not devices:
-        raise RuntimeError("No GigE camera was found")
+        raise RuntimeError(f"No {args.camera_backend} camera was found")
     if not args.preview and args.duration == 0:
         raise ValueError("--duration must be greater than zero without --preview")
 
@@ -305,7 +315,7 @@ def run(args: argparse.Namespace) -> int:
         height=args.height,
         timeout_ms=args.timeout_ms,
     )
-    session = MvsCameraSession.open(args.serial, config)
+    session = backend.open_session(args.serial, config)
     try:
         print(
             f"Opened: model={session.device.model}  "

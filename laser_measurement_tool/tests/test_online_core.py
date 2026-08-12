@@ -23,6 +23,7 @@ from online.pipeline import FramePipeline
 from online.recording import FrameRecorder
 from online.runtime import LatestFrameSlot
 from online_camera import build_parser
+from reconstruction.reconstructor import reconstruct_uv_to_ground
 
 
 def _frame(number: int, dtype: np.dtype = np.dtype(np.uint8)) -> CapturedFrame:
@@ -177,6 +178,28 @@ class OnlineCoreTests(unittest.TestCase):
         self.assertIs(result.overlay_rgb, result._overlay_rgb)
         self.assertEqual(result.section_xz.shape[1], 2)
 
+    def test_pipeline_exposes_camera_points_from_reconstruction(self) -> None:
+        app_config = load_app_config(DEFAULT_CONFIG_PATH)
+        camera_config = CameraConfig(
+            pixel_format="Mono8", offset_x=0, offset_y=960, width=2448, height=128
+        )
+        camera = SyntheticCameraSession(camera_config, target_fps=1000)
+        pipeline = FramePipeline(app_config)
+        camera.start()
+        try:
+            frame = camera.get_frame()
+            result = pipeline.run_frame(frame)
+        finally:
+            camera.stop()
+
+        expected = reconstruct_uv_to_ground(
+            result.centers_uv_full,
+            pipeline.package.calibration,
+            app_config.reconstruction,
+        )
+        np.testing.assert_array_equal(result.points_camera, expected.points_camera)
+        np.testing.assert_array_equal(result.points_ground, expected.points_ground)
+
     def test_pipeline_accepts_each_configured_extraction_method(self) -> None:
         config = load_app_config(DEFAULT_CONFIG_PATH)
         hashes: set[str] = set()
@@ -193,6 +216,13 @@ class OnlineCoreTests(unittest.TestCase):
     def test_online_cli_can_override_extraction_method(self) -> None:
         args = build_parser().parse_args(["--method", "steger", "--simulate"])
         self.assertEqual(args.method, "steger")
+        self.assertTrue(args.simulate)
+
+    def test_online_cli_can_select_daheng_backend(self) -> None:
+        args = build_parser().parse_args(
+            ["--camera-backend", "daheng", "--simulate"]
+        )
+        self.assertEqual(args.camera_backend, "daheng")
         self.assertTrue(args.simulate)
 
     def test_recorder_writes_lossless_frames_and_gap_metadata(self) -> None:

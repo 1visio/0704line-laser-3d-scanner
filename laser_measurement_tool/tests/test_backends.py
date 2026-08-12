@@ -183,6 +183,70 @@ class StegerBackendTest(unittest.TestCase):
             points[interior, 0], truth[rows[interior]], atol=0.08
         )
 
+    def test_configured_search_roi_forces_full_region_and_restores_local_coordinates(self) -> None:
+        height, width = 260, 180
+        rows = np.arange(height, dtype=np.float64)
+        columns = np.arange(width, dtype=np.float64)
+        image = np.zeros((height, width), dtype=np.float64)
+        centres = np.where(rows < height / 2, 35.25, 140.5)
+        image += 220.0 * np.exp(
+            -((columns[None, :] - centres[:, None]) ** 2) / (2.0 * 1.8**2)
+        )
+        image = np.clip(image, 0.0, 255.0).astype(np.uint8)
+        options = dict(
+            _STEGER_OPTIONS,
+            scan_axis="row",
+            roi_margin=5,
+            roi_max_height=30,
+            search_roi={
+                "offset_x": 1000,
+                "offset_y": 500,
+                "width": width,
+                "height": height,
+            },
+            _image_offset=(1000, 500),
+        )
+
+        points = steger_backend(image, options)
+
+        self.assertGreater(len(points), 200)
+        self.assertTrue(np.any(points[:, 0] < 50.0))
+        self.assertTrue(np.any(points[:, 0] > 125.0))
+        self.assertGreaterEqual(float(points[:, 1].min()), 0.0)
+        self.assertLess(float(points[:, 1].max()), height)
+
+    def test_search_roi_outside_frame_returns_empty(self) -> None:
+        image, _ = _horizontal_stripe_image()
+        options = dict(
+            _STEGER_OPTIONS,
+            search_roi={
+                "offset_x": 1000,
+                "offset_y": 1000,
+                "width": 100,
+                "height": 100,
+            },
+        )
+        self.assertEqual(len(steger_backend(image, options)), 0)
+
+    def test_configured_search_roi_skips_auto_band_seed_validation(self) -> None:
+        image = np.zeros((80, 80), dtype=np.uint8)
+        image[10, :] = 20
+        image[50, 40] = 255
+        options = dict(
+            _STEGER_OPTIONS,
+            search_roi={
+                "offset_x": 0,
+                "offset_y": 0,
+                "width": image.shape[1],
+                "height": image.shape[0],
+            },
+        )
+
+        points = steger_backend(image, options)
+
+        self.assertEqual(points.ndim, 2)
+        self.assertEqual(points.shape[1], 2)
+
     def test_low_contrast_image_returns_empty(self) -> None:
         points = steger_backend(
             np.full((80, 80), 10, dtype=np.uint8), _STEGER_OPTIONS

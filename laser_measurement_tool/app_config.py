@@ -8,6 +8,7 @@
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+import math
 from pathlib import Path
 from typing import Any
 
@@ -56,6 +57,32 @@ class OutputConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class CameraStartupConfig:
+    """在线相机启动参数；配置未声明 camera 段时保持原有界面默认值。"""
+
+    exposure_us: float = 600.0
+    gain_db: float = 0.0
+    pixel_format: str = "Mono8"
+    offset_x: int = 0
+    offset_y: int = 880
+    width: int = 2448
+    height: int = 300
+    timeout_ms: int = 2000
+
+    def __post_init__(self) -> None:
+        if self.exposure_us <= 0 or not math.isfinite(self.exposure_us):
+            raise ValueError("exposure_us 必须是有限正数")
+        if not math.isfinite(self.gain_db):
+            raise ValueError("gain_db 必须是有限数")
+        if self.pixel_format not in {"Mono8", "Mono12"}:
+            raise ValueError("pixel_format 必须是 Mono8 或 Mono12")
+        if min(self.offset_x, self.offset_y) < 0:
+            raise ValueError("ROI 偏移不能为负数")
+        if min(self.width, self.height, self.timeout_ms) <= 0:
+            raise ValueError("ROI 尺寸和 timeout_ms 必须为正数")
+
+
+@dataclass(frozen=True, slots=True)
 class AppConfig:
     """加载并校验后的应用配置。"""
 
@@ -71,6 +98,7 @@ class AppConfig:
     )
     measurement: MeasurementParams = field(default_factory=MeasurementParams)
     output: OutputConfig | None = None
+    camera: CameraStartupConfig | None = None
 
 
 def load_app_config(config_path: str | Path | None = None) -> AppConfig:
@@ -96,6 +124,13 @@ def load_app_config(config_path: str | Path | None = None) -> AppConfig:
         document.get("measurement"), MeasurementParams, "measurement"
     )
     output = _parse_output(document, base_dir)
+    camera = (
+        None
+        if document.get("camera") is None
+        else _build_dataclass(
+            document.get("camera"), CameraStartupConfig, "camera"
+        )
+    )
 
     return AppConfig(
         config_path=path.resolve(),
@@ -106,6 +141,7 @@ def load_app_config(config_path: str | Path | None = None) -> AppConfig:
         reconstruction=reconstruction,
         measurement=measurement,
         output=output,
+        camera=camera,
     )
 
 

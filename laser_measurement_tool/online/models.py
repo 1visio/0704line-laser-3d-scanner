@@ -67,6 +67,7 @@ class CapturedFrame:
 class FrameResult:
     frame: CapturedFrame
     centers_uv_full: np.ndarray
+    points_camera: np.ndarray
     points_ground: np.ndarray
     section_xz: np.ndarray
     extraction_ms: float

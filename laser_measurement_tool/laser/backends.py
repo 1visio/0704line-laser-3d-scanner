@@ -148,10 +148,50 @@ def centroid_params_from_options(options: Mapping[str, Any]) -> CentroidParams:
 def steger_params_from_options(options: Mapping[str, Any]) -> StegerParams:
     """把配置映射转换为 ``StegerParams``，未知键报错。"""
     known = {field.name for field in fields(StegerParams)}
-    unknown = set(options) - known
+    unknown = set(options) - known - {"search_roi", "_image_offset"}
     if unknown:
         raise ValueError(f"steger 提取不认识的参数: {sorted(unknown)}")
-    return StegerParams(**dict(options))
+    if "search_roi" in options:
+        _parse_search_roi(options["search_roi"])
+    resolved = {key: value for key, value in options.items() if key in known}
+    return StegerParams(**resolved)
+
+
+def _parse_search_roi(value: Any) -> tuple[int, int, int, int]:
+    """解析全幅传感器坐标中的 Steger 搜索矩形。"""
+    if not isinstance(value, Mapping):
+        raise ValueError("steger.search_roi 必须是包含 offset_x/offset_y/width/height 的映射")
+    required = {"offset_x", "offset_y", "width", "height"}
+    unknown = set(value) - required
+    missing = required - set(value)
+    if missing or unknown:
+        raise ValueError(
+            "steger.search_roi 字段错误："
+            f"缺少 {sorted(missing)}，未知 {sorted(unknown)}"
+        )
+    parsed: list[int] = []
+    for name in ("offset_x", "offset_y", "width", "height"):
+        raw = value[name]
+        if isinstance(raw, bool) or not isinstance(raw, (int, np.integer)):
+            raise ValueError(f"steger.search_roi.{name} 必须是整数")
+        parsed.append(int(raw))
+    offset_x, offset_y, width, height = parsed
+    if min(offset_x, offset_y) < 0:
+        raise ValueError("steger.search_roi 偏移不能为负数")
+    if min(width, height) <= 0:
+        raise ValueError("steger.search_roi 宽高必须为正数")
+    return offset_x, offset_y, width, height
+
+
+def _parse_image_offset(value: Any) -> tuple[int, int]:
+    if not isinstance(value, (tuple, list)) or len(value) != 2:
+        raise ValueError("内部 image_offset 必须是两个整数")
+    if any(isinstance(item, bool) or not isinstance(item, (int, np.integer)) for item in value):
+        raise ValueError("内部 image_offset 必须是两个整数")
+    offset = int(value[0]), int(value[1])
+    if min(offset) < 0:
+        raise ValueError("内部 image_offset 不能为负数")
+    return offset
 
 
 def shared_steger_params_from_options(
@@ -400,7 +440,46 @@ def steger_backend(
     image: np.ndarray, options: Mapping[str, Any]
 ) -> np.ndarray:
     """Steger/Hessian 亚像素中心提取，返回 ``(N, 2)`` 的 ``(u, v)``。"""
-    return _load_realtime_steger_module().steger_backend(image, options)
+    resolved = dict(options)
+    search_roi_value = resolved.pop("search_roi", None)
+    image_offset = _parse_image_offset(resolved.pop("_image_offset", (0, 0)))
+    params = steger_params_from_options(resolved)
+    realtime = _load_realtime_steger_module()
+    if search_roi_value is None:
+        return realtime.steger_backend(image, resolved)
+
+    roi_x, roi_y, roi_width, roi_height = _parse_search_roi(search_roi_value)
+    frame_x, frame_y = image_offset
+    image_height, image_width = image.shape
+    left = max(frame_x, roi_x)
+    top = max(frame_y, roi_y)
+    right = min(frame_x + image_width, roi_x + roi_width)
+    bottom = min(frame_y + image_height, roi_y + roi_height)
+    if right <= left or bottom <= top:
+        return np.empty((0, 2), dtype=np.float64)
+
+    local_left = left - frame_x
+    local_top = top - frame_y
+    local_right = right - frame_x
+    local_bottom = bottom - frame_y
+    cropped = np.ascontiguousarray(
+        image[local_top:local_bottom, local_left:local_right]
+    )
+    normal_extent = cropped.shape[1] if params.scan_axis == "row" else cropped.shape[0]
+    search_region = realtime.LaserSearchRegion(
+        0, normal_extent, "configured_search_roi"
+    )
+    points = realtime.steger_backend(
+        cropped,
+        resolved,
+        search_region=search_region,
+        use_auto_band=False,
+    )
+    if points.size:
+        points = np.ascontiguousarray(points, dtype=np.float64)
+        points[:, 0] += local_left
+        points[:, 1] += local_top
+    return points
 
 
 def _load_realtime_steger_module() -> Any:

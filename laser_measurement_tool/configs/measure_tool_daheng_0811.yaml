@@ -1,0 +1,66 @@
+# 大恒 ME2P-1230 · 2026-08-11 标定 · 显式可选配置
+# 不作为默认配置。在线启动时同时传入：--camera-backend daheng --config <本文件>。
+
+schema_version: 1
+
+# 相机硬 ROI；在线管线会加回偏移，恢复为 4096x3000 标定坐标。
+camera:
+  exposure_us: 2000.0
+  gain_db: 0.0
+  pixel_format: Mono8
+  offset_x: 1760
+  offset_y: 0
+  width: 480
+  height: 3000
+  timeout_ms: 3000
+
+calibration:
+  manifest: calibration_daheng_0811/manifest.yaml
+  intrinsics: calibration_daheng_0811/calibration_result.yaml
+  laser_model: calibration_daheng_0811/circular_cone.yaml
+  extrinsics: calibration_daheng_0811/camera_ground_extrinsics.yaml
+  ground_u_compensation: null
+
+extraction:
+  method: steger
+  profile: ../../../calibration/config/realtime_steger.yaml
+  # 本轮大恒标定的激光线为纵向；逐行扫描，每行输出一个中心点。
+  steger:
+    scan_axis: row
+    # 全幅传感器坐标中的算法搜索 ROI；强制搜索整个横向范围，
+    # 避免自动单峰预搜索漏掉横向偏移较大的阶梯。
+    search_roi:
+      offset_x: 1760
+      offset_y: 0
+      width: 480
+      height: 3000
+  centroid:
+    background_kernel: 51
+    min_local_contrast_dn: 20.0
+    centroid_window_radius: 5
+    segment_min_columns: 42
+    continuity_max_column_gap: 2
+    continuity_max_vertical_jump: 14.0
+    correction_window: 7
+    correction_max_shift: 3.5
+    scan_axis: row
+
+reconstruction:
+  parallel_epsilon: 1.0e-9
+  quadratic_epsilon: 1.0e-12
+  min_camera_depth_mm: 630.0
+  max_camera_depth_mm: 715.0
+  model_range_margin_mm: 2.0
+  image_roi_polygon: null
+
+measurement:
+  outlier_sigma_multiplier: 2.0
+  outlier_max_iterations: 5
+  min_baseline_points: 30
+  min_height_points: 30
+
+output:
+  dir: ../output_daheng_0811
+  save_pointcloud_csv: true
+  save_overlay_png: true
+  save_full_pointcloud_ply: true

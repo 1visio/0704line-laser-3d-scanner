@@ -90,6 +90,30 @@ class LoadAppConfigTest(unittest.TestCase):
         with self.assertRaises(AppConfigError):
             load_app_config(path)
 
+    def test_optional_camera_config_parses_without_changing_default(self) -> None:
+        camera_section = """camera:
+  exposure_us: 2000.0
+  gain_db: 0.0
+  pixel_format: Mono8
+  offset_x: 0
+  offset_y: 0
+  width: 4096
+  height: 3000
+  timeout_ms: 3000
+"""
+        path = self._write_config(camera_section + _VALID_CONFIG)
+        config = load_app_config(path)
+        assert config.camera is not None
+        self.assertEqual(config.camera.width, 4096)
+        self.assertEqual(config.camera.height, 3000)
+        self.assertEqual(config.camera.timeout_ms, 3000)
+
+        default_config = load_app_config(DEFAULT_CONFIG_PATH)
+        assert default_config.camera is not None
+        self.assertEqual(default_config.camera.offset_y, 800)
+        self.assertEqual(default_config.camera.width, 2440)
+        self.assertEqual(default_config.camera.height, 300)
+
     def test_invalid_measurement_value_raises(self) -> None:
         content = _VALID_CONFIG.replace(
             "outlier_sigma_multiplier: 2.5", "outlier_sigma_multiplier: -1.0"

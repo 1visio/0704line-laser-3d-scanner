@@ -1,0 +1,56 @@
+{
+  "source_images_declared_by_existing_results": [
+    "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\obs\\.chessboard.inprogress\\fit\\laser 002.tif",
+    "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\obs\\.chessboard.inprogress\\fit\\laser 003.tif",
+    "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\obs\\.chessboard.inprogress\\fit\\laser 004.tif",
+    "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\obs\\.chessboard.inprogress\\fit\\laser 005.tif",
+    "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\obs\\.chessboard.inprogress\\fit\\laser 006.tif"
+  ],
+  "source_measurement_root": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\output_daheng_0811",
+  "source_calibration_run": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\outputs\\0811",
+  "intrinsics": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\configs\\calibration_daheng_0811\\calibration_result.yaml",
+  "extrinsics": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\configs\\calibration_daheng_0811\\camera_ground_extrinsics.yaml",
+  "models": {
+    "circular_cone": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\outputs\\0811\\laser_model\\models\\circular_cone.yaml",
+    "quadratic_graph": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\outputs\\0811\\laser_model\\models\\quadratic_graph.yaml"
+  },
+  "centre_extraction_rerun": false,
+  "source_images_read": false,
+  "frames": [
+    {
+      "frame": "laser 002",
+      "laser_center_csv": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\output_daheng_0811\\laser 002_measure\\laser_center.csv",
+      "selected_uv_source": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\output_daheng_0811\\laser 002_measure\\height_points.csv",
+      "full_pixel_count": 1317,
+      "selected_pixel_count": 1100
+    },
+    {
+      "frame": "laser 003",
+      "laser_center_csv": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\output_daheng_0811\\laser 003_measure\\laser_center.csv",
+      "selected_uv_source": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\output_daheng_0811\\laser 003_measure\\height_points.csv",
+      "full_pixel_count": 1307,
+      "selected_pixel_count": 1102
+    },
+    {
+      "frame": "laser 004",
+      "laser_center_csv": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\output_daheng_0811\\laser 004_measure\\laser_center.csv",
+      "selected_uv_source": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\output_daheng_0811\\laser 004_measure\\height_points.csv",
+      "full_pixel_count": 1481,
+      "selected_pixel_count": 1295
+    },
+    {
+      "frame": "laser 005",
+      "laser_center_csv": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\output_daheng_0811\\laser 005_measure\\laser_center.csv",
+      "selected_uv_source": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\output_daheng_0811\\laser 005_measure\\height_points.csv",
+      "full_pixel_count": 1513,
+      "selected_pixel_count": 1271
+    },
+    {
+      "frame": "laser 006",
+      "laser_center_csv": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\output_daheng_0811\\laser 006_measure\\laser_center.csv",
+      "selected_uv_source": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\output_daheng_0811\\laser 006_measure\\height_points.csv",
+      "full_pixel_count": 1641,
+      "selected_pixel_count": 1234
+    }
+  ]
+}
