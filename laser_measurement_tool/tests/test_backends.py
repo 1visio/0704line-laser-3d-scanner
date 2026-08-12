@@ -228,6 +228,25 @@ class StegerBackendTest(unittest.TestCase):
         )
         self.assertEqual(len(steger_backend(image, options)), 0)
 
+    def test_configured_search_roi_skips_auto_band_seed_validation(self) -> None:
+        image = np.zeros((80, 80), dtype=np.uint8)
+        image[10, :] = 20
+        image[50, 40] = 255
+        options = dict(
+            _STEGER_OPTIONS,
+            search_roi={
+                "offset_x": 0,
+                "offset_y": 0,
+                "width": image.shape[1],
+                "height": image.shape[0],
+            },
+        )
+
+        points = steger_backend(image, options)
+
+        self.assertEqual(points.ndim, 2)
+        self.assertEqual(points.shape[1], 2)
+
     def test_low_contrast_image_returns_empty(self) -> None:
         points = steger_backend(
             np.full((80, 80), 10, dtype=np.uint8), _STEGER_OPTIONS

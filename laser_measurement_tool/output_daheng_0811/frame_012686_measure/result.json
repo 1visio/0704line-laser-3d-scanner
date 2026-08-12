@@ -1,0 +1,127 @@
+{
+  "image": "frame_012686.tiff",
+  "config": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\configs\\measure_tool_daheng_0811.yaml",
+  "calibration": {
+    "intrinsics": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\configs\\calibration_daheng_0811\\calibration_result.yaml",
+    "laser_model": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\configs\\calibration_daheng_0811\\circular_cone.yaml",
+    "laser_plane": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\configs\\calibration_daheng_0811\\circular_cone.yaml",
+    "extrinsics": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\configs\\calibration_daheng_0811\\camera_ground_extrinsics.yaml",
+    "ground_u_compensation": null
+  },
+  "extraction_method": "steger",
+  "measurement_performed": true,
+  "laser_center_csv": "laser_center.csv",
+  "image_offset": {
+    "u": 1760,
+    "v": 0
+  },
+  "ground_reference_mode": "baseline_roi_profile",
+  "results_mm": {
+    "height_mean": 19.947924492860928,
+    "height_median": 19.946784661283534,
+    "height_std": 0.025418627529900265,
+    "length": 6.040377927506816,
+    "angle_with_baseline_deg": 0.13826788087238792,
+    "ground_baseline_zg": -0.14064433647976968,
+    "ground_noise_sigma": 0.027149092430462214,
+    "ground_profile": {
+      "model": "z_mm = slope_z_per_mm * s_mm + intercept_z_mm",
+      "slope_z_per_mm": 0.0035497821980108443,
+      "intercept_z_mm": -0.14064433647976973,
+      "rmse_mm": 0.023618199362232063
+    },
+    "height_line_fit_rmse": 0.006332481618262206,
+    "endpoints_ground": [
+      [
+        -4.339652192890967,
+        -134.3219066674619,
+        19.796300833816243
+      ],
+      [
+        -4.281322118859057,
+        -128.2818103843241,
+        19.817742859852565
+      ]
+    ]
+  },
+  "obstacles": [
+    {
+      "index": 1,
+      "points_csv": "height_points.csv",
+      "results_mm": {
+        "height_mean": 19.947924492860928,
+        "height_median": 19.946784661283534,
+        "height_std": 0.025418627529900265,
+        "length": 6.040377927506816,
+        "angle_with_baseline_deg": 0.13826788087238792,
+        "ground_baseline_zg": -0.14064433647976968,
+        "ground_noise_sigma": 0.027149092430462214,
+        "ground_profile": {
+          "model": "z_mm = slope_z_per_mm * s_mm + intercept_z_mm",
+          "slope_z_per_mm": 0.0035497821980108443,
+          "intercept_z_mm": -0.14064433647976973,
+          "rmse_mm": 0.023618199362232063
+        },
+        "height_line_fit_rmse": 0.006332481618262206,
+        "endpoints_ground": [
+          [
+            -4.339652192890967,
+            -134.3219066674619,
+            19.796300833816243
+          ],
+          [
+            -4.281322118859057,
+            -128.2818103843241,
+            19.817742859852565
+          ]
+        ]
+      },
+      "point_counts": {
+        "total": 67,
+        "inliers": 61
+      },
+      "reconstruction_filtered": {
+        "near_parallel": 0,
+        "negative_depth": 0,
+        "outside_working_distance": 0,
+        "non_finite": 0,
+        "no_valid_intersection": 0,
+        "outside_image_roi": 0
+      }
+    }
+  ],
+  "point_counts": {
+    "laser_centers_2d": 2351,
+    "full_laser_reconstructed": 818,
+    "baseline_total": 169,
+    "baseline_inliers": 161,
+    "height_total": 67,
+    "height_inliers": 61
+  },
+  "reconstruction_filtered": {
+    "baseline": {
+      "near_parallel": 0,
+      "negative_depth": 0,
+      "outside_working_distance": 0,
+      "non_finite": 0,
+      "no_valid_intersection": 0,
+      "outside_image_roi": 0
+    },
+    "height": {
+      "near_parallel": 0,
+      "negative_depth": 0,
+      "outside_working_distance": 0,
+      "non_finite": 0,
+      "no_valid_intersection": 0,
+      "outside_image_roi": 0
+    }
+  },
+  "full_laser_reconstruction_filtered": {
+    "near_parallel": 0,
+    "negative_depth": 0,
+    "outside_working_distance": 0,
+    "non_finite": 0,
+    "no_valid_intersection": 1533,
+    "outside_image_roi": 0
+  }
+}

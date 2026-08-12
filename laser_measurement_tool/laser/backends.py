@@ -473,6 +473,7 @@ def steger_backend(
         cropped,
         resolved,
         search_region=search_region,
+        use_auto_band=False,
     )
     if points.size:
         points = np.ascontiguousarray(points, dtype=np.float64)
