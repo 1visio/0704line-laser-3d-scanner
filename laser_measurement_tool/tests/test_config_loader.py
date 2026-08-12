@@ -108,6 +108,57 @@ class ConfigLoaderTests(unittest.TestCase):
         self.assertNotIn("z_offset_mm", compensation)
         self.assertEqual(compensation["source_path"], str(npy_path.resolve()))
 
+    def test_load_ground_bias_v_npy_metadata(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            directory = Path(temporary_directory)
+            self._write_valid_required_files(directory)
+            npy_path = directory / "ground_bias_table.npy"
+            np.save(
+                npy_path,
+                {
+                    "columns": np.array([10.0, 20.0, 30.0]),
+                    "bias_mm": np.array([1.0, 2.0, 3.0]),
+                    "metadata": {"compensation_axis": "v"},
+                },
+            )
+
+            calibration = load_calibration_files(
+                intrinsics=directory / "camera_intrinsics.yaml",
+                laser_plane=directory / "laser_plane.yaml",
+                extrinsics=directory / "camera_ground_extrinsics.yaml",
+                ground_u_compensation=npy_path,
+            )
+
+        compensation = calibration["ground_u_compensation"]
+        self.assertEqual(compensation["compensation_axis"], "v")
+        np.testing.assert_allclose(compensation["row_v_px"], [10, 20, 30])
+        np.testing.assert_allclose(compensation["coordinate_px"], [10, 20, 30])
+
+    def test_load_ground_bias_v_csv(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            directory = Path(temporary_directory)
+            self._write_valid_required_files(directory)
+            csv_path = directory / "ground_bias_table.csv"
+            csv_path.write_text(
+                "row_v_px,yg_mm,bias_mm\n"
+                "10,-10,1.5\n"
+                "20,0,0.25\n"
+                "30,10,-0.5\n",
+                encoding="utf-8",
+            )
+
+            calibration = load_calibration_files(
+                intrinsics=directory / "camera_intrinsics.yaml",
+                laser_plane=directory / "laser_plane.yaml",
+                extrinsics=directory / "camera_ground_extrinsics.yaml",
+                ground_u_compensation=csv_path,
+            )
+
+        compensation = calibration["ground_u_compensation"]
+        self.assertEqual(compensation["compensation_axis"], "v")
+        np.testing.assert_allclose(compensation["row_v_px"], [10, 20, 30])
+        np.testing.assert_allclose(compensation["bias_mm"], [1.5, 0.25, -0.5])
+
     def test_ground_bias_csv_requires_strictly_increasing_columns(self) -> None:
         with TemporaryDirectory() as temporary_directory:
             directory = Path(temporary_directory)

@@ -12,7 +12,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtGui import QFont, QVector3D
+from PySide6.QtGui import QFont, QTransform, QVector3D
 from PySide6.QtWidgets import (
     QApplication,
     QButtonGroup,
@@ -265,6 +265,7 @@ class OnlineCameraWindow(QMainWindow):
         self._last_render_at = 0.0
         self._raw_view_shape: tuple[int, int] | None = None
         self._extracted_view_shape: tuple[int, int] | None = None
+        self._image_preview_rotated = False
         self._section_x_bounds: tuple[float, float] | None = None
         self._section_points = np.empty((0, 2), dtype=np.float64)
         self._section_points_ground = np.empty((0, 3), dtype=np.float64)
@@ -321,6 +322,18 @@ class OnlineCameraWindow(QMainWindow):
             image_toolbar_layout.addWidget(button)
         self.image_width_mode_button.setChecked(True)
         self._image_view_mode = "width"
+        image_toolbar_layout.addSpacing(12)
+        self.image_rotate_button = QPushButton("旋转预览 90°", image_toolbar)
+        self.image_rotate_button.setCheckable(True)
+        self.image_rotate_button.setProperty("imagePreviewAction", True)
+        self.image_rotate_button.setFixedHeight(28)
+        self.image_rotate_button.setToolTip(
+            "仅将两个预览顺时针旋转 90°；不改变图像数据、像素坐标或导出结果"
+        )
+        self.image_rotate_button.toggled.connect(
+            self._set_image_preview_rotated
+        )
+        image_toolbar_layout.addWidget(self.image_rotate_button)
         image_toolbar_layout.addStretch(1)
         self.image_reset_button = QPushButton("复位视野", image_toolbar)
         self.image_reset_button.setFixedHeight(28)
@@ -389,6 +402,18 @@ class OnlineCameraWindow(QMainWindow):
                 background: #ffffff;
             }
             QPushButton[imageViewMode="true"]:checked {
+                color: #174ea6;
+                border-color: #79a7e3;
+                background: #e7f0fc;
+            }
+            QPushButton[imagePreviewAction="true"] {
+                min-width: 96px;
+                padding: 2px 9px;
+                border: 1px solid #b8c1cb;
+                border-radius: 4px;
+                background: #ffffff;
+            }
+            QPushButton[imagePreviewAction="true"]:checked {
                 color: #174ea6;
                 border-color: #79a7e3;
                 background: #e7f0fc;
@@ -606,7 +631,10 @@ class OnlineCameraWindow(QMainWindow):
         self.section_crosshair_checkbox.setChecked(True)
         self.section_auto_height_checkbox = QCheckBox("自动高度", section_toolbar)
         self.section_auto_height_checkbox.setChecked(True)
-        self.section_max_dx = _double_spin(
+        self.section_auto_height_checkbox.setToolTip(
+            "按截面主体高度自动调整视野，少量孤立点不参与视野范围计算"
+        )
+        self.section_max_ds = _double_spin(
             section_toolbar, 0.1, 100.0, 2.0, " mm"
         )
         self.section_max_dz = _double_spin(
@@ -616,7 +644,7 @@ class OnlineCameraWindow(QMainWindow):
             section_toolbar, 0.1, 100.0, 4.0, " mm"
         )
         for control in (
-            self.section_max_dx,
+            self.section_max_ds,
             self.section_max_dz,
             self.section_max_distance,
         ):
@@ -625,9 +653,10 @@ class OnlineCameraWindow(QMainWindow):
             control.setFixedWidth(82)
         self.section_fit_button = QPushButton("适配截面", section_toolbar)
         self.section_fit_button.setFixedHeight(28)
+        self.section_fit_button.setToolTip("显示包括孤立点在内的完整截面")
         section_toolbar_layout.addWidget(QLabel("断线阈值", section_toolbar))
-        section_toolbar_layout.addWidget(QLabel("ΔXg", section_toolbar))
-        section_toolbar_layout.addWidget(self.section_max_dx)
+        section_toolbar_layout.addWidget(QLabel("ΔS", section_toolbar))
+        section_toolbar_layout.addWidget(self.section_max_ds)
         section_toolbar_layout.addWidget(QLabel("ΔZg", section_toolbar))
         section_toolbar_layout.addWidget(self.section_max_dz)
         section_toolbar_layout.addWidget(QLabel("3D", section_toolbar))
@@ -643,7 +672,7 @@ class OnlineCameraWindow(QMainWindow):
 
         self.section_view = pg.PlotWidget(section_tab)
         self.section_view.setBackground("#eef1f4")
-        self.section_view.setLabel("bottom", "Xg", units="mm")
+        self.section_view.setLabel("bottom", "S（沿激光线）", units="mm")
         self.section_view.setLabel("left", "Zg", units="mm")
         self.section_view.showGrid(x=True, y=True, alpha=0.22)
         axis_pen = pg.mkPen("#687482", width=1)
@@ -698,13 +727,13 @@ class OnlineCameraWindow(QMainWindow):
         section_footer_layout.setSpacing(16)
         self.section_count_label = QLabel("截面 0 点", section_footer)
         self.section_range_label = QLabel(
-            "Xg --  |  Zg --", section_footer
+            "S --  |  Zg --", section_footer
         )
         self.section_extrema_label = QLabel(
             "最低 --  |  最高 --", section_footer
         )
         self.section_cursor_label = QLabel(
-            "游标 Xg --  Zg --", section_footer
+            "游标 S --  Zg --", section_footer
         )
         self.section_cursor_label.setObjectName("sectionCursor")
         section_footer_layout.addWidget(self.section_count_label)
@@ -737,7 +766,7 @@ class OnlineCameraWindow(QMainWindow):
         self.section_auto_height_checkbox.toggled.connect(
             self._set_section_auto_height
         )
-        self.section_max_dx.valueChanged.connect(
+        self.section_max_ds.valueChanged.connect(
             self._refresh_section_connections
         )
         self.section_max_dz.valueChanged.connect(
@@ -981,13 +1010,16 @@ class OnlineCameraWindow(QMainWindow):
             return
         self.section_crosshair_x.hide()
         self.section_crosshair_z.hide()
-        self.section_cursor_label.setText("游标 Xg --  Zg --")
+        self.section_cursor_label.setText("游标 S --  Zg --")
 
     def _set_section_auto_height(self, enabled: bool) -> None:
-        self.section_view.getViewBox().enableAutoRange(
-            axis=pg.ViewBox.YAxis,
-            enable=enabled,
-        )
+        view_box = self.section_view.getViewBox()
+        view_box.enableAutoRange(axis=pg.ViewBox.YAxis, enable=False)
+        if enabled and len(self._section_points):
+            lower, upper = _section_height_range(
+                self._section_points[:, 1], robust=True
+            )
+            view_box.setYRange(lower, upper, padding=0)
 
     def _fit_section_view(self) -> None:
         if self._section_x_bounds is not None:
@@ -997,17 +1029,11 @@ class OnlineCameraWindow(QMainWindow):
             )
         if not len(self._section_points):
             return
-        minimum = float(self._section_points[:, 1].min())
-        maximum = float(self._section_points[:, 1].max())
-        span = max(maximum - minimum, 1.0)
-        padding = span * 0.08
-        self.section_view.getViewBox().setYRange(
-            minimum - padding,
-            maximum + padding,
-            padding=0,
+        lower, upper = _section_height_range(
+            self._section_points[:, 1], robust=False
         )
-        self.section_auto_height_checkbox.setChecked(True)
-        self._set_section_auto_height(True)
+        self.section_auto_height_checkbox.setChecked(False)
+        self.section_view.getViewBox().setYRange(lower, upper, padding=0)
 
     def _on_section_range_changed_manually(
         self, changed_axes: tuple[bool, bool]
@@ -1024,10 +1050,10 @@ class OnlineCameraWindow(QMainWindow):
         view_box = self.section_view.getViewBox()
         view_box.setLimits(xMin=None, xMax=None, maxXRange=None)
         view_box.enableAutoRange(axis=pg.ViewBox.XAxis, enable=False)
-        view_box.enableAutoRange(axis=pg.ViewBox.YAxis, enable=True)
+        view_box.enableAutoRange(axis=pg.ViewBox.YAxis, enable=False)
         self.section_auto_height_checkbox.setChecked(True)
         self.section_count_label.setText("截面 0 点")
-        self.section_range_label.setText("Xg --  |  Zg --")
+        self.section_range_label.setText("S --  |  Zg --")
         self.section_extrema_label.setText("最低 --  |  最高 --")
         self._set_section_crosshair_enabled(False)
 
@@ -1037,13 +1063,14 @@ class OnlineCameraWindow(QMainWindow):
             ground = np.empty((0, 3), dtype=np.float64)
         ground = ground[np.isfinite(ground).all(axis=1)]
         self._section_points_ground = np.ascontiguousarray(ground)
-        points = ground[:, (0, 2)]
+        distance = _section_distance(ground[:, :2])
+        points = np.column_stack((distance, ground[:, 2]))
         self._section_points = np.ascontiguousarray(points)
         if not len(points):
             self.section_curve.setData([], [])
             self.section_scatter.setData([], [])
             self.section_count_label.setText("截面 0 点")
-            self.section_range_label.setText("Xg --  |  Zg --")
+            self.section_range_label.setText("S --  |  Zg --")
             self.section_extrema_label.setText("最低 --  |  最高 --")
             return
 
@@ -1052,7 +1079,7 @@ class OnlineCameraWindow(QMainWindow):
         minimum = points.min(axis=0)
         maximum = points.max(axis=0)
         self.section_range_label.setText(
-            f"Xg {minimum[0]:.1f} ~ {maximum[0]:.1f} mm  |  "
+            f"S {minimum[0]:.1f} ~ {maximum[0]:.1f} mm  |  "
             f"Zg {minimum[1]:.1f} ~ {maximum[1]:.1f} mm"
         )
         self.section_extrema_label.setText(
@@ -1061,10 +1088,7 @@ class OnlineCameraWindow(QMainWindow):
         if self._section_x_bounds is None:
             self._set_section_x_limits(minimum[0], maximum[0])
         if self.section_auto_height_checkbox.isChecked():
-            self.section_view.getViewBox().enableAutoRange(
-                axis=pg.ViewBox.YAxis,
-                enable=True,
-            )
+            self._set_section_auto_height(True)
 
     def _refresh_section_connections(self) -> None:
         points = self._section_points
@@ -1074,7 +1098,8 @@ class OnlineCameraWindow(QMainWindow):
             return
         connections = _section_connection_mask(
             self._section_points_ground,
-            max_dx=self.section_max_dx.value(),
+            self._section_points[:, 0],
+            max_ds=self.section_max_ds.value(),
             max_dz=self.section_max_dz.value(),
             max_distance=self.section_max_distance.value(),
         )
@@ -1124,13 +1149,13 @@ class OnlineCameraWindow(QMainWindow):
         index = int(
             np.argmin(np.abs(self._section_points[:, 0] - mouse_point.x()))
         )
-        xg, zg = self._section_points[index]
-        self.section_crosshair_x.setPos(float(xg))
+        distance, zg = self._section_points[index]
+        self.section_crosshair_x.setPos(float(distance))
         self.section_crosshair_z.setPos(float(zg))
         self.section_crosshair_x.show()
         self.section_crosshair_z.show()
         self.section_cursor_label.setText(
-            f"游标 Xg {xg:.2f} mm  Zg {zg:.2f} mm"
+            f"游标 S {distance:.2f} mm  Zg {zg:.2f} mm"
         )
 
     def _control_panel(self) -> QWidget:
@@ -1727,6 +1752,19 @@ class OnlineCameraWindow(QMainWindow):
         self._image_view_mode = mode
         self._reset_image_views()
 
+    def _set_image_preview_rotated(self, rotated: bool) -> None:
+        """Rotate both previews without changing image or algorithm coordinates."""
+        self._image_preview_rotated = bool(rotated)
+        for item, boundary in (
+            (self.raw_image_item, self.raw_image_boundary),
+            (self.extracted_image_item, self.extracted_image_boundary),
+        ):
+            image = item.image
+            transform = _image_preview_transform(image, self._image_preview_rotated)
+            item.setTransform(transform)
+            boundary.setTransform(transform)
+        self._reset_image_views()
+
     def _reset_image_views(self) -> None:
         for view, item in (
             (self.raw_image_view, self.raw_image_item),
@@ -1734,7 +1772,12 @@ class OnlineCameraWindow(QMainWindow):
         ):
             image = item.image
             if isinstance(image, np.ndarray) and image.size:
-                _fit_image_view(view, image, self._image_view_mode)
+                _fit_image_view(
+                    view,
+                    image,
+                    self._image_view_mode,
+                    rotated=self._image_preview_rotated,
+                )
 
     def _show_raw_frame(self, frame: CapturedFrame) -> None:
         if self.tabs.currentIndex() != 0:
@@ -1750,8 +1793,16 @@ class OnlineCameraWindow(QMainWindow):
         _set_image_boundary(self.raw_image_boundary, frame.image)
         if shape_changed:
             self._raw_view_shape = image_shape
+            transform = _image_preview_transform(
+                frame.image, self._image_preview_rotated
+            )
+            self.raw_image_item.setTransform(transform)
+            self.raw_image_boundary.setTransform(transform)
             _fit_image_view(
-                self.raw_image_view, frame.image, self._image_view_mode
+                self.raw_image_view,
+                frame.image,
+                self._image_view_mode,
+                rotated=self._image_preview_rotated,
             )
 
     def _show_result(self, result: FrameResult) -> None:
@@ -1781,10 +1832,16 @@ class OnlineCameraWindow(QMainWindow):
             )
             if shape_changed:
                 self._extracted_view_shape = image_shape
+                transform = _image_preview_transform(
+                    result.overlay_rgb, self._image_preview_rotated
+                )
+                self.extracted_image_item.setTransform(transform)
+                self.extracted_image_boundary.setTransform(transform)
                 _fit_image_view(
                     self.extracted_image_view,
                     result.overlay_rgb,
                     self._image_view_mode,
+                    rotated=self._image_preview_rotated,
                 )
         elif current_tab == 1:
             trail_points: list[np.ndarray] = []
@@ -1923,15 +1980,19 @@ def _double_spin(
 
 def _section_connection_mask(
     points_ground: np.ndarray,
+    section_distance: np.ndarray,
     *,
-    max_dx: float,
+    max_ds: float,
     max_dz: float,
     max_distance: float,
 ) -> np.ndarray:
     points = np.asarray(points_ground, dtype=np.float64)
     if points.ndim != 2 or points.shape[1] != 3:
         raise ValueError("points_ground 必须是形状为 (N, 3) 的数组")
-    if min(max_dx, max_dz, max_distance) <= 0:
+    distance_along_line = np.asarray(section_distance, dtype=np.float64)
+    if distance_along_line.shape != (len(points),):
+        raise ValueError("section_distance 必须与 points_ground 等长")
+    if min(max_ds, max_dz, max_distance) <= 0:
         raise ValueError("截面断线阈值必须大于 0")
     connections = np.zeros(len(points), dtype=np.int32)
     if len(points) < 2:
@@ -1939,7 +2000,7 @@ def _section_connection_mask(
     differences = np.diff(points, axis=0)
     distances = np.linalg.norm(differences, axis=1)
     continuous = (
-        (np.abs(differences[:, 0]) <= max_dx)
+        (np.abs(np.diff(distance_along_line)) <= max_ds)
         & (np.abs(differences[:, 2]) <= max_dz)
         & (distances <= max_distance)
     )
@@ -1948,12 +2009,67 @@ def _section_connection_mask(
     return connections
 
 
+def _section_distance(points_xy: np.ndarray) -> np.ndarray:
+    """Project ground XY points onto their dominant laser-line direction."""
+    points = np.asarray(points_xy, dtype=np.float64)
+    if points.ndim != 2 or points.shape[1] != 2:
+        raise ValueError("points_xy 必须是形状为 (N, 2) 的数组")
+    if not len(points):
+        return np.empty(0, dtype=np.float64)
+    centred = points - np.mean(points, axis=0)
+    _, singular_values, right_vectors = np.linalg.svd(
+        centred, full_matrices=False
+    )
+    if not len(singular_values) or singular_values[0] <= np.finfo(np.float64).eps:
+        return np.zeros(len(points), dtype=np.float64)
+    direction = right_vectors[0]
+    if direction[0] < 0.0 or (direction[0] == 0.0 and direction[1] < 0.0):
+        direction = -direction
+    distance = centred @ direction
+    return np.ascontiguousarray(distance - float(distance.min()))
+
+
+def _section_height_range(
+    heights: np.ndarray, *, robust: bool
+) -> tuple[float, float]:
+    """Return padded display limits; robust mode suppresses sparse tail points."""
+    values = np.asarray(heights, dtype=np.float64).reshape(-1)
+    values = values[np.isfinite(values)]
+    if not len(values):
+        raise ValueError("heights 必须包含至少一个有限值")
+    if robust and len(values) >= 20:
+        minimum, maximum = np.quantile(
+            values, (0.01, 0.99), method="nearest"
+        )
+        minimum = float(minimum)
+        maximum = float(maximum)
+    else:
+        minimum = float(values.min())
+        maximum = float(values.max())
+    centre = (minimum + maximum) * 0.5
+    span = max(maximum - minimum, 1.0)
+    half_span = span * 0.58
+    return centre - half_span, centre + half_span
+
+
 def _set_image_boundary(boundary: pg.PlotDataItem, image: np.ndarray) -> None:
     height, width = image.shape[:2]
     boundary.setData(
         [0, width, width, 0, 0],
         [0, 0, height, height, 0],
     )
+
+
+def _image_preview_transform(
+    image: np.ndarray | None, rotated: bool
+) -> QTransform:
+    """Return a display-only clockwise rotation with a positive scene extent."""
+    transform = QTransform()
+    if rotated and isinstance(image, np.ndarray) and image.size:
+        height = image.shape[0]
+        transform.translate(float(height), 0.0)
+        transform.rotate(90.0)
+    return transform
 
 
 def _bounded_view_range(
@@ -1972,9 +2088,15 @@ def _bounded_view_range(
 
 
 def _fit_image_view(
-    view: pg.PlotWidget, image: np.ndarray, mode: str = "width"
+    view: pg.PlotWidget,
+    image: np.ndarray,
+    mode: str = "width",
+    *,
+    rotated: bool = False,
 ) -> None:
     height, width = image.shape[:2]
+    if rotated:
+        width, height = height, width
     view_box = view.getViewBox()
     if not isinstance(view_box, ConstrainedImageViewBox):
         raise TypeError("图像预览必须使用 ConstrainedImageViewBox")
