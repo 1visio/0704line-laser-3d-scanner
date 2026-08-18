@@ -1,0 +1,3 @@
+model,model_path,input_count,valid_count,count,mean_signed_mm,mae_mm,rmse_mm,median_abs_mm,p95_abs_mm,max_abs_mm
+circular_cone,D:\Docs\linelaserscan\0704line-laser-3d-scanner\laser_measurement_tool\configs\calibration_daheng_0811\circular_cone.yaml,5400,5400,5400,-0.008634679332197233,0.06936089592029711,0.08321982635295729,0.06524606753430362,0.14954585010664234,0.2588777890906613
+quadratic_graph_latest,D:\Docs\linelaserscan\0704line-laser-3d-scanner\laser_measurement_tool\configs\calibration_daheng_0811\quadratic_graph.yaml,5400,5400,5400,-0.005181619774398314,0.06303411458446771,0.07797064835686207,0.05483963880368492,0.14506021313403042,0.25925087721782347

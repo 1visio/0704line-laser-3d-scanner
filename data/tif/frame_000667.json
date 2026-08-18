@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "source": "online_snapshot",
+  "image": {
+    "filename": "frame_000667.png",
+    "width": 480,
+    "height": 3000,
+    "dtype": "uint8"
+  },
+  "image_offset": {
+    "u": 1760,
+    "v": 0
+  },
+  "frame": {
+    "camera_frame_number": 2786,
+    "camera_timestamp_ticks": 2148511942000,
+    "host_timestamp_ns": 1787039876471233800
+  }
+}

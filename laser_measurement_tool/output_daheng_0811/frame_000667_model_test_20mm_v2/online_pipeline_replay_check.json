@@ -1,0 +1,19 @@
+{
+  "performed": true,
+  "entry_point": "online.pipeline.FramePipeline.run_frame",
+  "calibration_package_id": "daheng-me2p-1230-20260818-quadratic-graph-v1",
+  "center_count": 1847,
+  "valid_point_count": 1801,
+  "centers_max_abs_difference_from_saved_artifact_px": 4.996145435143262e-07,
+  "valid_points_max_abs_difference_from_saved_artifact_mm": 4.999300760311076e-07,
+  "allclose_atol": 1.0e-06,
+  "filtered": {
+    "near_parallel": 0,
+    "negative_depth": 0,
+    "outside_working_distance": 0,
+    "non_finite": 0,
+    "no_valid_intersection": 46,
+    "outside_image_roi": 0
+  },
+  "note": "The online package replay was run after artifact generation; saved CSV values are rounded to six decimals."
+}
