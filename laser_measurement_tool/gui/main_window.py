@@ -695,6 +695,7 @@ class MainWindow(QMainWindow):
                     laser_plane=paths.laser_plane,
                     extrinsics=paths.extrinsics,
                     ground_u_compensation=paths.ground_u_compensation,
+                    laser_ray_correction=paths.laser_ray_correction,
                 )
         except (
             CalibrationFileNotFoundError,

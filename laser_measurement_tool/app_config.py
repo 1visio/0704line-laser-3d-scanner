@@ -27,7 +27,7 @@ class AppConfigError(ValueError):
 
 @dataclass(frozen=True, slots=True)
 class CalibrationPaths:
-    """相机内参、激光表面模型、地面外参与可选 U 补偿的绝对路径。
+    """相机内参、激光表面模型、外参与可选补偿文件的绝对路径。
 
     为兼容旧代码，成员名仍保留为 ``laser_plane``；文件内容现在可以是
     global_plane、quadratic_graph 或 circular_cone。推荐使用配置键
@@ -38,6 +38,7 @@ class CalibrationPaths:
     laser_plane: Path
     extrinsics: Path
     ground_u_compensation: Path | None = None
+    laser_ray_correction: Path | None = None
     manifest: Path | None = None
 
     @property
@@ -159,6 +160,7 @@ def _parse_calibration(
     if not isinstance(section, Mapping):
         raise AppConfigError(f"{path} 缺少 calibration 段")
     ground_u_value = section.get("ground_u_compensation")
+    laser_ray_correction_value = section.get("laser_ray_correction")
     manifest_value = section.get("manifest")
     laser_model_value = section.get("laser_model")
     legacy_laser_plane_value = section.get("laser_plane")
@@ -192,6 +194,15 @@ def _parse_calibration(
             if ground_u_value in (None, "")
             else _resolve_path(
                 ground_u_value, base_dir, "calibration.ground_u_compensation"
+            )
+        ),
+        laser_ray_correction=(
+            None
+            if laser_ray_correction_value in (None, "")
+            else _resolve_path(
+                laser_ray_correction_value,
+                base_dir,
+                "calibration.laser_ray_correction",
             )
         ),
         manifest=(

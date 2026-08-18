@@ -98,6 +98,40 @@ def load_calibration_package(manifest_path: str | Path) -> CalibrationPackage:
             )
         resolved[name] = file_path
 
+    laser_ray_entry = files.get("laser_ray_correction")
+    if laser_ray_entry is None:
+        laser_ray_path: Path | None = None
+    else:
+        if not isinstance(laser_ray_entry, dict):
+            raise CalibrationManifestError(
+                "files.laser_ray_correction 必须是映射或 null"
+            )
+        relative = Path(_required_text(laser_ray_entry, "path"))
+        if relative.is_absolute() or ".." in relative.parts:
+            raise CalibrationManifestError(
+                "files.laser_ray_correction.path 必须是包内相对路径"
+            )
+        laser_ray_path = (path.parent / relative).resolve()
+        try:
+            laser_ray_path.relative_to(path.parent)
+        except ValueError as error:
+            raise CalibrationManifestError(
+                "files.laser_ray_correction.path 越出标定包"
+            ) from error
+        expected_hash = _required_text(laser_ray_entry, "sha256").lower()
+        if len(expected_hash) != 64:
+            raise CalibrationManifestError(
+                "files.laser_ray_correction.sha256 格式错误"
+            )
+        if not laser_ray_path.is_file():
+            raise CalibrationManifestError(f"标定文件不存在: {laser_ray_path}")
+        actual_hash = sha256_file(laser_ray_path)
+        if actual_hash != expected_hash:
+            raise CalibrationManifestError(
+                f"标定文件哈希不匹配: {laser_ray_path.name}\n"
+                f"期望 {expected_hash}\n实际 {actual_hash}"
+            )
+
     # 生产包通常提供真实补偿表；显式 null 允许在几何标定完成后先做
     # smoke test，而不需要伪造一张“已验收”的补偿 LUT。
     ground_entry = files["ground_u_compensation"]
@@ -140,6 +174,7 @@ def load_calibration_package(manifest_path: str | Path) -> CalibrationPackage:
         resolved["laser_plane"],
         resolved["extrinsics"],
         ground_u_path,
+        laser_ray_correction=laser_ray_path,
     )
     return CalibrationPackage(
         manifest_path=path,

@@ -20,6 +20,7 @@ calibration:
   laser_model: calibration_daheng_0811/quadratic_graph.yaml
   extrinsics: calibration_daheng_0811/camera_ground_extrinsics.yaml
   ground_u_compensation: null
+  laser_ray_correction: calibration_daheng_0811/frozen_c1_4k.json
 
 extraction:
   method: steger
@@ -54,6 +55,7 @@ reconstruction:
   max_camera_depth_mm: 715.0
   model_range_margin_mm: 2.0
   image_roi_polygon: null
+  enable_laser_ray_correction: false
 
 measurement:
   outlier_sigma_multiplier: 2.0

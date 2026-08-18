@@ -8,6 +8,17 @@ from typing import Any
 import numpy as np
 import yaml
 
+try:
+    from ..reconstruction.laser_ray_correction import (
+        LaserRayCorrectionError,
+        load_frozen_laser_ray_correction,
+    )
+except ImportError:  # Supports the existing top-level ``calibration`` imports.
+    from reconstruction.laser_ray_correction import (
+        LaserRayCorrectionError,
+        load_frozen_laser_ray_correction,
+    )
+
 
 _CAMERA_FILE = "camera_intrinsics.yaml"
 _CALIBRATION_RESULT_FILE = "calibration_result.yaml"
@@ -80,6 +91,7 @@ def load_calibration_files(
     laser_plane: str | Path,
     extrinsics: str | Path,
     ground_u_compensation: str | Path | None = None,
+    laser_ray_correction: str | Path | None = None,
     *,
     ground_u_optional: bool = False,
 ) -> dict[str, Any]:
@@ -90,7 +102,8 @@ def load_calibration_files(
     ``circular_cone`` 的激光表面模型。
 
     返回字典固定包含 ``K``、``D``、``laser_model``、``R``、``t``、
-    ``ground_u_compensation``。全局平面额外保留 ``plane_abcd``，兼容旧调用方。
+    ``ground_u_compensation``、``laser_ray_correction``。全局平面额外保留
+    ``plane_abcd``，兼容旧调用方；没有 C1 文件时对应值为 ``None``。
     """
     camera = _load_camera_intrinsics(Path(intrinsics))
     laser_model = _load_laser_model(Path(laser_plane))
@@ -105,6 +118,20 @@ def load_calibration_files(
             )
         ground_u = _load_optional_ground_u(ground_u_path)
 
+    frozen_c1 = None
+    if laser_ray_correction is not None:
+        correction_path = Path(laser_ray_correction)
+        if not correction_path.is_file():
+            raise CalibrationFileNotFoundError(
+                f"标定文件不存在: {correction_path}"
+            )
+        try:
+            frozen_c1 = load_frozen_laser_ray_correction(correction_path)
+        except LaserRayCorrectionError as error:
+            raise CalibrationConfigError(
+                f"frozen laser ray correction 无效: {correction_path}: {error}"
+            ) from error
+
     result: dict[str, Any] = {
         "K": camera["K"],
         "D": camera["D"],
@@ -112,6 +139,7 @@ def load_calibration_files(
         "R": pose["R"],
         "t": pose["t"],
         "ground_u_compensation": ground_u,
+        "laser_ray_correction": frozen_c1,
     }
     if laser_model["model_type"] == "global_plane":
         result["plane_abcd"] = np.ascontiguousarray(
