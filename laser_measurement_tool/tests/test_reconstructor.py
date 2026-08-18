@@ -146,9 +146,27 @@ class ReconstructUvToGroundTest(unittest.TestCase):
             "bias_mm": np.array([1.0, 3.0]),
         }
 
-        corrected = reconstruct_uv_to_ground(pixels, calibration)
+        with self.assertWarnsRegex(RuntimeWarning, "nearest endpoint bias"):
+            corrected = reconstruct_uv_to_ground(pixels, calibration)
 
         np.testing.assert_allclose(corrected.points_ground[:, :2], raw.points_ground[:, :2])
+        np.testing.assert_allclose(
+            raw.points_ground[:, 2] - corrected.points_ground[:, 2],
+            [1.0, 2.0, 3.0],
+        )
+
+    def test_reconstruction_applies_interpolated_ground_v_bias(self) -> None:
+        calibration = _synthetic_calibration()
+        pixels = np.array([[320.0, 200.0], [320.0, 250.0], [320.0, 300.0]])
+        raw = reconstruct_uv_to_ground(pixels, calibration)
+        calibration["ground_u_compensation"] = {
+            "compensation_axis": "v",
+            "row_v_px": np.array([200.0, 300.0]),
+            "bias_mm": np.array([1.0, 3.0]),
+        }
+
+        corrected = reconstruct_uv_to_ground(pixels, calibration)
+
         np.testing.assert_allclose(
             raw.points_ground[:, 2] - corrected.points_ground[:, 2],
             [1.0, 2.0, 3.0],
@@ -202,6 +220,26 @@ class GroundUCompensationTest(unittest.TestCase):
                 np.zeros((2, 2)),
                 {"column_u_px": [0.0, 1.0], "bias_mm": [0.0]},
             )
+
+    def test_v_compensation_is_pointwise_for_different_roi_lengths(self) -> None:
+        compensation = {
+            "compensation_axis": "v",
+            "row_v_px": [10.0, 20.0],
+            "bias_mm": [2.0, 4.0],
+        }
+        for point_count in (3, 7, 19):
+            with self.subTest(point_count=point_count):
+                v = np.linspace(10.0, 20.0, point_count)
+                pixels = np.column_stack((np.full(point_count, 123.0), v))
+                points = np.column_stack(
+                    (np.zeros(point_count), np.zeros(point_count), 50.0 + 0.2 * v)
+                )
+
+                corrected = apply_ground_u_compensation(
+                    points, pixels, compensation
+                )
+
+                np.testing.assert_allclose(corrected[:, 2], 50.0)
 
 
 class ProjectGroundPointsTest(unittest.TestCase):

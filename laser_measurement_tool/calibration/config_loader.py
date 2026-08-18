@@ -444,23 +444,27 @@ def _load_optional_ground_u(path: Path) -> dict[str, Any] | None:
         {"px", "mm"},
     )
     converted = _convert_numeric_sequences(document)
+    axis = _ground_compensation_axis(converted, path)
+    coordinate_key = "column_u_px" if axis == "u" else "row_v_px"
     if "sample_table" in converted:
         table = _numeric_array(converted["sample_table"], path, "sample_table")
         if table.ndim != 2 or table.shape[1] != 2:
             raise CalibrationDimensionError(
                 f"{path.name} 的 sample_table 维度为 {table.shape}，应为 (N, 2)"
             )
-        converted["column_u_px"] = table[:, 0]
+        converted[coordinate_key] = table[:, 0]
         converted["bias_mm"] = table[:, 1]
 
-    if "column_u_px" not in converted or "bias_mm" not in converted:
+    if coordinate_key not in converted or "bias_mm" not in converted:
         raise CalibrationConfigError(
-            f"{path.name} 缺少 column_u_px/bias_mm 或 sample_table"
+            f"{path.name} 缺少 {coordinate_key}/bias_mm 或 sample_table"
         )
     columns, bias = _validate_ground_u_table(
-        converted["column_u_px"], converted["bias_mm"], path
+        converted[coordinate_key], converted["bias_mm"], path, coordinate_key
     )
-    converted["column_u_px"] = columns
+    converted[coordinate_key] = columns
+    converted["coordinate_px"] = columns
+    converted["compensation_axis"] = axis
     converted["bias_mm"] = bias
     z_offset = _ground_u_z_offset(converted, path)
     if z_offset is not None:
@@ -480,28 +484,34 @@ def _load_ground_u_npy(path: Path) -> dict[str, Any]:
 
     if isinstance(loaded, Mapping):
         converted = dict(loaded)
-        if "column_u_px" not in converted and "columns" in converted:
-            converted["column_u_px"] = converted["columns"]
     elif isinstance(loaded, np.ndarray) and loaded.dtype.names is not None:
         converted = {name: loaded[name] for name in loaded.dtype.names}
-        if "column_u_px" not in converted and "columns" in converted:
-            converted["column_u_px"] = converted["columns"]
     else:
         table = _numeric_array(loaded, path, "ground_u_compensation")
         if table.ndim != 2 or table.shape[1] != 2:
             raise CalibrationDimensionError(
                 f"{path.name} must be a dict/structured array or an (N, 2) table"
             )
-        converted = {"column_u_px": table[:, 0], "bias_mm": table[:, 1]}
+        converted = {
+            "compensation_axis": "u",
+            "column_u_px": table[:, 0],
+            "bias_mm": table[:, 1],
+        }
 
-    if "column_u_px" not in converted or "bias_mm" not in converted:
+    axis = _ground_compensation_axis(converted, path)
+    coordinate_key = "column_u_px" if axis == "u" else "row_v_px"
+    if coordinate_key not in converted and "columns" in converted:
+        converted[coordinate_key] = converted["columns"]
+    if coordinate_key not in converted or "bias_mm" not in converted:
         raise CalibrationConfigError(
-            f"{path.name} must contain column_u_px/bias_mm or columns/bias_mm"
+            f"{path.name} must contain {coordinate_key}/bias_mm or columns/bias_mm"
         )
     columns, bias = _validate_ground_u_table(
-        converted["column_u_px"], converted["bias_mm"], path
+        converted[coordinate_key], converted["bias_mm"], path, coordinate_key
     )
-    converted["column_u_px"] = columns
+    converted[coordinate_key] = columns
+    converted["coordinate_px"] = columns
+    converted["compensation_axis"] = axis
     converted["bias_mm"] = bias
     z_offset = _ground_u_z_offset(converted, path)
     if z_offset is not None:
@@ -515,47 +525,74 @@ def _load_ground_u_csv(path: Path) -> dict[str, Any]:
     try:
         with path.open("r", encoding="utf-8-sig", newline="") as stream:
             reader = csv.DictReader(stream)
-            required = {"column_u_px", "bias_mm"}
-            if reader.fieldnames is None or not required.issubset(reader.fieldnames):
+            fieldnames = set(reader.fieldnames or ())
+            coordinate_key = (
+                "row_v_px" if "row_v_px" in fieldnames else "column_u_px"
+            )
+            required = {coordinate_key, "bias_mm"}
+            if not required.issubset(fieldnames):
                 raise CalibrationConfigError(
-                    f"{path.name} 必须包含列 column_u_px 和 bias_mm"
+                    f"{path.name} 必须包含 column_u_px/bias_mm 或 row_v_px/bias_mm"
                 )
             rows = list(reader)
     except (OSError, UnicodeError, csv.Error) as error:
         raise CalibrationConfigError(f"无法读取 {path.name}: {error}") from error
 
     try:
-        columns = np.asarray([row["column_u_px"] for row in rows], dtype=np.float64)
+        columns = np.asarray([row[coordinate_key] for row in rows], dtype=np.float64)
         bias = np.asarray([row["bias_mm"] for row in rows], dtype=np.float64)
     except (TypeError, ValueError) as error:
         raise CalibrationConfigError(
-            f"{path.name} 的 column_u_px/bias_mm 必须是数值"
+            f"{path.name} 的 {coordinate_key}/bias_mm 必须是数值"
         ) from error
 
-    columns, bias = _validate_ground_u_table(columns, bias, path)
+    columns, bias = _validate_ground_u_table(
+        columns, bias, path, coordinate_key
+    )
+    axis = "v" if coordinate_key == "row_v_px" else "u"
     return {
-        "column_u_px": columns,
+        coordinate_key: columns,
+        "coordinate_px": columns,
+        "compensation_axis": axis,
         "bias_mm": bias,
         "source_path": str(path.resolve()),
     }
 
 
 def _validate_ground_u_table(
-    columns: Any, bias: Any, path: Path
+    columns: Any,
+    bias: Any,
+    path: Path,
+    coordinate_key: str = "column_u_px",
 ) -> tuple[np.ndarray, np.ndarray]:
-    columns_array = _vector(columns, path, "column_u_px")
+    columns_array = _vector(columns, path, coordinate_key)
     bias_array = _vector(bias, path, "bias_mm")
     if len(columns_array) == 0:
         raise CalibrationConfigError(f"{path.name} 的补偿表不能为空")
     if len(columns_array) != len(bias_array):
         raise CalibrationDimensionError(
-            f"{path.name} 的 column_u_px 与 bias_mm 长度不一致"
+            f"{path.name} 的 {coordinate_key} 与 bias_mm 长度不一致"
         )
     if np.any(np.diff(columns_array) <= 0.0):
         raise CalibrationConfigError(
-            f"{path.name} 的 column_u_px 必须严格递增且不能重复"
+            f"{path.name} 的 {coordinate_key} 必须严格递增且不能重复"
         )
     return columns_array, bias_array
+
+
+def _ground_compensation_axis(document: Mapping[str, Any], path: Path) -> str:
+    raw_axis = document.get("compensation_axis")
+    metadata = document.get("metadata")
+    if raw_axis is None and isinstance(metadata, Mapping):
+        raw_axis = metadata.get("compensation_axis")
+    if raw_axis is None:
+        raw_axis = "v" if "row_v_px" in document else "u"
+    axis = str(raw_axis).strip().lower()
+    if axis not in {"u", "v"}:
+        raise CalibrationConfigError(
+            f"{path.name} 的 compensation_axis 必须是 u 或 v，实际为 {raw_axis!r}"
+        )
+    return axis
 
 
 def _ground_u_z_offset(document: Mapping[str, Any], path: Path) -> float | None:

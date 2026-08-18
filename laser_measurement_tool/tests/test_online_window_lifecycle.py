@@ -10,6 +10,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import numpy as np
 import pyqtgraph as pg
+from PySide6.QtCore import QPointF
 from PySide6.QtWidgets import QApplication
 
 from app_config import DEFAULT_CONFIG_PATH, load_app_config
@@ -18,7 +19,10 @@ from online.window import (
     OnlineCameraWindow,
     OnlineState,
     _fit_image_view,
+    _image_preview_transform,
     _section_connection_mask,
+    _section_distance,
+    _section_height_range,
 )
 
 
@@ -147,6 +151,63 @@ class OnlineWindowLifecycleTests(unittest.TestCase):
         finally:
             view.close()
 
+    def test_preview_rotation_is_display_only_and_swaps_view_extents(self) -> None:
+        image = np.arange(6, dtype=np.uint8).reshape(2, 3)
+        original = image.copy()
+        transform = _image_preview_transform(image, True)
+
+        top_left = transform.map(QPointF(0.0, 0.0))
+        top_right = transform.map(QPointF(3.0, 0.0))
+        bottom_left = transform.map(QPointF(0.0, 2.0))
+        self.assertEqual((top_left.x(), top_left.y()), (2.0, 0.0))
+        self.assertEqual((top_right.x(), top_right.y()), (2.0, 3.0))
+        self.assertEqual((bottom_left.x(), bottom_left.y()), (0.0, 0.0))
+        np.testing.assert_array_equal(image, original)
+
+        view_box = ConstrainedImageViewBox()
+        view = pg.PlotWidget(viewBox=view_box)
+        view.resize(400, 300)
+        view.setAspectLocked(True)
+        view.show()
+        self.application.processEvents()
+        try:
+            _fit_image_view(view, image, "fit", rotated=True)
+            self.assertEqual(view_box._image_size, (2.0, 3.0))
+        finally:
+            view.close()
+
+    def test_rotation_button_updates_both_preview_items(self) -> None:
+        window = OnlineCameraWindow(self.config, simulate=True)
+        image = np.arange(6, dtype=np.uint8).reshape(2, 3)
+        window.raw_image_item.setImage(image, autoLevels=False)
+        window.extracted_image_item.setImage(image, autoLevels=False)
+
+        window.image_rotate_button.setChecked(True)
+
+        self.assertTrue(window._image_preview_rotated)
+        self.assertEqual(
+            window.raw_image_item.transform(),
+            window.extracted_image_item.transform(),
+        )
+        self.assertEqual(
+            window.raw_image_item.transform(),
+            window.raw_image_boundary.transform(),
+        )
+        self.assertEqual(
+            window.extracted_image_item.transform(),
+            window.extracted_image_boundary.transform(),
+        )
+        self.assertFalse(window.raw_image_item.transform().isIdentity())
+        np.testing.assert_array_equal(window.raw_image_item.image, image)
+        np.testing.assert_array_equal(window.extracted_image_item.image, image)
+
+        window.image_rotate_button.setChecked(False)
+
+        self.assertFalse(window._image_preview_rotated)
+        self.assertTrue(window.raw_image_item.transform().isIdentity())
+        self.assertTrue(window.extracted_image_item.transform().isIdentity())
+        window.close()
+
     def test_section_keeps_points_and_breaks_on_each_distance_threshold(self) -> None:
         points = np.array(
             [
@@ -160,9 +221,11 @@ class OnlineWindowLifecycleTests(unittest.TestCase):
             dtype=np.float64,
         )
         expected = np.array([1, 0, 0, 0, 1, 0], dtype=np.int32)
+        section_distance = np.array([0.0, 1.0, 4.0, 4.5, 5.0, 5.5])
         connections = _section_connection_mask(
             points,
-            max_dx=2.0,
+            section_distance,
+            max_ds=2.0,
             max_dz=3.0,
             max_distance=4.0,
         )
@@ -172,12 +235,68 @@ class OnlineWindowLifecycleTests(unittest.TestCase):
         window._update_section_view(points)
         scatter_x, scatter_z = window.section_scatter.getData()
         self.assertEqual(len(scatter_x), len(points))
-        np.testing.assert_allclose(scatter_x, points[:, 0])
+        np.testing.assert_allclose(scatter_x, _section_distance(points[:, :2]))
         np.testing.assert_allclose(scatter_z, points[:, 2])
         np.testing.assert_array_equal(
-            window.section_curve.opts["connect"], expected
+            window.section_curve.opts["connect"],
+            _section_connection_mask(
+                points,
+                _section_distance(points[:, :2]),
+                max_ds=window.section_max_ds.value(),
+                max_dz=window.section_max_dz.value(),
+                max_distance=window.section_max_distance.value(),
+            ),
         )
-        self.assertEqual(window.section_count_label.text(), "截面 6 点 · 4 段")
+        self.assertEqual(
+            window.section_view.getAxis("bottom").labelText,
+            "S（沿激光线）",
+        )
+        window.close()
+
+    def test_section_distance_supports_horizontal_vertical_and_diagonal_lines(
+        self,
+    ) -> None:
+        parameter = np.arange(4, dtype=np.float64)
+        horizontal = np.column_stack((parameter, np.zeros_like(parameter)))
+        vertical = np.column_stack((np.zeros_like(parameter), parameter))
+        diagonal = np.column_stack((parameter, parameter))
+
+        np.testing.assert_allclose(_section_distance(horizontal), parameter)
+        np.testing.assert_allclose(_section_distance(vertical), parameter)
+        np.testing.assert_allclose(
+            _section_distance(diagonal), parameter * np.sqrt(2.0)
+        )
+
+    def test_auto_height_ignores_sparse_outlier_but_fit_includes_all_points(
+        self,
+    ) -> None:
+        normal_heights = np.linspace(-0.3, 0.3, 1000)
+        heights = np.append(normal_heights, 50.0)
+        robust_lower, robust_upper = _section_height_range(heights, robust=True)
+        full_lower, full_upper = _section_height_range(heights, robust=False)
+        self.assertLess(robust_lower, normal_heights.min())
+        self.assertGreater(robust_upper, normal_heights.max())
+        self.assertLess(robust_upper, 2.0)
+        self.assertGreater(full_upper, 50.0)
+
+        window = OnlineCameraWindow(self.config, simulate=True)
+        points = np.column_stack(
+            (
+                np.linspace(0.0, 100.0, len(heights)),
+                np.zeros(len(heights)),
+                heights,
+            )
+        )
+        window._update_section_view(points)
+        _, auto_y = window.section_view.getViewBox().viewRange()
+        self.assertLess(auto_y[1], 2.0)
+
+        window._fit_section_view()
+
+        _, fitted_y = window.section_view.getViewBox().viewRange()
+        self.assertFalse(window.section_auto_height_checkbox.isChecked())
+        self.assertLessEqual(fitted_y[0], heights.min())
+        self.assertGreaterEqual(fitted_y[1], heights.max())
         window.close()
 
 

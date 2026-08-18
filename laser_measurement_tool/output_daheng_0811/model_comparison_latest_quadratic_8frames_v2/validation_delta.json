@@ -1,0 +1,11 @@
+{
+  "mae_mm_delta_quadratic_minus_cone_mm": -0.006326781335829396,
+  "mae_mm_improvement_percent": 9.121539236026486,
+  "rmse_mm_delta_quadratic_minus_cone_mm": -0.005249177996095214,
+  "rmse_mm_improvement_percent": 6.307605081789119,
+  "p95_abs_mm_delta_quadratic_minus_cone_mm": -0.004485636972611923,
+  "p95_abs_mm_improvement_percent": 2.9995061510654955,
+  "max_abs_mm_delta_quadratic_minus_cone_mm": 0.0003730881271621911,
+  "max_abs_mm_improvement_percent": -0.14411747275527462,
+  "mean_signed_delta_quadratic_minus_cone_mm": 0.0034530595577989187
+}

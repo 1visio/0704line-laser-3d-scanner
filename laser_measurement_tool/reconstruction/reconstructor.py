@@ -9,6 +9,7 @@
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
+import warnings
 
 import cv2
 import numpy as np
@@ -103,7 +104,11 @@ def apply_ground_u_compensation(
     pixels_uv: np.ndarray,
     compensation: Mapping[str, Any] | None,
 ) -> np.ndarray:
-    """按图像列坐标插值偏差，并执行 ``Zg_corrected = Zg_raw - bias(u)``。"""
+    """按配置的图像轴逐点插值，并执行 ``Zg_corrected = Zg_raw - bias``。
+
+    函数名和 ``ground_u_compensation`` 配置键保留用于旧标定包兼容；没有
+    ``compensation_axis`` 的历史表始终按 ``u`` 解释。
+    """
     points = np.asarray(points_ground, dtype=np.float64)
     pixels = np.asarray(pixels_uv, dtype=np.float64)
     if compensation is None or len(points) == 0:
@@ -113,23 +118,47 @@ def apply_ground_u_compensation(
     if pixels.ndim != 2 or pixels.shape != (len(points), 2):
         raise ReconstructionInputError("pixels_uv 必须与 points_ground 逐行对齐")
 
+    raw_axis = compensation.get("compensation_axis", "u")
+    axis = str(raw_axis).strip().lower()
+    if axis not in {"u", "v"}:
+        raise ReconstructionInputError(
+            f"ground_u_compensation.compensation_axis 必须是 u 或 v，实际为 {raw_axis!r}"
+        )
+    coordinate_key = "column_u_px" if axis == "u" else "row_v_px"
     try:
-        columns = np.asarray(compensation["column_u_px"], dtype=np.float64).reshape(-1)
+        coordinate_values = (
+            compensation["coordinate_px"]
+            if "coordinate_px" in compensation
+            else compensation[coordinate_key]
+        )
+        columns = np.asarray(coordinate_values, dtype=np.float64).reshape(-1)
         bias = np.asarray(compensation["bias_mm"], dtype=np.float64).reshape(-1)
     except (KeyError, TypeError, ValueError) as error:
         raise ReconstructionInputError(
-            "ground_u_compensation 必须包含数值数组 column_u_px 和 bias_mm"
+            f"ground_u_compensation 必须包含数值数组 {coordinate_key} 和 bias_mm"
         ) from error
     if len(columns) == 0 or len(columns) != len(bias):
         raise ReconstructionInputError("ground_u_compensation 两列必须非空且等长")
     if not np.isfinite(columns).all() or not np.isfinite(bias).all():
         raise ReconstructionInputError("ground_u_compensation 包含 NaN 或无穷值")
     if np.any(np.diff(columns) <= 0.0):
-        raise ReconstructionInputError("ground_u_compensation 的 column_u_px 必须严格递增")
+        raise ReconstructionInputError(
+            f"ground_u_compensation 的 {coordinate_key} 必须严格递增"
+        )
 
     z_offset = _compensation_z_offset(compensation)
     corrected = points.copy()
-    corrected[:, 2] -= np.interp(pixels[:, 0], columns, bias)
+    coordinate = pixels[:, 0 if axis == "u" else 1]
+    outside = (coordinate < columns[0]) | (coordinate > columns[-1])
+    if np.any(outside):
+        warnings.warn(
+            f"{np.count_nonzero(outside)} point(s) are outside the ground-bias "
+            f"{axis} range [{columns[0]:g}, {columns[-1]:g}] px; "
+            "using the nearest endpoint bias",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+    corrected[:, 2] -= np.interp(coordinate, columns, bias)
     corrected[:, 2] -= z_offset
     return np.ascontiguousarray(corrected)
 

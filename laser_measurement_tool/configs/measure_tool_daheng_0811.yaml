@@ -17,7 +17,7 @@ camera:
 calibration:
   manifest: calibration_daheng_0811/manifest.yaml
   intrinsics: calibration_daheng_0811/calibration_result.yaml
-  laser_model: calibration_daheng_0811/circular_cone.yaml
+  laser_model: calibration_daheng_0811/quadratic_graph.yaml
   extrinsics: calibration_daheng_0811/camera_ground_extrinsics.yaml
   ground_u_compensation: null
 
@@ -48,6 +48,8 @@ extraction:
 reconstruction:
   parallel_epsilon: 1.0e-9
   quadratic_epsilon: 1.0e-12
+  # 保留现有在线工作距离门限；冻结 Quadratic 的 z_valid_range 下限约为 599.916 mm，
+  # 因此约 599.916–630.0 mm 仍会由在线门限主动过滤。
   min_camera_depth_mm: 630.0
   max_camera_depth_mm: 715.0
   model_range_margin_mm: 2.0
