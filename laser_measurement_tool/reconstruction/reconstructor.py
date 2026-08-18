@@ -14,6 +14,12 @@ import warnings
 import cv2
 import numpy as np
 
+from .laser_ray_correction import (
+    FrozenLaserRayCorrection,
+    LaserRayCorrectionError,
+    apply_frozen_laser_ray_correction,
+)
+
 
 class ReconstructionInputError(ValueError):
     """重建输入（点、标定或参数）不满足约束。"""
@@ -32,8 +38,14 @@ class ReconstructionParams:
     # 固定姿态下的棋盘格内部多边形，坐标为原始图像像素 (u, v)。
     # None 表示不启用图像 ROI，保持历史全幅重建行为。
     image_roi_polygon: tuple[tuple[float, float], ...] | None = None
+    # Frozen C1 is opt-in; the historical C0-only path remains the default.
+    enable_laser_ray_correction: bool = False
 
     def __post_init__(self) -> None:
+        if not isinstance(self.enable_laser_ray_correction, bool):
+            raise ReconstructionInputError(
+                "enable_laser_ray_correction 必须是布尔值"
+            )
         if self.parallel_epsilon <= 0.0:
             raise ReconstructionInputError("parallel_epsilon 必须为正数")
         if self.quadratic_epsilon <= 0.0:
@@ -581,19 +593,38 @@ def reconstruct_uv_to_ground(
     rays = np.column_stack(
         [normalized, np.ones(len(normalized), dtype=np.float64)]
     )
-    scale, stable, model_type = _intersect_laser_surface(
+    lambda_c0, stable, model_type = _intersect_laser_surface(
         rays, calibration, params
     )
-    points_camera = rays * scale[:, None]
+    lambda_final = lambda_c0
+    if params.enable_laser_ray_correction:
+        if model_type != "quadratic_graph":
+            raise ReconstructionInputError(
+                "laser_ray_correction 只能用于 quadratic_graph 基础模型"
+            )
+        correction = calibration.get("laser_ray_correction")
+        if not isinstance(correction, FrozenLaserRayCorrection):
+            raise ReconstructionInputError(
+                "已开启 laser_ray_correction，但 calibration 缺少有效 frozen C1 参数"
+            )
+        try:
+            lambda_final = apply_frozen_laser_ray_correction(
+                lambda_c0, rays, correction
+            )
+        except LaserRayCorrectionError as error:
+            raise ReconstructionInputError(
+                f"laser_ray_correction 参数或运行时输入非法: {error}"
+            ) from error
+    points_camera = rays * lambda_final[:, None]
 
-    finite = np.isfinite(points_camera).all(axis=1) & np.isfinite(scale)
-    positive = scale > 0.0
+    finite = np.isfinite(points_camera).all(axis=1) & np.isfinite(lambda_final)
+    positive = lambda_final > 0.0
     within_distance = (
         (points_camera[:, 2] >= params.min_camera_depth_mm)
         & (points_camera[:, 2] <= params.max_camera_depth_mm)
     )
     valid = stable & finite & positive & within_distance
-    no_intersection = ~np.isfinite(scale)
+    no_intersection = ~np.isfinite(lambda_final)
     filtered = {
         "near_parallel": (
             int(np.count_nonzero(~stable)) if model_type == "global_plane" else 0
