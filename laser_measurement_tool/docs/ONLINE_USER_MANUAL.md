@@ -259,10 +259,10 @@ python -c "import gxipy; print(gxipy.__file__); print(gxipy.__version__)"
 
 ### 6.1 保存当前帧
 
-点击“保存当前帧”，选择 `.png`、`.tif` 或 `.tiff`。保存图像的同时会写入同名 JSON sidecar，例如：
+点击“保存当前帧”时，默认文件名使用无损的 `.tif`；保存对话框仍可手动选择 `.png`、`.tif` 或 `.tiff`。保存图像的同时会写入同名 JSON sidecar，例如：
 
 ```text
-frame_000123.tiff
+frame_000123.tif
 frame_000123.json
 ```
 

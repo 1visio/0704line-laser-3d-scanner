@@ -1580,7 +1580,10 @@ class OnlineCameraWindow(QMainWindow):
         if self._last_result is None:
             QMessageBox.information(self, "没有图像", "当前尚无可保存帧")
             return
-        default_suffix = ".png" if self._last_result.frame.image.dtype == np.uint8 else ".tiff"
+        # TIFF is lossless for both Mono8 and Mono12/uint16 frames.  Keep PNG
+        # in the save dialog as an explicit option, but make the default
+        # snapshot format independent of the camera pixel depth.
+        default_suffix = ".tif"
         path, _ = QFileDialog.getSaveFileName(
             self,
             "保存当前帧",
