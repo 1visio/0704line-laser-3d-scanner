@@ -1,0 +1,47 @@
+schema_version: 1
+selection_basis: image_geometry_only
+residual_used: false
+residual_threshold_used: false
+shared_within_pose: true
+coordinate_convention: "Steger centers are absolute image (u,column; v,row) coordinates"
+source_overlays:
+  - pose002_median_image.png
+  - pose002_median_steger_overlay.png
+  - pose003_median_image.png
+  - pose003_median_steger_overlay.png
+  - pose004_median_image.png
+  - pose004_median_steger_overlay.png
+poses:
+  "002":
+    rationale: "Median/overlay shows an upper board-perimeter or protrusion transition around v=90; retain the stable main chessboard-plane track below it. No separate lower-edge track was visible in the captured image range."
+    excluded_geometry: "v < 110: upper perimeter/protrusion transition"
+    ranges:
+      - axis: v
+        min: 110.0
+        max: 3000.0
+        include_max: true
+    selection_basis: image_geometry_only
+    residual_used: false
+    residual_threshold_used: false
+  "003":
+    rationale: "Median/overlay shows an upper board-perimeter or protrusion transition around v=140; retain the stable main chessboard-plane track below it. No separate lower-edge track was visible in the captured image range."
+    excluded_geometry: "v < 170: upper perimeter/protrusion transition"
+    ranges:
+      - axis: v
+        min: 170.0
+        max: 3000.0
+        include_max: true
+    selection_basis: image_geometry_only
+    residual_used: false
+    residual_threshold_used: false
+  "004":
+    rationale: "Median/overlay shows an upper board-perimeter or protrusion transition around v=45; retain the stable main chessboard-plane track below it. No separate lower-edge track was visible in the captured image range."
+    excluded_geometry: "v < 70: upper perimeter/protrusion transition"
+    ranges:
+      - axis: v
+        min: 70.0
+        max: 3000.0
+        include_max: true
+    selection_basis: image_geometry_only
+    residual_used: false
+    residual_threshold_used: false

@@ -1,0 +1,616 @@
+{
+  "schema_version": 1,
+  "created_at_local": "2026-08-19T16:35:06+0800",
+  "ground1_reuse": {
+    "summary_path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\output_daheng_0811\\ground_reference_20frames\\ground_reference_summary.json",
+    "summary_sha256": "7351491151606f2fd7533369f393a46e61796f1ed2e8816385aca3b00064b8f3",
+    "profile_path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\output_daheng_0811\\ground_reference_20frames\\ground_profile_pooled.csv",
+    "profile_sha256": "0bed24160bb4a3edceddafde6da9939e5af2967c948b0372cb3e8f70dc29b396",
+    "frozen_origin_xy": [
+      4.345466690716022,
+      2.878594498981755
+    ],
+    "frozen_direction_xy": [
+      0.012883418031591754,
+      0.9999170053258537
+    ],
+    "bin_count": 50,
+    "s_min_mm": -147.0472008100069,
+    "s_max_mm": 144.12573742616544,
+    "ground1_profile_status": {
+      "GROUND_LINEAR_MODEL": "REVIEW_REQUIRED_SPATIAL_STRUCTURE",
+      "GROUND_PROFILE_STABILITY": "STABLE_SPATIAL_STRUCTURE",
+      "diagnostic_only": true,
+      "parameter_freeze_candidate_only": true
+    }
+  },
+  "new_data_audit": {
+    "data_dir": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\.chessboard_v2.inprogress\\fit",
+    "dataset_manifest": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\.chessboard_v2.inprogress\\dataset_manifest.yaml",
+    "frames_csv": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\.chessboard_v2.inprogress\\frames.csv",
+    "dataset_status": "completed",
+    "quality_summary": {
+      "frames": 15,
+      "passed": 0,
+      "warnings": 15,
+      "warning_counts": {
+        "dynamic_range_low": 15
+      }
+    },
+    "pose_counts": {
+      "002": 5,
+      "003": 5,
+      "004": 5
+    },
+    "exposure_us_by_pose": {
+      "002": [
+        300.0
+      ],
+      "003": [
+        320.0
+      ],
+      "004": [
+        350.0
+      ]
+    },
+    "input_files": [
+      {
+        "path": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\.chessboard_v2.inprogress\\fit\\laser 002.tif",
+        "pose_id": "002",
+        "sha256": "30990e584384a9fc8581561f51cfd81b3e9e25fdea3b2e1156480b33aa091034",
+        "manifest_sha256": "30990e584384a9fc8581561f51cfd81b3e9e25fdea3b2e1156480b33aa091034",
+        "camera_frame_number": 184,
+        "shape": [
+          3000,
+          4096
+        ],
+        "dtype": "uint8",
+        "quality": {
+          "passed": false,
+          "warnings": [
+            "dynamic_range_low"
+          ],
+          "dynamic_range_u8": 14.0,
+          "dark_fraction": 0.9983744303385417,
+          "laser_coverage": 0.974
+        }
+      },
+      {
+        "path": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\.chessboard_v2.inprogress\\fit\\laser 002_02.tif",
+        "pose_id": "002",
+        "sha256": "2c6c2ed2b58ed630d7e6e4731704809a70346831b3629971fe8b909ea652dc1c",
+        "manifest_sha256": "2c6c2ed2b58ed630d7e6e4731704809a70346831b3629971fe8b909ea652dc1c",
+        "camera_frame_number": 185,
+        "shape": [
+          3000,
+          4096
+        ],
+        "dtype": "uint8",
+        "quality": {
+          "passed": false,
+          "warnings": [
+            "dynamic_range_low"
+          ],
+          "dynamic_range_u8": 14.0,
+          "dark_fraction": 0.9983745930989584,
+          "laser_coverage": 0.9736666666666667
+        }
+      },
+      {
+        "path": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\.chessboard_v2.inprogress\\fit\\laser 002_03.tif",
+        "pose_id": "002",
+        "sha256": "7f7cb664e2e827f8f5047c3fb019d45a281caef6b67aba94c93d2421736582b6",
+        "manifest_sha256": "7f7cb664e2e827f8f5047c3fb019d45a281caef6b67aba94c93d2421736582b6",
+        "camera_frame_number": 186,
+        "shape": [
+          3000,
+          4096
+        ],
+        "dtype": "uint8",
+        "quality": {
+          "passed": false,
+          "warnings": [
+            "dynamic_range_low"
+          ],
+          "dynamic_range_u8": 14.0,
+          "dark_fraction": 0.9983738606770833,
+          "laser_coverage": 0.9736666666666667
+        }
+      },
+      {
+        "path": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\.chessboard_v2.inprogress\\fit\\laser 002_04.tif",
+        "pose_id": "002",
+        "sha256": "a733c623004b9ef33b7015304292bf5f06971c9956a8e259f75fc88def199beb",
+        "manifest_sha256": "a733c623004b9ef33b7015304292bf5f06971c9956a8e259f75fc88def199beb",
+        "camera_frame_number": 187,
+        "shape": [
+          3000,
+          4096
+        ],
+        "dtype": "uint8",
+        "quality": {
+          "passed": false,
+          "warnings": [
+            "dynamic_range_low"
+          ],
+          "dynamic_range_u8": 14.0,
+          "dark_fraction": 0.998373291015625,
+          "laser_coverage": 0.974
+        }
+      },
+      {
+        "path": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\.chessboard_v2.inprogress\\fit\\laser 002_05.tif",
+        "pose_id": "002",
+        "sha256": "eb401e4ec90d95e139529eb8255b1805d1f0d47d147a95b89e4a94f56c815649",
+        "manifest_sha256": "eb401e4ec90d95e139529eb8255b1805d1f0d47d147a95b89e4a94f56c815649",
+        "camera_frame_number": 188,
+        "shape": [
+          3000,
+          4096
+        ],
+        "dtype": "uint8",
+        "quality": {
+          "passed": false,
+          "warnings": [
+            "dynamic_range_low"
+          ],
+          "dynamic_range_u8": 14.0,
+          "dark_fraction": 0.99837060546875,
+          "laser_coverage": 0.9736666666666667
+        }
+      },
+      {
+        "path": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\.chessboard_v2.inprogress\\fit\\laser 003.tif",
+        "pose_id": "003",
+        "sha256": "1bd2181729619d19e6b8ece86f7a2f1118ee4b6fbfcd4360f8b9b3b77a27d896",
+        "manifest_sha256": "1bd2181729619d19e6b8ece86f7a2f1118ee4b6fbfcd4360f8b9b3b77a27d896",
+        "camera_frame_number": 4298,
+        "shape": [
+          3000,
+          4096
+        ],
+        "dtype": "uint8",
+        "quality": {
+          "passed": false,
+          "warnings": [
+            "dynamic_range_low"
+          ],
+          "dynamic_range_u8": 15.0,
+          "dark_fraction": 0.99833349609375,
+          "laser_coverage": 0.9873333333333333
+        }
+      },
+      {
+        "path": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\.chessboard_v2.inprogress\\fit\\laser 003_02.tif",
+        "pose_id": "003",
+        "sha256": "f29dfcdc2aa3499c4a82d8831bde7786235103dff6c6ebcabda5e4a45a34b681",
+        "manifest_sha256": "f29dfcdc2aa3499c4a82d8831bde7786235103dff6c6ebcabda5e4a45a34b681",
+        "camera_frame_number": 4299,
+        "shape": [
+          3000,
+          4096
+        ],
+        "dtype": "uint8",
+        "quality": {
+          "passed": false,
+          "warnings": [
+            "dynamic_range_low"
+          ],
+          "dynamic_range_u8": 15.0,
+          "dark_fraction": 0.99833056640625,
+          "laser_coverage": 0.9863333333333333
+        }
+      },
+      {
+        "path": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\.chessboard_v2.inprogress\\fit\\laser 003_03.tif",
+        "pose_id": "003",
+        "sha256": "95395fcf79857e738e0457e1b6ed161dfe390d7380132653ccf931fb9791422c",
+        "manifest_sha256": "95395fcf79857e738e0457e1b6ed161dfe390d7380132653ccf931fb9791422c",
+        "camera_frame_number": 4300,
+        "shape": [
+          3000,
+          4096
+        ],
+        "dtype": "uint8",
+        "quality": {
+          "passed": false,
+          "warnings": [
+            "dynamic_range_low"
+          ],
+          "dynamic_range_u8": 15.0,
+          "dark_fraction": 0.9983378092447917,
+          "laser_coverage": 0.9873333333333333
+        }
+      },
+      {
+        "path": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\.chessboard_v2.inprogress\\fit\\laser 003_04.tif",
+        "pose_id": "003",
+        "sha256": "a80320ecd11e8076a7466324eed36c186aa981453d8e6dc71484ce4e203574c3",
+        "manifest_sha256": "a80320ecd11e8076a7466324eed36c186aa981453d8e6dc71484ce4e203574c3",
+        "camera_frame_number": 4301,
+        "shape": [
+          3000,
+          4096
+        ],
+        "dtype": "uint8",
+        "quality": {
+          "passed": false,
+          "warnings": [
+            "dynamic_range_low"
+          ],
+          "dynamic_range_u8": 15.0,
+          "dark_fraction": 0.9983326009114584,
+          "laser_coverage": 0.9873333333333333
+        }
+      },
+      {
+        "path": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\.chessboard_v2.inprogress\\fit\\laser 003_05.tif",
+        "pose_id": "003",
+        "sha256": "37d92e17972930547bf11562ebbc439a15c544df85dc45290edcbfcd0cc3164b",
+        "manifest_sha256": "37d92e17972930547bf11562ebbc439a15c544df85dc45290edcbfcd0cc3164b",
+        "camera_frame_number": 4302,
+        "shape": [
+          3000,
+          4096
+        ],
+        "dtype": "uint8",
+        "quality": {
+          "passed": false,
+          "warnings": [
+            "dynamic_range_low"
+          ],
+          "dynamic_range_u8": 15.0,
+          "dark_fraction": 0.9983346354166667,
+          "laser_coverage": 0.987
+        }
+      },
+      {
+        "path": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\.chessboard_v2.inprogress\\fit\\laser 004.tif",
+        "pose_id": "004",
+        "sha256": "dfb1cb732a85e9a385871c46c8d2270cf65d219187dad060cce2c7219b3cad67",
+        "manifest_sha256": "dfb1cb732a85e9a385871c46c8d2270cf65d219187dad060cce2c7219b3cad67",
+        "camera_frame_number": 271,
+        "shape": [
+          3000,
+          4096
+        ],
+        "dtype": "uint8",
+        "quality": {
+          "passed": false,
+          "warnings": [
+            "dynamic_range_low"
+          ],
+          "dynamic_range_u8": 15.0,
+          "dark_fraction": 0.9982928873697917,
+          "laser_coverage": 0.9603333333333334
+        }
+      },
+      {
+        "path": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\.chessboard_v2.inprogress\\fit\\laser 004_02.tif",
+        "pose_id": "004",
+        "sha256": "b3a37163e895322be9b5de353d6fa167fcf43f82bdb5875df4bb23f3b52e6404",
+        "manifest_sha256": "b3a37163e895322be9b5de353d6fa167fcf43f82bdb5875df4bb23f3b52e6404",
+        "camera_frame_number": 272,
+        "shape": [
+          3000,
+          4096
+        ],
+        "dtype": "uint8",
+        "quality": {
+          "passed": false,
+          "warnings": [
+            "dynamic_range_low"
+          ],
+          "dynamic_range_u8": 15.0,
+          "dark_fraction": 0.998292236328125,
+          "laser_coverage": 0.9623333333333334
+        }
+      },
+      {
+        "path": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\.chessboard_v2.inprogress\\fit\\laser 004_03.tif",
+        "pose_id": "004",
+        "sha256": "a0e7e831c447abec3a2a5707adacf8fe51f58ca9509c2e1c30f67663a5975575",
+        "manifest_sha256": "a0e7e831c447abec3a2a5707adacf8fe51f58ca9509c2e1c30f67663a5975575",
+        "camera_frame_number": 273,
+        "shape": [
+          3000,
+          4096
+        ],
+        "dtype": "uint8",
+        "quality": {
+          "passed": false,
+          "warnings": [
+            "dynamic_range_low"
+          ],
+          "dynamic_range_u8": 15.0,
+          "dark_fraction": 0.99829638671875,
+          "laser_coverage": 0.9626666666666667
+        }
+      },
+      {
+        "path": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\.chessboard_v2.inprogress\\fit\\laser 004_04.tif",
+        "pose_id": "004",
+        "sha256": "f7ed7e1b7c29c2cf6b7d3df60035077534f23e85bc1e92539373d5bec96987e9",
+        "manifest_sha256": "f7ed7e1b7c29c2cf6b7d3df60035077534f23e85bc1e92539373d5bec96987e9",
+        "camera_frame_number": 274,
+        "shape": [
+          3000,
+          4096
+        ],
+        "dtype": "uint8",
+        "quality": {
+          "passed": false,
+          "warnings": [
+            "dynamic_range_low"
+          ],
+          "dynamic_range_u8": 15.0,
+          "dark_fraction": 0.9982950032552084,
+          "laser_coverage": 0.9623333333333334
+        }
+      },
+      {
+        "path": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\.chessboard_v2.inprogress\\fit\\laser 004_05.tif",
+        "pose_id": "004",
+        "sha256": "4a9ddcc6e8e62f656392ef57f02e181ed0dcd7b078631aa22e793543b0d2842f",
+        "manifest_sha256": "4a9ddcc6e8e62f656392ef57f02e181ed0dcd7b078631aa22e793543b0d2842f",
+        "camera_frame_number": 275,
+        "shape": [
+          3000,
+          4096
+        ],
+        "dtype": "uint8",
+        "quality": {
+          "passed": false,
+          "warnings": [
+            "dynamic_range_low"
+          ],
+          "dynamic_range_u8": 15.0,
+          "dark_fraction": 0.9982954915364584,
+          "laser_coverage": 0.9616666666666667
+        }
+      }
+    ]
+  },
+  "configuration": {
+    "config_path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\configs\\measure_tool_daheng_0811.yaml",
+    "config_sha256": "c22e463aff6dc51565679382cc766a3c7078a57f676809e7b31ee1cbe185f15f",
+    "enable_laser_ray_correction": true,
+    "calibration_manifest": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\configs\\calibration_daheng_0811\\manifest.yaml",
+    "calibration_package_id": "daheng-me2p-1230-20260818-quadratic-graph-v1",
+    "calibration_package_manifest_sha256": "94d1c1ca3e95d9e98f5060ea5fc069448674324ac039cbdf5ef9b9c9d9ebe210",
+    "code_sha256": "a7bea742ba22693c8d50133e2485461418356fdf052b812155e43638bef1fc60"
+  },
+  "protocol": {
+    "one_steger_per_frame": true,
+    "same_centers_to_c0_and_c1": true,
+    "all_c1_valid_points_retained": true,
+    "analytical_roi_used": false,
+    "reconstruction_image_roi_polygon": null,
+    "black_cell_interpolation": false,
+    "new_xy_pca": false,
+    "new_origin_or_direction": false,
+    "cross_pose_point_pooling_before_fit": false,
+    "spline_or_lut": false,
+    "height_linear_compensation": false,
+    "fixed_s_formula": "S=(XY-Ground1_origin_xy) dot Ground1_direction_xy",
+    "profile_binning": "Ground-1 frozen 50-bin edges; no extrapolation outside common coverage"
+  },
+  "classification": {
+    "GROUND_POSE_INVARIANCE": "NOT_SUPPORTED_BOARD_DEPENDENT",
+    "CAMERA_SPACE_STRUCTURE": "NOT_SUPPORTED",
+    "BOARD_DEPENDENT_STRUCTURE": "SUPPORTED",
+    "MIXED_STRUCTURE": "NOT_SELECTED",
+    "ground3_recommendation": "BLOCK",
+    "valid_pose_comparison_count": 3,
+    "full_profile_alignment_flags": {
+      "pose002": false,
+      "pose003": false,
+      "pose004": false
+    },
+    "low_frequency_alignment_flags": {
+      "pose002": false,
+      "pose003": false,
+      "pose004": true
+    },
+    "thresholds": {
+      "full_correlation_min": 0.8,
+      "full_normalized_difference_max": 0.5,
+      "low_frequency_correlation_min": 0.8,
+      "moving_average_window_bins": 5
+    }
+  },
+  "comparison_rows": [
+    {
+      "reference_group": "ground1",
+      "target_group": "pose002",
+      "comparison_type": "ground1_vs_pose",
+      "coverage_requirement_fraction": 0.8,
+      "common_bin_count": 50,
+      "common_s_min_mm": -144.13547142764517,
+      "common_s_max_mm": 141.21400804380372,
+      "common_s_span_mm": 285.3494794714489,
+      "profile_correlation": 0.4912997371117117,
+      "low_frequency_correlation": 0.7283854822030791,
+      "high_frequency_correlation": 0.06332708210246313,
+      "profile_rmse_difference_mm": 0.09327632712163446,
+      "profile_median_abs_difference_mm": 0.013708757593462406,
+      "profile_rms_reference_mm": 0.055807394774195995,
+      "profile_rms_target_mm": 0.1031053171096033,
+      "normalized_profile_difference": 0.904670386906231,
+      "reference_peak_s_mm": 18.921373984611336,
+      "target_peak_s_mm": 141.21400804380372,
+      "peak_s_offset_mm": 122.29263405919238,
+      "reference_valley_s_mm": 71.33250286712236,
+      "target_valley_s_mm": 65.50904410239892,
+      "valley_s_offset_mm": -5.823458764723441,
+      "reference_frame_rmse_median_mm": 0.06623764380643513,
+      "target_frame_rmse_median_mm": 0.10324080167047651,
+      "detrended_rmse_difference_mm": 0.03700315786404139,
+      "status": "ok"
+    },
+    {
+      "reference_group": "ground1",
+      "target_group": "pose003",
+      "comparison_type": "ground1_vs_pose",
+      "coverage_requirement_fraction": 0.8,
+      "common_bin_count": 50,
+      "common_s_min_mm": -144.13547142764517,
+      "common_s_max_mm": 141.21400804380372,
+      "common_s_span_mm": 285.3494794714489,
+      "profile_correlation": 0.5635163858546349,
+      "low_frequency_correlation": 0.7736154544252385,
+      "high_frequency_correlation": 0.10566522165187485,
+      "profile_rmse_difference_mm": 0.07889465021653266,
+      "profile_median_abs_difference_mm": 0.013791305414451322,
+      "profile_rms_reference_mm": 0.055807394774195995,
+      "profile_rms_target_mm": 0.0927356832796082,
+      "normalized_profile_difference": 0.8507474946688719,
+      "reference_peak_s_mm": 18.921373984611336,
+      "target_peak_s_mm": 135.39054927908026,
+      "peak_s_offset_mm": 116.46917529446893,
+      "reference_valley_s_mm": 71.33250286712236,
+      "target_valley_s_mm": 59.68558533767546,
+      "valley_s_offset_mm": -11.646917529446895,
+      "reference_frame_rmse_median_mm": 0.06623764380643513,
+      "target_frame_rmse_median_mm": 0.10446547566050156,
+      "detrended_rmse_difference_mm": 0.03822783185406643,
+      "status": "ok"
+    },
+    {
+      "reference_group": "ground1",
+      "target_group": "pose004",
+      "comparison_type": "ground1_vs_pose",
+      "coverage_requirement_fraction": 0.8,
+      "common_bin_count": 50,
+      "common_s_min_mm": -144.13547142764517,
+      "common_s_max_mm": 141.21400804380372,
+      "common_s_span_mm": 285.3494794714489,
+      "profile_correlation": 0.5759099059133157,
+      "low_frequency_correlation": 0.843317264363129,
+      "high_frequency_correlation": 0.1990770655588019,
+      "profile_rmse_difference_mm": 0.06930616523412328,
+      "profile_median_abs_difference_mm": 0.011830453460943049,
+      "profile_rms_reference_mm": 0.055807394774195995,
+      "profile_rms_target_mm": 0.08133068294414837,
+      "normalized_profile_difference": 0.8521527512773672,
+      "reference_peak_s_mm": 18.921373984611336,
+      "target_peak_s_mm": 141.21400804380372,
+      "peak_s_offset_mm": 122.29263405919238,
+      "reference_valley_s_mm": 71.33250286712236,
+      "target_valley_s_mm": 71.33250286712236,
+      "valley_s_offset_mm": 0.0,
+      "reference_frame_rmse_median_mm": 0.06623764380643513,
+      "target_frame_rmse_median_mm": 0.08568797789689357,
+      "detrended_rmse_difference_mm": 0.019450334090458446,
+      "status": "ok"
+    },
+    {
+      "reference_group": "pose002",
+      "target_group": "pose003",
+      "comparison_type": "pose_pair",
+      "coverage_requirement_fraction": 0.8,
+      "common_bin_count": 50,
+      "common_s_min_mm": -144.13547142764517,
+      "common_s_max_mm": 141.21400804380372,
+      "common_s_span_mm": 285.3494794714489,
+      "profile_correlation": 0.9663334353862899,
+      "low_frequency_correlation": 0.981411031106324,
+      "high_frequency_correlation": 0.9397718070641239,
+      "profile_rmse_difference_mm": 0.028249002429305673,
+      "profile_median_abs_difference_mm": 0.01561887534784224,
+      "profile_rms_reference_mm": 0.1031053171096033,
+      "profile_rms_target_mm": 0.0927356832796082,
+      "normalized_profile_difference": 0.2739820139370343,
+      "reference_peak_s_mm": 141.21400804380372,
+      "target_peak_s_mm": 135.39054927908026,
+      "peak_s_offset_mm": -5.823458764723455,
+      "reference_valley_s_mm": 65.50904410239892,
+      "target_valley_s_mm": 59.68558533767546,
+      "valley_s_offset_mm": -5.823458764723455,
+      "reference_frame_rmse_median_mm": 0.10324080167047651,
+      "target_frame_rmse_median_mm": 0.10446547566050156,
+      "detrended_rmse_difference_mm": 0.0012246739900250436,
+      "status": "ok"
+    },
+    {
+      "reference_group": "pose002",
+      "target_group": "pose004",
+      "comparison_type": "pose_pair",
+      "coverage_requirement_fraction": 0.8,
+      "common_bin_count": 50,
+      "common_s_min_mm": -144.13547142764517,
+      "common_s_max_mm": 141.21400804380372,
+      "common_s_span_mm": 285.3494794714489,
+      "profile_correlation": 0.8124931795982671,
+      "low_frequency_correlation": 0.9390105008540042,
+      "high_frequency_correlation": 0.6362146927684883,
+      "profile_rmse_difference_mm": 0.060344266442678075,
+      "profile_median_abs_difference_mm": 0.010436291016546995,
+      "profile_rms_reference_mm": 0.1031053171096033,
+      "profile_rms_target_mm": 0.08133068294414837,
+      "normalized_profile_difference": 0.5852682299452194,
+      "reference_peak_s_mm": 141.21400804380372,
+      "target_peak_s_mm": 141.21400804380372,
+      "peak_s_offset_mm": 0.0,
+      "reference_valley_s_mm": 65.50904410239892,
+      "target_valley_s_mm": 71.33250286712236,
+      "valley_s_offset_mm": 5.823458764723441,
+      "reference_frame_rmse_median_mm": 0.10324080167047651,
+      "target_frame_rmse_median_mm": 0.08568797789689357,
+      "detrended_rmse_difference_mm": -0.017552823773582943,
+      "status": "ok"
+    },
+    {
+      "reference_group": "pose003",
+      "target_group": "pose004",
+      "comparison_type": "pose_pair",
+      "coverage_requirement_fraction": 0.8,
+      "common_bin_count": 50,
+      "common_s_min_mm": -144.13547142764517,
+      "common_s_max_mm": 141.21400804380372,
+      "common_s_span_mm": 285.3494794714489,
+      "profile_correlation": 0.7139576816167724,
+      "low_frequency_correlation": 0.920464124055889,
+      "high_frequency_correlation": 0.39387937572461024,
+      "profile_rmse_difference_mm": 0.06661209232321406,
+      "profile_median_abs_difference_mm": 0.018389254427311815,
+      "profile_rms_reference_mm": 0.0927356832796082,
+      "profile_rms_target_mm": 0.08133068294414837,
+      "normalized_profile_difference": 0.7183005502032195,
+      "reference_peak_s_mm": 135.39054927908026,
+      "target_peak_s_mm": 141.21400804380372,
+      "peak_s_offset_mm": 5.823458764723455,
+      "reference_valley_s_mm": 59.68558533767546,
+      "target_valley_s_mm": 71.33250286712236,
+      "valley_s_offset_mm": 11.646917529446895,
+      "reference_frame_rmse_median_mm": 0.10446547566050156,
+      "target_frame_rmse_median_mm": 0.08568797789689357,
+      "detrended_rmse_difference_mm": -0.018777497763607987,
+      "status": "ok"
+    }
+  ],
+  "output_files": [
+    "ground_pose_frame_metrics.csv",
+    "ground_pose_profiles.csv",
+    "ground_pose_comparison.csv",
+    "ground_pose_residual_overlay.png",
+    "ground_pose_pairwise_difference.png",
+    "ground_pose_consensus_profile.png",
+    "ground_pose_invariance_report.md",
+    "ground_pose_invariance_summary.json"
+  ],
+  "artifact_provenance": {
+    "reused": [
+      "Ground-1 frozen origin_xy/direction_xy and 50 S-bin edges",
+      "Ground-1 pooled residual profile R_A(S)",
+      "existing Daheng configuration, calibration package, Steger, C0/C1 reconstruction, and robust Zg=a*S+b kernel"
+    ],
+    "reused_as_new_target_results": [],
+    "newly_computed": [
+      "15 new frames: one Steger plus C0/C1 reconstruction each",
+      "15 fixed-axis frame fits grouped as pose 002/003/004",
+      "5-frame-balanced residual profile for each pose",
+      "common-S profile comparisons, pairwise differences, consensus curve, and attribution report"
+    ]
+  }
+}

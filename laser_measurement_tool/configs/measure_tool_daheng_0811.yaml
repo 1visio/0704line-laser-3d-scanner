@@ -55,7 +55,7 @@ reconstruction:
   max_camera_depth_mm: 715.0
   model_range_margin_mm: 2.0
   image_roi_polygon: null
-  enable_laser_ray_correction: false
+  enable_laser_ray_correction: true
 
 measurement:
   outlier_sigma_multiplier: 2.0

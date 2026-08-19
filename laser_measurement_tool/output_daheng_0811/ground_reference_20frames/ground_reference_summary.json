@@ -1,0 +1,585 @@
+{
+  "schema_version": 1,
+  "created_at_local": "2026-08-19T15:58:55+0800",
+  "frame_count": 20,
+  "input_audit": {
+    "data_dir": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\chessboard\\fit",
+    "dataset_manifest": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\chessboard\\dataset_manifest.yaml",
+    "frames_csv": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\chessboard\\frames.csv",
+    "dataset_status": "completed",
+    "frames_expected": 20,
+    "frames_captured": 20,
+    "quality_summary": {
+      "frames": 20,
+      "passed": 0,
+      "warnings": 20,
+      "warning_counts": {
+        "dynamic_range_low": 20
+      }
+    },
+    "input_files": [
+      {
+        "path": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\chessboard\\fit\\laser 001.tif",
+        "sha256": "6a9e4b86bbf5c9656566a6f2dd79fbddba2e496c7f9ed53b111fca26ec007084",
+        "size_bytes": 563276,
+        "shape": [
+          3000,
+          4096
+        ],
+        "dtype": "uint8",
+        "camera_frame_number": 40,
+        "quality": {
+          "passed": false,
+          "warnings": [
+            "dynamic_range_low"
+          ],
+          "dynamic_range_u8": 17.0,
+          "dark_fraction": 0.9981934407552083,
+          "laser_coverage": 0.992
+        },
+        "manifest_sha256": "6a9e4b86bbf5c9656566a6f2dd79fbddba2e496c7f9ed53b111fca26ec007084"
+      },
+      {
+        "path": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\chessboard\\fit\\laser 001_02.tif",
+        "sha256": "23491096d77f50e08e57b0fed6a67b4c594432cd225582724b65860461214487",
+        "size_bytes": 563490,
+        "shape": [
+          3000,
+          4096
+        ],
+        "dtype": "uint8",
+        "camera_frame_number": 41,
+        "quality": {
+          "passed": false,
+          "warnings": [
+            "dynamic_range_low"
+          ],
+          "dynamic_range_u8": 17.0,
+          "dark_fraction": 0.9981898600260417,
+          "laser_coverage": 0.9926666666666667
+        },
+        "manifest_sha256": "23491096d77f50e08e57b0fed6a67b4c594432cd225582724b65860461214487"
+      },
+      {
+        "path": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\chessboard\\fit\\laser 001_03.tif",
+        "sha256": "7f16b3111bbbcfae07690ed339c5ed3de0cfdf0133635eb4e769133804e249fe",
+        "size_bytes": 563260,
+        "shape": [
+          3000,
+          4096
+        ],
+        "dtype": "uint8",
+        "camera_frame_number": 42,
+        "quality": {
+          "passed": false,
+          "warnings": [
+            "dynamic_range_low"
+          ],
+          "dynamic_range_u8": 17.0,
+          "dark_fraction": 0.9981891276041667,
+          "laser_coverage": 0.9923333333333333
+        },
+        "manifest_sha256": "7f16b3111bbbcfae07690ed339c5ed3de0cfdf0133635eb4e769133804e249fe"
+      },
+      {
+        "path": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\chessboard\\fit\\laser 001_04.tif",
+        "sha256": "c17cd61b1890cfe58d6c2067694b4a17a3757bd04360842f1615a44143fd3331",
+        "size_bytes": 563408,
+        "shape": [
+          3000,
+          4096
+        ],
+        "dtype": "uint8",
+        "camera_frame_number": 43,
+        "quality": {
+          "passed": false,
+          "warnings": [
+            "dynamic_range_low"
+          ],
+          "dynamic_range_u8": 17.0,
+          "dark_fraction": 0.9981912434895833,
+          "laser_coverage": 0.992
+        },
+        "manifest_sha256": "c17cd61b1890cfe58d6c2067694b4a17a3757bd04360842f1615a44143fd3331"
+      },
+      {
+        "path": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\chessboard\\fit\\laser 001_05.tif",
+        "sha256": "1273830916993719fbc570dffcb4817ab55c9751a84d90b1f673abbbf37eea95",
+        "size_bytes": 564466,
+        "shape": [
+          3000,
+          4096
+        ],
+        "dtype": "uint8",
+        "camera_frame_number": 44,
+        "quality": {
+          "passed": false,
+          "warnings": [
+            "dynamic_range_low"
+          ],
+          "dynamic_range_u8": 17.0,
+          "dark_fraction": 0.998190185546875,
+          "laser_coverage": 0.9926666666666667
+        },
+        "manifest_sha256": "1273830916993719fbc570dffcb4817ab55c9751a84d90b1f673abbbf37eea95"
+      },
+      {
+        "path": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\chessboard\\fit\\laser 001_06.tif",
+        "sha256": "2124674e9c283fbc358112d9a90b162f21d281c14d436ad559bac2c0c5fe8077",
+        "size_bytes": 564068,
+        "shape": [
+          3000,
+          4096
+        ],
+        "dtype": "uint8",
+        "camera_frame_number": 45,
+        "quality": {
+          "passed": false,
+          "warnings": [
+            "dynamic_range_low"
+          ],
+          "dynamic_range_u8": 17.0,
+          "dark_fraction": 0.9981935221354167,
+          "laser_coverage": 0.993
+        },
+        "manifest_sha256": "2124674e9c283fbc358112d9a90b162f21d281c14d436ad559bac2c0c5fe8077"
+      },
+      {
+        "path": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\chessboard\\fit\\laser 001_07.tif",
+        "sha256": "7ba2b702da92039a829c2885fd3a7b1349b29d8741373f95303dd5da583160d5",
+        "size_bytes": 563080,
+        "shape": [
+          3000,
+          4096
+        ],
+        "dtype": "uint8",
+        "camera_frame_number": 46,
+        "quality": {
+          "passed": false,
+          "warnings": [
+            "dynamic_range_low"
+          ],
+          "dynamic_range_u8": 17.0,
+          "dark_fraction": 0.9981885579427083,
+          "laser_coverage": 0.9923333333333333
+        },
+        "manifest_sha256": "7ba2b702da92039a829c2885fd3a7b1349b29d8741373f95303dd5da583160d5"
+      },
+      {
+        "path": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\chessboard\\fit\\laser 001_08.tif",
+        "sha256": "53c233cd58479ec3d8cb1070610d50b19cfe69ecca91083d6309d3f91d66c8f8",
+        "size_bytes": 563810,
+        "shape": [
+          3000,
+          4096
+        ],
+        "dtype": "uint8",
+        "camera_frame_number": 47,
+        "quality": {
+          "passed": false,
+          "warnings": [
+            "dynamic_range_low"
+          ],
+          "dynamic_range_u8": 17.0,
+          "dark_fraction": 0.9981923014322917,
+          "laser_coverage": 0.9916666666666667
+        },
+        "manifest_sha256": "53c233cd58479ec3d8cb1070610d50b19cfe69ecca91083d6309d3f91d66c8f8"
+      },
+      {
+        "path": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\chessboard\\fit\\laser 001_09.tif",
+        "sha256": "fde130894e7c39a262c01f656525026909f8ead6a8015fff241537b2aa5b696d",
+        "size_bytes": 563728,
+        "shape": [
+          3000,
+          4096
+        ],
+        "dtype": "uint8",
+        "camera_frame_number": 48,
+        "quality": {
+          "passed": false,
+          "warnings": [
+            "dynamic_range_low"
+          ],
+          "dynamic_range_u8": 17.0,
+          "dark_fraction": 0.99819091796875,
+          "laser_coverage": 0.992
+        },
+        "manifest_sha256": "fde130894e7c39a262c01f656525026909f8ead6a8015fff241537b2aa5b696d"
+      },
+      {
+        "path": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\chessboard\\fit\\laser 001_10.tif",
+        "sha256": "24782cc794b5750d59da8ddcb6d2099647c787572e85b46fbe034d576ad3f5dd",
+        "size_bytes": 563778,
+        "shape": [
+          3000,
+          4096
+        ],
+        "dtype": "uint8",
+        "camera_frame_number": 49,
+        "quality": {
+          "passed": false,
+          "warnings": [
+            "dynamic_range_low"
+          ],
+          "dynamic_range_u8": 17.0,
+          "dark_fraction": 0.9981929524739583,
+          "laser_coverage": 0.992
+        },
+        "manifest_sha256": "24782cc794b5750d59da8ddcb6d2099647c787572e85b46fbe034d576ad3f5dd"
+      },
+      {
+        "path": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\chessboard\\fit\\laser 001_11.tif",
+        "sha256": "3150a7bf36fab0eee8d4533d2ec7884197691b065b7219c8c861f5669332d7f1",
+        "size_bytes": 563836,
+        "shape": [
+          3000,
+          4096
+        ],
+        "dtype": "uint8",
+        "camera_frame_number": 50,
+        "quality": {
+          "passed": false,
+          "warnings": [
+            "dynamic_range_low"
+          ],
+          "dynamic_range_u8": 17.0,
+          "dark_fraction": 0.9981943359375,
+          "laser_coverage": 0.9926666666666667
+        },
+        "manifest_sha256": "3150a7bf36fab0eee8d4533d2ec7884197691b065b7219c8c861f5669332d7f1"
+      },
+      {
+        "path": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\chessboard\\fit\\laser 001_12.tif",
+        "sha256": "3c45ce5dcf07f46ed9a957e05e83d4f444e93f2c29468edaeeaa7efb4c0a755f",
+        "size_bytes": 563648,
+        "shape": [
+          3000,
+          4096
+        ],
+        "dtype": "uint8",
+        "camera_frame_number": 51,
+        "quality": {
+          "passed": false,
+          "warnings": [
+            "dynamic_range_low"
+          ],
+          "dynamic_range_u8": 17.0,
+          "dark_fraction": 0.9981904296875,
+          "laser_coverage": 0.993
+        },
+        "manifest_sha256": "3c45ce5dcf07f46ed9a957e05e83d4f444e93f2c29468edaeeaa7efb4c0a755f"
+      },
+      {
+        "path": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\chessboard\\fit\\laser 001_13.tif",
+        "sha256": "d154585cf095fe0f6c9732f77f5c872f54ed67cdeec468be906aa563a1d0d897",
+        "size_bytes": 564624,
+        "shape": [
+          3000,
+          4096
+        ],
+        "dtype": "uint8",
+        "camera_frame_number": 52,
+        "quality": {
+          "passed": false,
+          "warnings": [
+            "dynamic_range_low"
+          ],
+          "dynamic_range_u8": 17.0,
+          "dark_fraction": 0.9981888020833334,
+          "laser_coverage": 0.9923333333333333
+        },
+        "manifest_sha256": "d154585cf095fe0f6c9732f77f5c872f54ed67cdeec468be906aa563a1d0d897"
+      },
+      {
+        "path": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\chessboard\\fit\\laser 001_14.tif",
+        "sha256": "56987206ab3497ac8ecc12f2758b838420510b2629df7579f8b777f435d1b645",
+        "size_bytes": 564214,
+        "shape": [
+          3000,
+          4096
+        ],
+        "dtype": "uint8",
+        "camera_frame_number": 53,
+        "quality": {
+          "passed": false,
+          "warnings": [
+            "dynamic_range_low"
+          ],
+          "dynamic_range_u8": 17.0,
+          "dark_fraction": 0.99819091796875,
+          "laser_coverage": 0.9923333333333333
+        },
+        "manifest_sha256": "56987206ab3497ac8ecc12f2758b838420510b2629df7579f8b777f435d1b645"
+      },
+      {
+        "path": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\chessboard\\fit\\laser 001_15.tif",
+        "sha256": "ebebce56eddc04dc68ad86c472971ef65b58755c56e58eab41e985943481a9c4",
+        "size_bytes": 565624,
+        "shape": [
+          3000,
+          4096
+        ],
+        "dtype": "uint8",
+        "camera_frame_number": 54,
+        "quality": {
+          "passed": false,
+          "warnings": [
+            "dynamic_range_low"
+          ],
+          "dynamic_range_u8": 17.0,
+          "dark_fraction": 0.998189453125,
+          "laser_coverage": 0.9916666666666667
+        },
+        "manifest_sha256": "ebebce56eddc04dc68ad86c472971ef65b58755c56e58eab41e985943481a9c4"
+      },
+      {
+        "path": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\chessboard\\fit\\laser 001_16.tif",
+        "sha256": "597cbe5c6eac9f1c6e48fd40fe6aae9f46a164b4e9a1dea59276babf2d190f35",
+        "size_bytes": 564540,
+        "shape": [
+          3000,
+          4096
+        ],
+        "dtype": "uint8",
+        "camera_frame_number": 55,
+        "quality": {
+          "passed": false,
+          "warnings": [
+            "dynamic_range_low"
+          ],
+          "dynamic_range_u8": 17.0,
+          "dark_fraction": 0.9981919759114584,
+          "laser_coverage": 0.9923333333333333
+        },
+        "manifest_sha256": "597cbe5c6eac9f1c6e48fd40fe6aae9f46a164b4e9a1dea59276babf2d190f35"
+      },
+      {
+        "path": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\chessboard\\fit\\laser 001_17.tif",
+        "sha256": "a184dc3dc7d51723cc5d7bf0c6918306d5c1e8269760ab0ebed64a82eb730d62",
+        "size_bytes": 565052,
+        "shape": [
+          3000,
+          4096
+        ],
+        "dtype": "uint8",
+        "camera_frame_number": 56,
+        "quality": {
+          "passed": false,
+          "warnings": [
+            "dynamic_range_low"
+          ],
+          "dynamic_range_u8": 17.0,
+          "dark_fraction": 0.9981897786458334,
+          "laser_coverage": 0.9923333333333333
+        },
+        "manifest_sha256": "a184dc3dc7d51723cc5d7bf0c6918306d5c1e8269760ab0ebed64a82eb730d62"
+      },
+      {
+        "path": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\chessboard\\fit\\laser 001_18.tif",
+        "sha256": "58dd8db6121a3f07dab7f8e6696b6afd58587dbf81ab3d19a1de72c1168de744",
+        "size_bytes": 566032,
+        "shape": [
+          3000,
+          4096
+        ],
+        "dtype": "uint8",
+        "camera_frame_number": 57,
+        "quality": {
+          "passed": false,
+          "warnings": [
+            "dynamic_range_low"
+          ],
+          "dynamic_range_u8": 17.0,
+          "dark_fraction": 0.9981901041666666,
+          "laser_coverage": 0.992
+        },
+        "manifest_sha256": "58dd8db6121a3f07dab7f8e6696b6afd58587dbf81ab3d19a1de72c1168de744"
+      },
+      {
+        "path": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\chessboard\\fit\\laser 001_19.tif",
+        "sha256": "91a69859613a9e2bfc7d9b6afe416da80e3ee2b540e225cd3ed9e736357ee969",
+        "size_bytes": 565692,
+        "shape": [
+          3000,
+          4096
+        ],
+        "dtype": "uint8",
+        "camera_frame_number": 58,
+        "quality": {
+          "passed": false,
+          "warnings": [
+            "dynamic_range_low"
+          ],
+          "dynamic_range_u8": 17.0,
+          "dark_fraction": 0.9981915690104166,
+          "laser_coverage": 0.9923333333333333
+        },
+        "manifest_sha256": "91a69859613a9e2bfc7d9b6afe416da80e3ee2b540e225cd3ed9e736357ee969"
+      },
+      {
+        "path": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\chessboard\\fit\\laser 001_20.tif",
+        "sha256": "265f8c2565a87feb670cbd7538cdf7cb20584cc462573bebee9b12f2ae32fa7b",
+        "size_bytes": 566466,
+        "shape": [
+          3000,
+          4096
+        ],
+        "dtype": "uint8",
+        "camera_frame_number": 59,
+        "quality": {
+          "passed": false,
+          "warnings": [
+            "dynamic_range_low"
+          ],
+          "dynamic_range_u8": 17.0,
+          "dark_fraction": 0.998192138671875,
+          "laser_coverage": 0.9923333333333333
+        },
+        "manifest_sha256": "265f8c2565a87feb670cbd7538cdf7cb20584cc462573bebee9b12f2ae32fa7b"
+      }
+    ],
+    "all_images_same_shape": true,
+    "all_images_same_dtype": true
+  },
+  "configuration": {
+    "config_path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\configs\\measure_tool_daheng_0811.yaml",
+    "config_sha256": "c22e463aff6dc51565679382cc766a3c7078a57f676809e7b31ee1cbe185f15f",
+    "calibration_manifest": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\configs\\calibration_daheng_0811\\manifest.yaml",
+    "calibration_manifest_sha256": "240c6ea407dbb3d46dd3287467cd8e9e1b92ca9a179fe22a94df2a4983eb2f90",
+    "package_id": "daheng-me2p-1230-20260818-quadratic-graph-v1",
+    "package_manifest_sha256": "94d1c1ca3e95d9e98f5060ea5fc069448674324ac039cbdf5ef9b9c9d9ebe210",
+    "laser_model": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\configs\\calibration_daheng_0811\\quadratic_graph.yaml",
+    "extrinsics": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\configs\\calibration_daheng_0811\\camera_ground_extrinsics.yaml",
+    "intrinsics": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\configs\\calibration_daheng_0811\\calibration_result.yaml",
+    "laser_ray_correction": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\configs\\calibration_daheng_0811\\frozen_c1_4k.json",
+    "code_sha256": "672acd5d03e31170b5df92bb62c1ce89a554ceaa7c29a962c32d1c0ce865ba11"
+  },
+  "protocol": {
+    "source_frames": 20,
+    "steger_once_per_frame": true,
+    "extraction_method": "steger",
+    "extraction_options": {
+      "sigma": 1.5,
+      "threshold": 30.0,
+      "deriv_thresh": 0.5,
+      "roi_margin": 48,
+      "roi_max_height": 512,
+      "scan_axis": "row",
+      "search_roi": {
+        "offset_x": 1760,
+        "offset_y": 0,
+        "width": 480,
+        "height": 3000
+      }
+    },
+    "image_offset_xy": [
+      0,
+      0
+    ],
+    "analytical_roi_used": false,
+    "reconstruction_image_roi_polygon": null,
+    "configured_detector_search_roi_is_not_point_selection": true,
+    "all_c1_valid_reconstructed_points_retained": true,
+    "reconstruction_invalid_points_only_removed": true,
+    "chessboard_black_cell_interpolation": false,
+    "spline_or_lut": false,
+    "height_linear_compensation": false,
+    "enable_laser_ray_correction": true,
+    "c0_base_and_c1_enabled_calls_share_centers": true
+  },
+  "artifact_provenance": {
+    "reused": [
+      "existing Daheng application configuration",
+      "existing Daheng calibration manifest and frozen C1_4k parameters",
+      "existing Steger extractor, C0 quadratic reconstruction, C1 correction, and robust ground-profile kernel"
+    ],
+    "reused_as_target_results": [],
+    "newly_computed": [
+      "one Steger extraction per each of 20 TIFF frames",
+      "C0 base and C1-enabled reconstruction for each shared center array",
+      "one joint robust XY origin/direction and shared S coordinate",
+      "20 per-frame robust Zg=a*S+b fits and residuals",
+      "frame-balanced pooled linear profile, residual structure check, plots, CSVs, and report"
+    ]
+  },
+  "shared_s_definition": {
+    "origin_xy": [
+      4.345466690716022,
+      2.878594498981755
+    ],
+    "direction_xy": [
+      0.012883418031591754,
+      0.9999170053258537
+    ],
+    "formula": "S=(XY-origin_xy) dot direction_xy",
+    "origin_source": "joint robust XY line fit over all C1-valid ground points",
+    "direction_source": "joint robust XY line fit over all C1-valid ground points",
+    "joint_line_fit_inlier_count_for_axis_only": 58375,
+    "joint_line_fit_point_count": 58813,
+    "joint_line_fit_rmse_mm": 0.13609947274493042,
+    "per_frame_redefinition": false
+  },
+  "a_stats": {
+    "mean": -0.0002379078833223681,
+    "median": -0.00023772602447470564,
+    "std": 1.2800827259938548e-05,
+    "range": {
+      "min": -0.0002616202615185105,
+      "max": -0.0002196393376282908,
+      "span": 4.198092389021973e-05
+    }
+  },
+  "b_stats": {
+    "mean": -0.006712634280175258,
+    "median": -0.00661112401293131,
+    "std": 0.0010992935805432232,
+    "range": {
+      "min": -0.008807571665947872,
+      "max": -0.00508052630916802,
+      "span": 0.0037270453567798513
+    }
+  },
+  "robust_residual_sigma_mm": 0.05054871336612346,
+  "max_frame_model_deviation_at_global_s_endpoints_mm": 0.005218645531058164,
+  "pooled_ground_profile": {
+    "method": "weighted robust linear least squares with each frame total weight=1",
+    "a_mm_per_mm": -0.00023762871066852824,
+    "b_mm": -0.006692715809298689,
+    "rmse_mm": 0.06631698124461828,
+    "p95_abs_mm": 0.14184433113238845,
+    "max_abs_mm": 0.6656535768461977,
+    "point_count": 58813,
+    "inlier_count": 50530,
+    "s_span_mm": 291.17293823617234
+  },
+  "spatial_structure": {
+    "status": "stable_spatial_structure_candidate",
+    "covered_bin_count": 50,
+    "coverage_requirement_frames": 16,
+    "median_profile_rms_mm": 0.055807394774195995,
+    "median_profile_peak_to_peak_mm": 0.23258605170974875,
+    "noise_sigma_mm": 0.05054871336612346,
+    "frame_median_repeatability_sigma_mm": 0.0015022604907416366,
+    "structure_to_noise_ratio": 1.1040319536915608,
+    "structure_to_repeatability_ratio": 37.14894661620567,
+    "profile_s_vs_residual_correlation": -0.21829506090255776,
+    "heuristic": "candidate when both profile RMS and peak-to-peak exceed 3x across-frame bin-median repeatability"
+  },
+  "conclusions": {
+    "GROUND_LINEAR_MODEL": "REVIEW_REQUIRED_SPATIAL_STRUCTURE",
+    "GROUND_PROFILE_STABILITY": "STABLE_SPATIAL_STRUCTURE",
+    "diagnostic_only": true,
+    "parameter_freeze_candidate_only": true
+  },
+  "outputs": [
+    "ground_frame_metrics.csv",
+    "ground_residuals.csv",
+    "ground_profile_pooled.csv",
+    "ground_reference_summary.json",
+    "ground_profile_all_frames.png",
+    "ground_detrended_residual_vs_s.png",
+    "ground_ab_stability.png",
+    "ground_reference_report.md"
+  ]
+}
