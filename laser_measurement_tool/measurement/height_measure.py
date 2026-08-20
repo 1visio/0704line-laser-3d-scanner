@@ -23,8 +23,8 @@ class MeasurementParams:
 
     outlier_sigma_multiplier: float = 2.0
     outlier_max_iterations: int = 5
-    min_baseline_points: int = 30
-    min_height_points: int = 30
+    min_baseline_points: int = 20
+    min_height_points: int = 20
 
     def __post_init__(self) -> None:
         if self.outlier_sigma_multiplier <= 0.0:

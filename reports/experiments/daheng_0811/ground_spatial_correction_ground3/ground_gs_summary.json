@@ -1,0 +1,567 @@
+{
+  "schema_version": 1,
+  "created_at_local": "2026-08-19T18:22:47+0800",
+  "classification": {
+    "GROUND_GS_STATUS": "PASS",
+    "allow_new_held_out_block_validation": true,
+    "selected_model_name": "cubic_bspline_3_interior_knots",
+    "all_folds_no_extrapolation": true,
+    "all_folds_no_clamp": true,
+    "max_unsupported_bin_count": 2
+  },
+  "selected_model": {
+    "model_name": "cubic_bspline_3_interior_knots",
+    "interior_knot_count": 3,
+    "basis_count": 7,
+    "coefficients": [
+      0.006395057203740177,
+      0.004165044298365104,
+      -0.0013955298701927733,
+      -0.011072335133394258,
+      -0.020026679758267715,
+      -0.005466246874989702,
+      0.0006462313478851442
+    ],
+    "knots": [
+      -147.0472008100069,
+      -147.0472008100069,
+      -147.0472008100069,
+      -147.0472008100069,
+      -74.25396625096381,
+      -1.4607316919207278,
+      71.33250286712237,
+      144.12573742616544,
+      144.12573742616544,
+      144.12573742616544,
+      144.12573742616544
+    ],
+    "domain_min_mm": -147.0472008100069,
+    "domain_max_mm": 144.12573742616544,
+    "robust_loss": "soft_l1",
+    "robust_scale_mm": 0.04515540333132596,
+    "smoothness_lambda": 0.001,
+    "correction_parameters_sha256": "a6aee2d10839ca3cc2c6fb641dd82cef098c479575f39b8060c226dabd497be7",
+    "full_fit_observation_count": 192
+  },
+  "protocol": {
+    "pose_ids": [
+      "ground1",
+      "002",
+      "003",
+      "004"
+    ],
+    "pose_weights": {
+      "ground1": 0.25,
+      "002": 0.25,
+      "003": 0.25,
+      "004": 0.25
+    },
+    "frame_counts": {
+      "ground1": 20,
+      "002": 5,
+      "003": 5,
+      "004": 5
+    },
+    "frame_balancing_verified": true,
+    "pose_balancing_verified": true,
+    "held_out_pose_cv_verified": true,
+    "four_pose_required": true,
+    "fixed_s_formula": "S=(XY-Ground1_origin_xy) dot Ground1_direction_xy",
+    "origin_xy": [
+      4.345466690716022,
+      2.878594498981755
+    ],
+    "direction_xy": [
+      0.012883418031591754,
+      0.9999170053258537
+    ],
+    "s_domain_min_mm": -147.0472008100069,
+    "s_domain_max_mm": 144.12573742616544,
+    "bin_count": 50,
+    "s_bin_edges_mm": [
+      -147.0472008100069,
+      -141.22374204528344,
+      -135.40028328056002,
+      -129.57682451583656,
+      -123.75336575111311,
+      -117.92990698638967,
+      -112.10644822166623,
+      -106.28298945694277,
+      -100.45953069221932,
+      -94.63607192749588,
+      -88.81261316277244,
+      -82.98915439804898,
+      -77.16569563332554,
+      -71.34223686860209,
+      -65.51877810387865,
+      -59.69531933915519,
+      -53.87186057443175,
+      -48.04840180970831,
+      -42.224943044984855,
+      -36.401484280261414,
+      -30.57802551553796,
+      -24.75456675081452,
+      -18.931107986091064,
+      -13.107649221367609,
+      -7.284190456644183,
+      -1.4607316919207278,
+      4.362727072802727,
+      10.186185837526153,
+      16.009644602249608,
+      21.833103366973063,
+      27.656562131696518,
+      33.480020896419944,
+      39.3034796611434,
+      45.126938425866854,
+      50.95039719059028,
+      56.773855955313735,
+      62.59731472003719,
+      68.42077348476064,
+      74.24423224948407,
+      80.06769101420753,
+      85.89114977893098,
+      91.7146085436544,
+      97.53806730837786,
+      103.36152607310132,
+      109.18498483782477,
+      115.00844360254823,
+      120.83190236727168,
+      126.65536113199508,
+      132.47881989671853,
+      138.302278661442,
+      144.12573742616544
+    ],
+    "raw_pipeline_id": "C1-enabled per-frame detrended residual r",
+    "corrected_pipeline_id": "same residual r minus diagnostic G(S)",
+    "correction_enabled": true,
+    "extrapolation_policy": "reject and mark unsupported",
+    "clamp_policy": "forbidden",
+    "interpolation_policy": "none; frozen bins and strict common support only",
+    "cv_scheme": "leave_one_pose_out",
+    "smoothness_lambda": 0.001,
+    "robust_loss": "soft_l1",
+    "candidate_interior_knot_counts": [
+      3,
+      4,
+      5
+    ],
+    "candidate_degree": 3,
+    "no_c0_c1_refit": true,
+    "no_production_change": true
+  },
+  "provenance": {
+    "ground1_summary_path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\output_daheng_0811\\ground_reference_20frames\\ground_reference_summary.json",
+    "ground1_summary_sha256": "7351491151606f2fd7533369f393a46e61796f1ed2e8816385aca3b00064b8f3",
+    "ground1_profile_path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\output_daheng_0811\\ground_reference_20frames\\ground_profile_pooled.csv",
+    "ground1_profile_sha256": "0bed24160bb4a3edceddafde6da9939e5af2967c948b0372cb3e8f70dc29b396",
+    "ground1_residuals_path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\output_daheng_0811\\ground_reference_20frames\\ground_residuals.csv",
+    "ground1_residuals_sha256": "b94ed6e007f9451120343d5ef7a9d62ac808de9f9bfb62ca7af274899bcf73a1",
+    "ground2r_summary_path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\output_daheng_0811\\ground_pose_invariance_ground_only\\ground_pose_invariance_ground_only_summary.json",
+    "ground2r_summary_sha256": "adb8b67b556118d0b121fb59457d9681d723951480d64dd0786ec1cb8de9d8d7",
+    "ground2r_cache_path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\output_daheng_0811\\ground_pose_invariance_ground_only\\ground_pose_geometry_cache.json",
+    "ground2r_cache_sha256": "fa26b98510abb0765e43f6d78bd7310792d199799cd3312bc61d023bdd4c1a6f",
+    "ground2r_ranges_path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\output_daheng_0811\\ground_pose_invariance_ground_only\\ground_only_ranges.yaml",
+    "ground2r_ranges_sha256": "5730bafd06872807321cd5d2d1811fff2bdccbecc3127f2450afd1bf1ac2712e",
+    "ground1_input_manifest": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\chessboard\\dataset_manifest.yaml",
+    "ground2r_input_manifest": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\.chessboard_v2.inprogress\\dataset_manifest.yaml",
+    "ground1_quality_summary": {
+      "frames": 20,
+      "passed": 0,
+      "warnings": 20,
+      "warning_counts": {
+        "dynamic_range_low": 20
+      }
+    },
+    "ground2r_quality_summary": {
+      "frames": 15,
+      "passed": 0,
+      "warnings": 15,
+      "warning_counts": {
+        "dynamic_range_low": 15
+      }
+    },
+    "ground2r_exposure_us_by_pose": {
+      "002": [
+        300.0
+      ],
+      "003": [
+        320.0
+      ],
+      "004": [
+        350.0
+      ]
+    },
+    "config_path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\configs\\measure_tool_daheng_0811.yaml",
+    "config_sha256": "c22e463aff6dc51565679382cc766a3c7078a57f676809e7b31ee1cbe185f15f",
+    "calibration_manifest": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\configs\\calibration_daheng_0811\\manifest.yaml",
+    "calibration_manifest_sha256": "240c6ea407dbb3d46dd3287467cd8e9e1b92ca9a179fe22a94df2a4983eb2f90",
+    "enable_laser_ray_correction": true,
+    "analysis_code_sha256": "d19b17f8d2c04e014fd6178799ff32139a4257100325b40ea24a0bba2e4cc80b",
+    "frame_ids_by_pose": {
+      "ground1": [
+        "ground1_frame_01",
+        "ground1_frame_02",
+        "ground1_frame_03",
+        "ground1_frame_04",
+        "ground1_frame_05",
+        "ground1_frame_06",
+        "ground1_frame_07",
+        "ground1_frame_08",
+        "ground1_frame_09",
+        "ground1_frame_10",
+        "ground1_frame_11",
+        "ground1_frame_12",
+        "ground1_frame_13",
+        "ground1_frame_14",
+        "ground1_frame_15",
+        "ground1_frame_16",
+        "ground1_frame_17",
+        "ground1_frame_18",
+        "ground1_frame_19",
+        "ground1_frame_20"
+      ],
+      "002": [
+        "pose002_frame_01",
+        "pose002_frame_02",
+        "pose002_frame_03",
+        "pose002_frame_04",
+        "pose002_frame_05"
+      ],
+      "003": [
+        "pose003_frame_06",
+        "pose003_frame_07",
+        "pose003_frame_08",
+        "pose003_frame_09",
+        "pose003_frame_10"
+      ],
+      "004": [
+        "pose004_frame_11",
+        "pose004_frame_12",
+        "pose004_frame_13",
+        "pose004_frame_14",
+        "pose004_frame_15"
+      ]
+    }
+  },
+  "model_comparison": [
+    {
+      "interior_knot_count": 3,
+      "basis_count": 7,
+      "smoothness_lambda": 0.001,
+      "robust_loss": "soft_l1",
+      "fold_count": 4,
+      "common_bin_count_min": 48,
+      "common_bin_count_max": 48,
+      "cv_mean_raw_rmse_mm": 0.04709188338016243,
+      "cv_mean_corrected_rmse_mm": 0.0447483739483042,
+      "cv_mean_raw_p95_abs_mm": 0.10684819490760887,
+      "cv_mean_corrected_p95_abs_mm": 0.09405126051494511,
+      "cv_mean_raw_peak_to_peak_mm": 0.18669391272755087,
+      "cv_mean_corrected_peak_to_peak_mm": 0.18512943433480472,
+      "cv_mean_rmse_improvement_mm": 0.0023435094318582303,
+      "cv_mean_p95_improvement_mm": 0.012796934392663762,
+      "cv_mean_peak_to_peak_improvement_mm": 0.0015644783927461492,
+      "cv_min_rmse_improvement_mm": 0.001722542406866874,
+      "cv_min_p95_improvement_mm": 0.010656855240104068,
+      "cv_min_peak_to_peak_improvement_mm": 0.00035887017169847213,
+      "all_fold_rmse_improved": true,
+      "all_fold_p95_improved_or_equal": true,
+      "all_fold_peak_to_peak_improved_or_equal": true,
+      "stable_cross_pose_improvement": true,
+      "full_fit_observation_count": 192,
+      "full_fit_success": true,
+      "full_fit_cost": 0.1348083080776233,
+      "selected": true
+    },
+    {
+      "interior_knot_count": 4,
+      "basis_count": 8,
+      "smoothness_lambda": 0.001,
+      "robust_loss": "soft_l1",
+      "fold_count": 4,
+      "common_bin_count_min": 48,
+      "common_bin_count_max": 48,
+      "cv_mean_raw_rmse_mm": 0.04709188338016243,
+      "cv_mean_corrected_rmse_mm": 0.04481003744342416,
+      "cv_mean_raw_p95_abs_mm": 0.10684819490760887,
+      "cv_mean_corrected_p95_abs_mm": 0.09431314927641747,
+      "cv_mean_raw_peak_to_peak_mm": 0.18669391272755087,
+      "cv_mean_corrected_peak_to_peak_mm": 0.18531217490230426,
+      "cv_mean_rmse_improvement_mm": 0.0022818459367382696,
+      "cv_mean_p95_improvement_mm": 0.012535045631191403,
+      "cv_mean_peak_to_peak_improvement_mm": 0.0013817378252466428,
+      "cv_min_rmse_improvement_mm": 0.0016894918689782726,
+      "cv_min_p95_improvement_mm": 0.010453398293358826,
+      "cv_min_peak_to_peak_improvement_mm": 0.00021380473035031988,
+      "all_fold_rmse_improved": true,
+      "all_fold_p95_improved_or_equal": true,
+      "all_fold_peak_to_peak_improved_or_equal": true,
+      "stable_cross_pose_improvement": true,
+      "full_fit_observation_count": 192,
+      "full_fit_success": true,
+      "full_fit_cost": 0.1349261361778738,
+      "selected": false
+    },
+    {
+      "interior_knot_count": 5,
+      "basis_count": 9,
+      "smoothness_lambda": 0.001,
+      "robust_loss": "soft_l1",
+      "fold_count": 4,
+      "common_bin_count_min": 48,
+      "common_bin_count_max": 48,
+      "cv_mean_raw_rmse_mm": 0.04709188338016243,
+      "cv_mean_corrected_rmse_mm": 0.044778330598541805,
+      "cv_mean_raw_p95_abs_mm": 0.10684819490760887,
+      "cv_mean_corrected_p95_abs_mm": 0.09422747741385479,
+      "cv_mean_raw_peak_to_peak_mm": 0.18669391272755087,
+      "cv_mean_corrected_peak_to_peak_mm": 0.18528922069819245,
+      "cv_mean_rmse_improvement_mm": 0.0023135527816206293,
+      "cv_mean_p95_improvement_mm": 0.012620717493754093,
+      "cv_mean_peak_to_peak_improvement_mm": 0.0014046920293584383,
+      "cv_min_rmse_improvement_mm": 0.0017131602399144338,
+      "cv_min_p95_improvement_mm": 0.010547725150865231,
+      "cv_min_peak_to_peak_improvement_mm": 0.0001874779750694333,
+      "all_fold_rmse_improved": true,
+      "all_fold_p95_improved_or_equal": true,
+      "all_fold_peak_to_peak_improved_or_equal": true,
+      "stable_cross_pose_improvement": true,
+      "full_fit_observation_count": 192,
+      "full_fit_success": true,
+      "full_fit_cost": 0.13482959963254146,
+      "selected": false
+    }
+  ],
+  "cv_metrics": [
+    {
+      "interior_knot_count": 3,
+      "held_out_pose": "ground1",
+      "train_pose_ids": [
+        "002",
+        "003",
+        "004"
+      ],
+      "train_pose_count": 3,
+      "train_pose_weights": {
+        "002": 0.3333333333333333,
+        "003": 0.3333333333333333,
+        "004": 0.3333333333333333
+      },
+      "held_out_frame_ids": [
+        "ground1_frame_01",
+        "ground1_frame_02",
+        "ground1_frame_03",
+        "ground1_frame_04",
+        "ground1_frame_05",
+        "ground1_frame_06",
+        "ground1_frame_07",
+        "ground1_frame_08",
+        "ground1_frame_09",
+        "ground1_frame_10",
+        "ground1_frame_11",
+        "ground1_frame_12",
+        "ground1_frame_13",
+        "ground1_frame_14",
+        "ground1_frame_15",
+        "ground1_frame_16",
+        "ground1_frame_17",
+        "ground1_frame_18",
+        "ground1_frame_19",
+        "ground1_frame_20"
+      ],
+      "common_bin_count": 48,
+      "common_s_min_mm": -147.0472008100069,
+      "common_s_max_mm": 132.47881989671853,
+      "held_out_valid_bin_count": 50,
+      "train_valid_bin_count_by_pose": {
+        "002": 49,
+        "003": 48,
+        "004": 49
+      },
+      "unsupported_bin_count": 2,
+      "extrapolation_count": 0,
+      "clamp_count": 0,
+      "interpolation_count": 0,
+      "fold_status": "ok_common_support",
+      "model_success": true,
+      "model_cost": 0.09326588486881533,
+      "raw_rmse_mm": 0.05682671477176711,
+      "raw_p95_abs_mm": 0.13702197787519857,
+      "raw_peak_to_peak_mm": 0.23258605170974875,
+      "corrected_rmse_mm": 0.05362299136930165,
+      "corrected_p95_abs_mm": 0.1261214307540797,
+      "corrected_peak_to_peak_mm": 0.23222718153805028,
+      "rmse_improvement_mm": 0.0032037234024654623,
+      "p95_improvement_mm": 0.010900547121118875,
+      "peak_to_peak_improvement_mm": 0.00035887017169847213
+    },
+    {
+      "interior_knot_count": 3,
+      "held_out_pose": "002",
+      "train_pose_ids": [
+        "ground1",
+        "003",
+        "004"
+      ],
+      "train_pose_count": 3,
+      "train_pose_weights": {
+        "ground1": 0.3333333333333333,
+        "003": 0.3333333333333333,
+        "004": 0.3333333333333333
+      },
+      "held_out_frame_ids": [
+        "pose002_frame_01",
+        "pose002_frame_02",
+        "pose002_frame_03",
+        "pose002_frame_04",
+        "pose002_frame_05"
+      ],
+      "common_bin_count": 48,
+      "common_s_min_mm": -147.0472008100069,
+      "common_s_max_mm": 132.47881989671853,
+      "held_out_valid_bin_count": 49,
+      "train_valid_bin_count_by_pose": {
+        "ground1": 50,
+        "003": 48,
+        "004": 49
+      },
+      "unsupported_bin_count": 1,
+      "extrapolation_count": 0,
+      "clamp_count": 0,
+      "interpolation_count": 0,
+      "fold_status": "ok_common_support",
+      "model_success": true,
+      "model_cost": 0.10617644576797139,
+      "raw_rmse_mm": 0.04209315813454998,
+      "raw_p95_abs_mm": 0.09384572795056134,
+      "raw_peak_to_peak_mm": 0.16681522962027528,
+      "corrected_rmse_mm": 0.04022490241842636,
+      "corrected_p95_abs_mm": 0.0784285560742361,
+      "corrected_peak_to_peak_mm": 0.16564853927722703,
+      "rmse_improvement_mm": 0.001868255716123618,
+      "p95_improvement_mm": 0.015417171876325242,
+      "peak_to_peak_improvement_mm": 0.0011666903430482545
+    },
+    {
+      "interior_knot_count": 3,
+      "held_out_pose": "003",
+      "train_pose_ids": [
+        "ground1",
+        "002",
+        "004"
+      ],
+      "train_pose_count": 3,
+      "train_pose_weights": {
+        "ground1": 0.3333333333333333,
+        "002": 0.3333333333333333,
+        "004": 0.3333333333333333
+      },
+      "held_out_frame_ids": [
+        "pose003_frame_06",
+        "pose003_frame_07",
+        "pose003_frame_08",
+        "pose003_frame_09",
+        "pose003_frame_10"
+      ],
+      "common_bin_count": 48,
+      "common_s_min_mm": -147.0472008100069,
+      "common_s_max_mm": 132.47881989671853,
+      "held_out_valid_bin_count": 48,
+      "train_valid_bin_count_by_pose": {
+        "ground1": 50,
+        "002": 49,
+        "004": 49
+      },
+      "unsupported_bin_count": 0,
+      "extrapolation_count": 0,
+      "clamp_count": 0,
+      "interpolation_count": 0,
+      "fold_status": "ok_common_support",
+      "model_success": true,
+      "model_cost": 0.10458405330822106,
+      "raw_rmse_mm": 0.04464317871419111,
+      "raw_p95_abs_mm": 0.1031727916500895,
+      "raw_peak_to_peak_mm": 0.17146223860569126,
+      "corrected_rmse_mm": 0.04206366251221414,
+      "corrected_p95_abs_mm": 0.08895962831698263,
+      "corrected_peak_to_peak_mm": 0.16946728950731038,
+      "rmse_improvement_mm": 0.002579516201976967,
+      "p95_improvement_mm": 0.014213163333106862,
+      "peak_to_peak_improvement_mm": 0.0019949490983808826
+    },
+    {
+      "interior_knot_count": 3,
+      "held_out_pose": "004",
+      "train_pose_ids": [
+        "ground1",
+        "002",
+        "003"
+      ],
+      "train_pose_count": 3,
+      "train_pose_weights": {
+        "ground1": 0.3333333333333333,
+        "002": 0.3333333333333333,
+        "003": 0.3333333333333333
+      },
+      "held_out_frame_ids": [
+        "pose004_frame_11",
+        "pose004_frame_12",
+        "pose004_frame_13",
+        "pose004_frame_14",
+        "pose004_frame_15"
+      ],
+      "common_bin_count": 48,
+      "common_s_min_mm": -147.0472008100069,
+      "common_s_max_mm": 132.47881989671853,
+      "held_out_valid_bin_count": 49,
+      "train_valid_bin_count_by_pose": {
+        "ground1": 50,
+        "002": 49,
+        "003": 48
+      },
+      "unsupported_bin_count": 1,
+      "extrapolation_count": 0,
+      "clamp_count": 0,
+      "interpolation_count": 0,
+      "fold_status": "ok_common_support",
+      "model_success": true,
+      "model_cost": 0.09976240327128051,
+      "raw_rmse_mm": 0.04480448190014153,
+      "raw_p95_abs_mm": 0.09335228215458607,
+      "raw_peak_to_peak_mm": 0.1759121309744882,
+      "corrected_rmse_mm": 0.04308193949327466,
+      "corrected_p95_abs_mm": 0.082695426914482,
+      "corrected_peak_to_peak_mm": 0.17317472701663122,
+      "rmse_improvement_mm": 0.001722542406866874,
+      "p95_improvement_mm": 0.010656855240104068,
+      "peak_to_peak_improvement_mm": 0.0027374039578569875
+    }
+  ],
+  "output_files": [
+    "ground_gs_frame_metrics.csv",
+    "ground_gs_frame_residuals.csv",
+    "ground_gs_pose_profiles.csv",
+    "ground_gs_cv_metrics.csv",
+    "ground_gs_model_comparison.csv",
+    "ground_gs_candidate_coefficients.csv",
+    "ground_gs_profile_candidates.png",
+    "ground_gs_cv_improvement.png",
+    "ground_gs_selected_cv_residuals.png",
+    "ground_gs_summary.json",
+    "ground_gs_report.md"
+  ],
+  "artifact_provenance": {
+    "reused": [
+      "Ground-1 frozen origin_xy/direction_xy and 50 S-bin edges",
+      "Ground-1 frame-level detrended residuals and pooled profile",
+      "Ground-2R image-geometry ground-only ranges, one-Steger cache, and pose grouping",
+      "Daheng C1-enabled calibration/reconstruction package; no C0/C1 refit"
+    ],
+    "newly_computed": [
+      "Ground-2R per-frame C1 ground-only residual arrays from cached centers",
+      "four-pose frame-balanced and pose-balanced profiles",
+      "3/4/5-knot cubic B-spline robust+smoothing candidates",
+      "four leave-one-pose-out CV folds, selected full-data freeze candidate, and diagnostics"
+    ]
+  }
+}

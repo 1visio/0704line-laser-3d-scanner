@@ -60,8 +60,8 @@ reconstruction:
 measurement:
   outlier_sigma_multiplier: 2.0      # 残差超过该倍数稳健 σ 的点被剔除
   outlier_max_iterations: 5          # 离群点剔除最大迭代次数
-  min_baseline_points: 30            # 基准线最少点数
-  min_height_points: 30              # 高度线最少点数
+  min_baseline_points: 20            # 基准线最少点数
+  min_height_points: 20              # 高度线最少点数
 
 output:
   dir: ../output                     # 结果输出目录

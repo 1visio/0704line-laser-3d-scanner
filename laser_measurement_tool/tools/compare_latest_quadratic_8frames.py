@@ -6,6 +6,7 @@ old coordinates, and never reads source images or reruns laser-center extraction
 
 from __future__ import annotations
 
+import argparse
 import csv
 import hashlib
 import json
@@ -155,7 +156,33 @@ def file_sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--measurement-root",
+        type=Path,
+        default=TOOL_ROOT / "output_daheng_0811",
+        help="Directory containing the saved *_measure inputs.",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        help="Output directory (default: <measurement-root>/model_comparison_latest_quadratic_8frames_v2).",
+    )
+    parser.add_argument(
+        "--validation-source",
+        type=Path,
+        default=Path(
+            "D:/Docs/linelaserscan/calibration_tool/projects/daheng/outputs/"
+            "0811/laser_model/calibration_points.csv"
+        ),
+        help="Calibration validation CSV.",
+    )
+    return parser.parse_args()
+
+
 def main() -> int:
+    args = parse_args()
     app = load_app_config(TOOL_ROOT / "configs" / "measure_tool_daheng_0811.yaml")
     old_model_path = (
         TOOL_ROOT / "configs" / "calibration_daheng_0811" / "circular_cone.yaml"
@@ -179,8 +206,12 @@ def main() -> int:
         app.calibration.ground_u_compensation,
     )
 
-    measurement_root = TOOL_ROOT / "output_daheng_0811"
-    output = measurement_root / "model_comparison_latest_quadratic_8frames_v2"
+    measurement_root = args.measurement_root.resolve()
+    output = (
+        args.output.resolve()
+        if args.output is not None
+        else measurement_root / "model_comparison_latest_quadratic_8frames_v2"
+    )
     if output.exists():
         raise FileExistsError(f"output already exists: {output}")
     output.mkdir(parents=True)
@@ -399,10 +430,7 @@ def main() -> int:
         selected_rows,
     )
 
-    validation_source = Path(
-        "D:/Docs/linelaserscan/calibration_tool/projects/daheng/outputs/"
-        "0811/laser_model/calibration_points.csv"
-    )
+    validation_source = args.validation_source.resolve()
     with validation_source.open("r", newline="", encoding="utf-8-sig") as stream:
         validation_rows = [
             row for row in csv.DictReader(stream) if row["split"] == "validation"

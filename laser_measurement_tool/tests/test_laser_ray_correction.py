@@ -28,10 +28,7 @@ TOOL_ROOT = Path(__file__).resolve().parents[1]
 C1_PATH = TOOL_ROOT / "configs" / "calibration_daheng_0811" / "frozen_c1_4k.json"
 DAHENG_CONFIG = TOOL_ROOT / "configs" / "measure_tool_daheng_0811.yaml"
 DAHENG_MANIFEST = TOOL_ROOT / "configs" / "calibration_daheng_0811" / "manifest.yaml"
-FROZEN_C0 = Path(
-    "D:/Docs/linelaserscan/calibration_tool/projects/daheng/outputs/0818/"
-    "c0_freeze/quadratic_graph.yaml"
-)
+FROZEN_C0 = TOOL_ROOT / "tests" / "data" / "daheng_frozen_c0_reference.yaml"
 
 
 def _rays_for_s(values: np.ndarray, correction: object) -> np.ndarray:

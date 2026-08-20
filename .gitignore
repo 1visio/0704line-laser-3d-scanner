@@ -5,6 +5,17 @@ __pycache__/
 dist/
 build/
 *.egg-info/
+.env
+.env.*
+!.env.example
+.vscode/
+.idea/
+.coverage
+coverage.xml
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+*.log
 
 # 原始图像和运行结果通常体积较大，仅保留目录骨架。
 data/raw/*/*
@@ -24,3 +35,7 @@ laser_measurement_tool/data/
 laser_measurement_tool/output/
 laser_measurement_tool/outputs/
 laser_measurement_tool/recordings/
+
+# Device/date-specific experiment runs are local artifacts. Keep their
+# provenance summaries in reports/ when a result must be reviewed in Git.
+laser_measurement_tool/output_daheng_*/

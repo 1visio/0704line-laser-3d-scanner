@@ -1,0 +1,373 @@
+{
+  "schema_version": 1,
+  "created_at_local": "2026-08-19T17:10:16+0800",
+  "ground1_reuse": {
+    "summary_path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\output_daheng_0811\\ground_reference_20frames\\ground_reference_summary.json",
+    "summary_sha256": "7351491151606f2fd7533369f393a46e61796f1ed2e8816385aca3b00064b8f3",
+    "profile_path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\output_daheng_0811\\ground_reference_20frames\\ground_profile_pooled.csv",
+    "profile_sha256": "0bed24160bb4a3edceddafde6da9939e5af2967c948b0372cb3e8f70dc29b396",
+    "frozen_origin_xy": [
+      4.345466690716022,
+      2.878594498981755
+    ],
+    "frozen_direction_xy": [
+      0.012883418031591754,
+      0.9999170053258537
+    ],
+    "bin_count": 50,
+    "s_min_mm": -147.0472008100069,
+    "s_max_mm": 144.12573742616544,
+    "ground1_profile_status": {
+      "GROUND_LINEAR_MODEL": "REVIEW_REQUIRED_SPATIAL_STRUCTURE",
+      "GROUND_PROFILE_STABILITY": "STABLE_SPATIAL_STRUCTURE",
+      "diagnostic_only": true,
+      "parameter_freeze_candidate_only": true
+    }
+  },
+  "new_data_audit": {
+    "data_dir": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\.chessboard_v2.inprogress\\fit",
+    "dataset_manifest": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\.chessboard_v2.inprogress\\dataset_manifest.yaml",
+    "frames_csv": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\.chessboard_v2.inprogress\\frames.csv",
+    "dataset_status": "completed",
+    "quality_summary": {
+      "frames": 15,
+      "passed": 0,
+      "warnings": 15,
+      "warning_counts": {
+        "dynamic_range_low": 15
+      }
+    },
+    "pose_counts": {
+      "002": 5,
+      "003": 5,
+      "004": 5
+    },
+    "exposure_us_by_pose": {
+      "002": [
+        300.0
+      ],
+      "003": [
+        320.0
+      ],
+      "004": [
+        350.0
+      ]
+    }
+  },
+  "configuration": {
+    "config_path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\configs\\measure_tool_daheng_0811.yaml",
+    "config_sha256": "c22e463aff6dc51565679382cc766a3c7078a57f676809e7b31ee1cbe185f15f",
+    "enable_laser_ray_correction": true,
+    "calibration_manifest": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\configs\\calibration_daheng_0811\\manifest.yaml",
+    "calibration_package_id": "daheng-me2p-1230-20260818-quadratic-graph-v1",
+    "calibration_package_manifest_sha256": "94d1c1ca3e95d9e98f5060ea5fc069448674324ac039cbdf5ef9b9c9d9ebe210",
+    "analysis_code_sha256": "c23b2f2c5a44123f18da81c0b2d61872ac26917254cb9617e7a5b42dfc085238"
+  },
+  "geometry_selection": {
+    "ranges_path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\output_daheng_0811\\ground_pose_invariance_ground_only\\ground_only_ranges.yaml",
+    "ranges_sha256": "5730bafd06872807321cd5d2d1811fff2bdccbecc3127f2450afd1bf1ac2712e",
+    "cache_path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\output_daheng_0811\\ground_pose_invariance_ground_only\\ground_pose_geometry_cache.json",
+    "cache_sha256": "fa26b98510abb0765e43f6d78bd7310792d199799cd3312bc61d023bdd4c1a6f",
+    "selection_basis": "image_geometry_only",
+    "residual_used": false,
+    "residual_threshold_used": false,
+    "shared_within_pose": true,
+    "ranges_by_pose": {
+      "002": {
+        "rationale": "Median/overlay shows an upper board-perimeter or protrusion transition around v=90; retain the stable main chessboard-plane track below it. No separate lower-edge track was visible in the captured image range.",
+        "excluded_geometry": "v < 110: upper perimeter/protrusion transition",
+        "ranges": [
+          {
+            "axis": "v",
+            "min": 110.0,
+            "max": 3000.0,
+            "include_max": true
+          }
+        ],
+        "selection_basis": "image_geometry_only",
+        "residual_used": false,
+        "residual_threshold_used": false
+      },
+      "003": {
+        "rationale": "Median/overlay shows an upper board-perimeter or protrusion transition around v=140; retain the stable main chessboard-plane track below it. No separate lower-edge track was visible in the captured image range.",
+        "excluded_geometry": "v < 170: upper perimeter/protrusion transition",
+        "ranges": [
+          {
+            "axis": "v",
+            "min": 170.0,
+            "max": 3000.0,
+            "include_max": true
+          }
+        ],
+        "selection_basis": "image_geometry_only",
+        "residual_used": false,
+        "residual_threshold_used": false
+      },
+      "004": {
+        "rationale": "Median/overlay shows an upper board-perimeter or protrusion transition around v=45; retain the stable main chessboard-plane track below it. No separate lower-edge track was visible in the captured image range.",
+        "excluded_geometry": "v < 70: upper perimeter/protrusion transition",
+        "ranges": [
+          {
+            "axis": "v",
+            "min": 70.0,
+            "max": 3000.0,
+            "include_max": true
+          }
+        ],
+        "selection_basis": "image_geometry_only",
+        "residual_used": false,
+        "residual_threshold_used": false
+      }
+    },
+    "mask_overlay_files": [
+      "pose002_ground_only_mask_overlay.png",
+      "pose003_ground_only_mask_overlay.png",
+      "pose004_ground_only_mask_overlay.png"
+    ]
+  },
+  "protocol": {
+    "one_steger_per_frame": true,
+    "steger_centers_reused_from_preview_cache": true,
+    "same_ground_only_centers_to_c0_and_c1": true,
+    "all_c1_valid_points_retained_after_image_geometry_mask": true,
+    "analytical_roi_used": false,
+    "black_cell_interpolation": false,
+    "new_xy_pca": false,
+    "new_origin_or_direction": false,
+    "cross_pose_point_pooling_before_fit": false,
+    "spline_or_lut": false,
+    "height_linear_compensation": false,
+    "fixed_s_formula": "S=(XY-Ground1_origin_xy) dot Ground1_direction_xy",
+    "profile_binning": "Ground-1 frozen 50-bin edges; no extrapolation outside common coverage"
+  },
+  "classification": {
+    "GROUND_POSE_INVARIANCE": "SUPPORTED",
+    "CAMERA_SPACE_STRUCTURE": "SUPPORTED",
+    "BOARD_DEPENDENT_STRUCTURE": "NOT_SUPPORTED",
+    "MIXED_STRUCTURE": "NOT_SELECTED",
+    "ground3_recommendation": "ALLOW",
+    "valid_pose_comparison_count": 3,
+    "full_profile_alignment_flags": {
+      "pose002": true,
+      "pose003": true,
+      "pose004": true
+    },
+    "low_frequency_alignment_flags": {
+      "pose002": true,
+      "pose003": true,
+      "pose004": true
+    },
+    "thresholds": {
+      "full_correlation_min": 0.8,
+      "full_normalized_difference_max": 0.5,
+      "low_frequency_correlation_min": 0.8,
+      "moving_average_window_bins": 5
+    }
+  },
+  "comparison_rows": [
+    {
+      "reference_group": "ground1",
+      "target_group": "pose002",
+      "comparison_type": "ground1_vs_pose",
+      "coverage_requirement_fraction": 0.8,
+      "common_bin_count": 49,
+      "common_s_min_mm": -144.13547142764517,
+      "common_s_max_mm": 135.39054927908026,
+      "common_s_span_mm": 279.52602070672543,
+      "profile_correlation": 0.9358641335186024,
+      "low_frequency_correlation": 0.9589729820876208,
+      "high_frequency_correlation": 0.6512070509233108,
+      "profile_rmse_difference_mm": 0.023329896610585998,
+      "profile_median_abs_difference_mm": 0.013784696190711002,
+      "profile_rms_reference_mm": 0.05631091625324515,
+      "profile_rms_target_mm": 0.04166155677810618,
+      "normalized_profile_difference": 0.41430504354902087,
+      "reference_peak_s_mm": 18.921373984611336,
+      "target_peak_s_mm": 24.74483274933479,
+      "peak_s_offset_mm": 5.823458764723455,
+      "reference_valley_s_mm": 71.33250286712236,
+      "target_valley_s_mm": 65.50904410239892,
+      "valley_s_offset_mm": -5.823458764723441,
+      "reference_frame_rmse_median_mm": 0.06623764380643513,
+      "target_frame_rmse_median_mm": 0.04915875492651892,
+      "detrended_rmse_difference_mm": -0.017078888879916203,
+      "status": "ok"
+    },
+    {
+      "reference_group": "ground1",
+      "target_group": "pose003",
+      "comparison_type": "ground1_vs_pose",
+      "coverage_requirement_fraction": 0.8,
+      "common_bin_count": 48,
+      "common_s_min_mm": -144.13547142764517,
+      "common_s_max_mm": 129.5670905143568,
+      "common_s_span_mm": 273.702561942002,
+      "profile_correlation": 0.9607986402831308,
+      "low_frequency_correlation": 0.9754486962861246,
+      "high_frequency_correlation": 0.8067797223685638,
+      "profile_rmse_difference_mm": 0.018770054807009957,
+      "profile_median_abs_difference_mm": 0.014436444006898884,
+      "profile_rms_reference_mm": 0.05682671477176711,
+      "profile_rms_target_mm": 0.04464317871419111,
+      "normalized_profile_difference": 0.3303033596504047,
+      "reference_peak_s_mm": 18.921373984611336,
+      "target_peak_s_mm": 13.09791521988788,
+      "peak_s_offset_mm": -5.823458764723455,
+      "reference_valley_s_mm": 71.33250286712236,
+      "target_valley_s_mm": 59.68558533767546,
+      "valley_s_offset_mm": -11.646917529446895,
+      "reference_frame_rmse_median_mm": 0.06623764380643513,
+      "target_frame_rmse_median_mm": 0.05092226120973609,
+      "detrended_rmse_difference_mm": -0.015315382596699033,
+      "status": "ok"
+    },
+    {
+      "reference_group": "ground1",
+      "target_group": "pose004",
+      "comparison_type": "ground1_vs_pose",
+      "coverage_requirement_fraction": 0.8,
+      "common_bin_count": 49,
+      "common_s_min_mm": -144.13547142764517,
+      "common_s_max_mm": 135.39054927908026,
+      "common_s_span_mm": 279.52602070672543,
+      "profile_correlation": 0.9342098983865326,
+      "low_frequency_correlation": 0.935503154483764,
+      "high_frequency_correlation": 0.7929632527098766,
+      "profile_rmse_difference_mm": 0.022654850520453,
+      "profile_median_abs_difference_mm": 0.01146050758439993,
+      "profile_rms_reference_mm": 0.05631091625324515,
+      "profile_rms_target_mm": 0.044407496446495144,
+      "normalized_profile_difference": 0.4023172064643402,
+      "reference_peak_s_mm": 18.921373984611336,
+      "target_peak_s_mm": 24.74483274933479,
+      "peak_s_offset_mm": 5.823458764723455,
+      "reference_valley_s_mm": 71.33250286712236,
+      "target_valley_s_mm": 71.33250286712236,
+      "valley_s_offset_mm": 0.0,
+      "reference_frame_rmse_median_mm": 0.06623764380643513,
+      "target_frame_rmse_median_mm": 0.05198711145425836,
+      "detrended_rmse_difference_mm": -0.014250532352176763,
+      "status": "ok"
+    },
+    {
+      "reference_group": "pose002",
+      "target_group": "pose003",
+      "comparison_type": "pose_pair",
+      "coverage_requirement_fraction": 0.8,
+      "common_bin_count": 48,
+      "common_s_min_mm": -144.13547142764517,
+      "common_s_max_mm": 129.5670905143568,
+      "common_s_span_mm": 273.702561942002,
+      "profile_correlation": 0.9213788725838908,
+      "low_frequency_correlation": 0.955889335394808,
+      "high_frequency_correlation": 0.5507448160050206,
+      "profile_rmse_difference_mm": 0.01731035352095565,
+      "profile_median_abs_difference_mm": 0.012972197159643283,
+      "profile_rms_reference_mm": 0.04209315813454998,
+      "profile_rms_target_mm": 0.04464317871419111,
+      "normalized_profile_difference": 0.3877491258357251,
+      "reference_peak_s_mm": 24.74483274933479,
+      "target_peak_s_mm": 13.09791521988788,
+      "peak_s_offset_mm": -11.64691752944691,
+      "reference_valley_s_mm": 65.50904410239892,
+      "target_valley_s_mm": 59.68558533767546,
+      "valley_s_offset_mm": -5.823458764723455,
+      "reference_frame_rmse_median_mm": 0.04915875492651892,
+      "target_frame_rmse_median_mm": 0.05092226120973609,
+      "detrended_rmse_difference_mm": 0.00176350628321717,
+      "status": "ok"
+    },
+    {
+      "reference_group": "pose002",
+      "target_group": "pose004",
+      "comparison_type": "pose_pair",
+      "coverage_requirement_fraction": 0.8,
+      "common_bin_count": 49,
+      "common_s_min_mm": -144.13547142764517,
+      "common_s_max_mm": 135.39054927908026,
+      "common_s_span_mm": 279.52602070672543,
+      "profile_correlation": 0.9351183373032744,
+      "low_frequency_correlation": 0.9466384395301805,
+      "high_frequency_correlation": 0.7095938338346686,
+      "profile_rmse_difference_mm": 0.01560279414009815,
+      "profile_median_abs_difference_mm": 0.010239530725157368,
+      "profile_rms_reference_mm": 0.04166155677810618,
+      "profile_rms_target_mm": 0.044407496446495144,
+      "normalized_profile_difference": 0.35135496005493905,
+      "reference_peak_s_mm": 24.74483274933479,
+      "target_peak_s_mm": 24.74483274933479,
+      "peak_s_offset_mm": 0.0,
+      "reference_valley_s_mm": 65.50904410239892,
+      "target_valley_s_mm": 71.33250286712236,
+      "valley_s_offset_mm": 5.823458764723441,
+      "reference_frame_rmse_median_mm": 0.04915875492651892,
+      "target_frame_rmse_median_mm": 0.05198711145425836,
+      "detrended_rmse_difference_mm": 0.0028283565277394396,
+      "status": "ok"
+    },
+    {
+      "reference_group": "pose003",
+      "target_group": "pose004",
+      "comparison_type": "pose_pair",
+      "coverage_requirement_fraction": 0.8,
+      "common_bin_count": 48,
+      "common_s_min_mm": -144.13547142764517,
+      "common_s_max_mm": 129.5670905143568,
+      "common_s_span_mm": 273.702561942002,
+      "profile_correlation": 0.9030652826807182,
+      "low_frequency_correlation": 0.9070894189186661,
+      "high_frequency_correlation": 0.721083762596961,
+      "profile_rmse_difference_mm": 0.019632569799023693,
+      "profile_median_abs_difference_mm": 0.014330951182990595,
+      "profile_rms_reference_mm": 0.04464317871419111,
+      "profile_rms_target_mm": 0.04480448190014153,
+      "normalized_profile_difference": 0.43818316754069364,
+      "reference_peak_s_mm": 13.09791521988788,
+      "target_peak_s_mm": 24.74483274933479,
+      "peak_s_offset_mm": 11.64691752944691,
+      "reference_valley_s_mm": 59.68558533767546,
+      "target_valley_s_mm": 71.33250286712236,
+      "valley_s_offset_mm": 11.646917529446895,
+      "reference_frame_rmse_median_mm": 0.05092226120973609,
+      "target_frame_rmse_median_mm": 0.05198711145425836,
+      "detrended_rmse_difference_mm": 0.0010648502445222696,
+      "status": "ok"
+    }
+  ],
+  "output_files": [
+    "ground_only_ranges.yaml",
+    "ground_pose_geometry_cache.json",
+    "pose002_median_image.png",
+    "pose002_median_steger_overlay.png",
+    "pose002_steger_geometry.png",
+    "pose002_ground_only_mask_overlay.png",
+    "pose003_median_image.png",
+    "pose003_median_steger_overlay.png",
+    "pose003_steger_geometry.png",
+    "pose003_ground_only_mask_overlay.png",
+    "pose004_median_image.png",
+    "pose004_median_steger_overlay.png",
+    "pose004_steger_geometry.png",
+    "pose004_ground_only_mask_overlay.png",
+    "ground_pose_frame_metrics_ground_only.csv",
+    "ground_pose_profiles_ground_only.csv",
+    "ground_pose_comparison_ground_only.csv",
+    "ground_pose_residual_overlay_ground_only.png",
+    "ground_pose_pairwise_difference_ground_only.png",
+    "ground_pose_invariance_ground_only_report.md",
+    "ground_pose_invariance_ground_only_summary.json"
+  ],
+  "artifact_provenance": {
+    "reused": [
+      "Ground-1 frozen origin_xy/direction_xy and 50 S-bin edges",
+      "Ground-1 pooled residual profile R_A(S)",
+      "Ground-2 source images, pose grouping, and one-Steger geometry cache",
+      "existing Daheng C1-enabled calibration/reconstruction and robust Zg=a*S+b kernel"
+    ],
+    "newly_computed": [
+      "pose median images and Steger geometry overlays",
+      "pose-level image-geometry ground-only masks/ranges",
+      "ground-only C0/C1 reconstruction, frame fits, balanced profiles, comparisons, and report"
+    ]
+  }
+}

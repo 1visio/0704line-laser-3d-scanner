@@ -233,6 +233,48 @@ python -c "import gxipy; print(gxipy.__file__); print(gxipy.__version__)"
 
 正式标定和运行建议使用同一个算法。下拉框切换只影响下一次启动的当前会话；要改变配置默认值，应修改 `measure_tool.yaml` 的 `extraction.method`。
 
+### 4.4 Session 基准标定
+
+在线窗口的“Session 基准标定”使用当前无障碍棋盘格帧调用 Session-1 的
+`solvePnP` API。棋盘格默认是 `11 × 8` 内角点、方格边长 `20 mm`；如果当前帧是
+硬件 ROI，程序会自动把内参主点换算到 ROI 局部坐标。
+
+成功后只替换当前进程的 runtime ground `R/t`，reference YAML、manifest、C0/C1
+和激光模型均不修改。实时状态会显示：
+
+- `ground 外参`：`reference` 或 `session`；
+- `Session 状态`：`VALID/INVALID`；
+- 检测角点数、重投影 RMSE、相对 reference 的 `Δtranslation` 和 `Δrotation`。
+
+最新尝试会保存为输出目录下的 `session_ground_calibration.json`。例如：
+
+```json
+{
+  "status": "VALID",
+  "runtime": {"ground_extrinsic_source": "session"},
+  "detection": {"corner_count": 88, "reprojection_rmse_px": 0.12},
+  "delta": {"translation_mm": 0.31, "rotation_deg": 0.04}
+}
+```
+
+`optional`（开发默认）允许直接使用 reference；`required` 需要先连接相机并完成
+Session 标定，之后才允许开始在线重建；`disabled` 隐藏该入口并始终使用 reference。
+
+### 4.5 Laser Ground Sanity Check
+
+完成 Session 基准标定后，保持棋盘不动并打开激光，点击“激光地面一致性检查”。
+在线取流时必须等待 Session 外参生效后的新帧；停流时按钮会单独采集一帧并调用同一
+正式链路：`Steger → Frozen C0 → Frozen C1 → Session ground extrinsic`。
+如果当前处理下拉框不是 `steger`，检查按钮会拒绝执行；请停流切回 `steger` 后重新开始。
+配置还必须启用当前 Daheng 的 Frozen C1；否则检查会拒绝执行。
+
+GUI 会显示 `SESSION_CALIBRATION = VALID/INVALID`、Bias Zg、RMSE、P95、Max、
+ground slope 和有效点数。默认至少需要 20 个有限点；异常只报警，不自动减 Bias、
+不拟合 `a*S+b`，也不执行 Surface correction 或 Stage-A。
+
+检查结果会合并保存到 `session_ground_calibration.json` 的
+`laser_ground_sanity` 节点，并记录 `ground_extrinsic_source`、帧号和正式链路。
+
 ## 5. FPS、处理耗时与丢帧解释
 
 实时状态中的几个数值不是同一个概念：
@@ -332,7 +374,7 @@ laser_measurement_tool/output/online_recordings/recording_YYYYMMDD_HHMMSS/
 - 多个障碍物区域不会合并，每个区域独立拟合高度线；
 - 添加基准区域后，如果区域内没有有效激光点，工具会报错并要求重新框选，不会静默退回固定零基准；
 - 完全不添加基准区域时，工具使用固定 `Zg=0` 作为基准，结果中地面噪声和基准线夹角显示为 `—`；
-- `min_baseline_points` 和 `min_height_points` 默认都是 `30`。点数指“经过提取、ROI 筛选、三维重建和有效性过滤后”的点，不是框内肉眼可见的绿色像素数量。
+- `min_baseline_points` 和 `min_height_points` 默认都是 `20`。点数指“经过提取、ROI 筛选、三维重建和有效性过滤后”的点，不是框内肉眼可见的绿色像素数量。
 
 因此，看到激光线很长但提示“height line has too few points”时，先检查 ROI 是否框在绿色中心线上、是否选错了坐标偏移、是否被重建深度/模型范围过滤，再考虑降低点数门槛。
 
@@ -431,7 +473,38 @@ calibration:
 
 如果 `manifest` 非空，它是运行时的权威标定来源，且会校验引用文件哈希。替换任何标定文件后，应由标定工具重新生成 manifest 或重新打包 calibration bundle，不要只手工修改 YAML 中的 SHA-256。
 
-### 9.3 激光提取配置
+### 9.3 Session 基准标定配置
+
+在线 GUI 可选地启用当前会话的棋盘格 ground 外参标定：
+
+```yaml
+session_ground_calibration:
+  mode: optional              # disabled / optional / required
+  pattern_cols: 11
+  pattern_rows: 8
+  square_size_mm: 20.0
+  detector: sb_then_classic   # 或 classic
+  output: null                # 默认写入 output.dir/session_ground_calibration.json
+  sanity:
+    mask_enabled: true
+    mask_inset_mm: 0.0         # 完整物理边界；0 mm，不做腐蚀/膨胀
+    min_valid_points: 20
+    max_abs_bias_mm: 2.0
+    max_rmse_mm: 2.0
+    max_p95_abs_mm: 3.0
+    max_abs_mm: 5.0
+    max_abs_slope_mm_per_mm: 0.02
+```
+
+该 JSON 是独立的运行记录，重复标定只更新这个 JSON；不会覆盖
+`calibration/camera_ground_extrinsics.yaml`。
+
+点击“激光地面一致性检查”后，工具会自动复用 Session PnP 的 pose、内参和畸变，
+投影完整棋盘物理边界生成 mask，并只统计 mask 内的激光重建点。默认使用完整
+12×9 方格边界，不做像素腐蚀/膨胀；mask 不可用时检查直接标记 `INVALID`，不会
+退回整帧统计。
+
+### 9.4 激光提取配置
 
 `measure_tool.yaml` 选择算法，实时 Steger 的共享 profile 位于当前目录结构的同级标定目录：
 
@@ -462,7 +535,7 @@ steger:
 
 这个 profile 同时被标定和在线测量使用。修改后必须重新运行标定/验证，并在结果 JSON 中记录新的 profile 哈希或版本。
 
-### 9.4 重建参数
+### 9.5 重建参数
 
 ```yaml
 reconstruction:
@@ -479,14 +552,14 @@ reconstruction:
 - `image_roi_polygon` 是原始全幅像素坐标的固定四边形，不是硬件 ROI 局部坐标。仅在棋盘姿态固定时启用，姿态变化后要重新测量四个角点；
 - 不要为了“显示更多点”盲目扩大深度范围，先确认标定模型和硬件工作距离。
 
-### 9.5 测量参数
+### 9.6 测量参数
 
 ```yaml
 measurement:
   outlier_sigma_multiplier: 2.0
   outlier_max_iterations: 5
-  min_baseline_points: 30
-  min_height_points: 30
+  min_baseline_points: 20
+  min_height_points: 20
 ```
 
 修改原则：
@@ -496,7 +569,7 @@ measurement:
 - 最后才考虑降低最少点数或放宽离群点规则；
 - 任何影响测量统计的改动都要用已知高度样件重新验证。
 
-### 9.6 输出参数
+### 9.7 输出参数
 
 ```yaml
 output:
@@ -508,7 +581,7 @@ output:
 
 `dir` 仍按配置文件所在目录解析。建议为每个实验使用独立输出目录，避免不同标定包的结果混写。
 
-### 9.7 曝光默认值与标定采集曝光的区别
+### 9.8 曝光默认值与标定采集曝光的区别
 
 在线窗口当前默认曝光 `600 μs` 由在线相机配置模型和界面初始值提供；`measure_tool.yaml` 目前不包含在线相机曝光字段，运行时请在右侧“采集参数”中确认实际回读值。
 

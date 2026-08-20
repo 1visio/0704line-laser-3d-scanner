@@ -17,6 +17,7 @@
 |---|---|
 | [在线实时工具用户手册](laser_measurement_tool/docs/ONLINE_USER_MANUAL.md) | 安装启动、界面操作、相机参数、曝光/ROI、FPS、单帧测量、标定配置、导出和故障排查 |
 | [实时工具模块说明](laser_measurement_tool/README.md) | 实时处理模块、配置字段、测试和开发说明 |
+| [仓库目录职责与整理约定](docs/REPOSITORY_STRUCTURE.md) | 每个目录放什么、主线/历史/产物边界、实验结果归档与清理规则 |
 | [标定工具仓库](https://github.com/1visio/calibration_tool) | 相机内参、外参、激光模型和地面补偿配置的生成与验证 |
 
 第一次使用时请先阅读[在线实时工具用户手册](laser_measurement_tool/docs/ONLINE_USER_MANUAL.md)，不要直接根据旧工程文档配置真实设备。
@@ -156,11 +157,16 @@ laser_measurement_tool/output/online_recordings/
 ```text
 laser_measurement_tool/
 ├─ online_camera.py             实时工具入口
+├─ main.py                      单帧测量 GUI
+├─ scan_offline.py              Stage-1 离线扫描入口
 ├─ online/                      相机、队列、处理和录制运行时
 ├─ gui/                         在线窗口、图像和点云视图
 ├─ laser/                       激光中心提取后端
 ├─ reconstruction/              三维恢复和地面坐标转换
 ├─ measurement/                 单帧区域和高度测量
+├─ scan/                        扫描运动学和点云累积
+├─ visualization/               可视化辅助
+├─ utils/                       图像与元数据 I/O
 ├─ configs/                     测量参数和标定 manifest
 ├─ docs/                        用户手册及界面图
 ├─ tests/                       单元测试和集成测试
@@ -172,7 +178,12 @@ laser_pretest_dataset/          激光条纹预采集和离线分析工具
 reports/                        性能、算法和阶段性报告
 src/line_laser_static/           静态链路和基础数据契约
 tests/                           仓库级静态链路测试
+tools/                           大恒量块实验、回放和验证脚本
+references/                      带来源记录的旧工程参考
+outputs/                         本地实验产物（Git 忽略）
 ```
+
+完整职责、当前重复项和清理边界见[仓库目录职责与整理约定](docs/REPOSITORY_STRUCTURE.md)。
 
 ## 测试
 

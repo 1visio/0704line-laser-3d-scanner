@@ -158,6 +158,33 @@ class MeasureHeightLineTest(unittest.TestCase):
         )
         self.assertGreater(result.height_mean_mm, 0.0)
 
+    def test_twenty_points_is_allowed_and_nineteen_rejected(self) -> None:
+        params = MeasurementParams()
+        result = measure_height_line(
+            _make_baseline(count=20),
+            _make_height_line(count=20),
+            params,
+        )
+        self.assertGreater(result.height_mean_mm, 0.0)
+
+        with self.assertRaisesRegex(
+            MeasurementError, r"height line has too few points: 19 < 20"
+        ):
+            measure_height_line(
+                _make_baseline(count=20),
+                _make_height_line(count=19),
+                params,
+            )
+
+        with self.assertRaisesRegex(
+            MeasurementError, r"baseline line has too few points: 19 < 20"
+        ):
+            measure_height_line(
+                _make_baseline(count=19),
+                _make_height_line(count=20),
+                params,
+            )
+
     def test_degenerate_points_raise(self) -> None:
         identical = np.tile(np.array([[1.0, 2.0, 3.0]]), (50, 1))
         with self.assertRaises(MeasurementError):

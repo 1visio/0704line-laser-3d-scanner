@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import SimpleNamespace
@@ -16,6 +17,21 @@ from laser_stripe_subpixel_module_v2 import (
     LaserStripeSubpixelConfig,
     extract_from_preprocess_result,
 )
+
+try:
+    from laser_measurement_tool.calibration.session_ground import (
+        BoardConfig,
+        create_object_points,
+        estimate_session_ground_extrinsic,
+    )
+except ModuleNotFoundError:
+    # Preserve direct execution from the legacy script directory.
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+    from laser_measurement_tool.calibration.session_ground import (
+        BoardConfig,
+        create_object_points,
+        estimate_session_ground_extrinsic,
+    )
 
 
 DEFAULT_IMAGE_DIR = Path(r"C:\Users\xmc\PycharmProjects\PythonProject\data\picture5")
@@ -103,9 +119,11 @@ def compute_gray_delta(board_image: np.ndarray, laser_image: np.ndarray) -> np.n
 
 
 def build_object_points(chessboard_size: tuple[int, int], square_size_m: float) -> np.ndarray:
-    objp = np.zeros((chessboard_size[0] * chessboard_size[1], 3), np.float32)
-    objp[:, :2] = np.mgrid[0 : chessboard_size[0], 0 : chessboard_size[1]].T.reshape(-1, 2) * square_size_m
-    return objp
+    return create_object_points(
+        chessboard_size[0],
+        chessboard_size[1],
+        square_size_m * 1000.0,
+    ) / 1000.0
 
 
 def detect_board_pose(
@@ -115,20 +133,28 @@ def detect_board_pose(
     dist_coeffs: np.ndarray,
     square_size_m: float,
 ) -> tuple[bool, np.ndarray | None, np.ndarray | None, np.ndarray | None]:
-    gray = cv2.cvtColor(board_image, cv2.COLOR_BGR2GRAY)
-    flags = cv2.CALIB_CB_ADAPTIVE_THRESH | cv2.CALIB_CB_NORMALIZE_IMAGE | cv2.CALIB_CB_FILTER_QUADS
-    found, corners = cv2.findChessboardCorners(gray, chessboard_size, flags=flags)
-    if not found:
+    result = estimate_session_ground_extrinsic(
+        board_image,
+        {"K": camera_matrix, "D": dist_coeffs},
+        BoardConfig(
+            pattern_cols=chessboard_size[0],
+            pattern_rows=chessboard_size[1],
+            square_size_mm=square_size_m * 1000.0,
+            detector="classic",
+        ),
+    )
+    if result.status != "success":
         return False, None, None, None
 
-    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 1e-3)
-    cv2.cornerSubPix(gray, corners, (11, 11), (-1, -1), criteria)
-    objp = build_object_points(chessboard_size, square_size_m)
-    solved, rvec, tvec = cv2.solvePnP(objp, corners, camera_matrix, dist_coeffs)
-    if not solved:
-        return False, None, None, None
-
-    return True, corners.reshape(-1, 2), rvec, tvec
+    assert result.detected_corners is not None
+    assert result.rvec is not None
+    assert result.tvec is not None
+    return (
+        True,
+        result.detected_corners,
+        result.rvec,
+        result.tvec / 1000.0,
+    )
 
 
 def build_board_mask(image_shape: tuple[int, int], corners: np.ndarray, dilation_px: int = 9) -> np.ndarray:
