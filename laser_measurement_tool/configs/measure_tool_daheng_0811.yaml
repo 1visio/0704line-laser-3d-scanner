@@ -2,6 +2,7 @@
 # 不作为默认配置。在线启动时同时传入：--camera-backend daheng --config <本文件>。
 
 schema_version: 1
+system: daheng
 
 # 相机硬 ROI；在线管线会加回偏移，恢复为 4096x3000 标定坐标。
 camera:
@@ -21,6 +22,32 @@ calibration:
   extrinsics: calibration_daheng_0811/camera_ground_extrinsics.yaml
   ground_u_compensation: null
   laser_ray_correction: calibration_daheng_0811/frozen_c1_4k.json
+
+correction:
+  # Stage-A 是实验性后处理；不修改 C0/C1、lambda 或点云坐标。
+  mode: stage_a_height_scale
+  stage_a_height_scale_enabled: true
+  stage_a_height_scale_config: calibration_daheng_0811/stage_a_height_scale.json
+
+session_ground_calibration:
+  # 开发阶段允许继续使用 reference；点击在线工具中的 Session 基准标定后切换。
+  mode: optional
+  pattern_cols: 11
+  pattern_rows: 8
+  square_size_mm: 20.0
+  detector: sb_then_classic
+  output: null
+  sanity:
+    # 使用 PnP 投影的完整棋盘物理边界；0 mm 表示完整 12x9 方格，
+    # 不做像素腐蚀/膨胀；仅用于报警判定，不自动减 Bias、不拟合 a*S+b。
+    mask_enabled: true
+    mask_inset_mm: 0.0
+    min_valid_points: 20
+    max_abs_bias_mm: 2.0
+    max_rmse_mm: 2.0
+    max_p95_abs_mm: 3.0
+    max_abs_mm: 5.0
+    max_abs_slope_mm_per_mm: 0.02
 
 extraction:
   method: steger
@@ -60,8 +87,8 @@ reconstruction:
 measurement:
   outlier_sigma_multiplier: 2.0
   outlier_max_iterations: 5
-  min_baseline_points: 30
-  min_height_points: 30
+  min_baseline_points: 20
+  min_height_points: 20
 
 output:
   dir: ../output_daheng_0811

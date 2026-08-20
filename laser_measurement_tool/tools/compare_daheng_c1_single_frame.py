@@ -30,6 +30,10 @@ if str(TOOL_ROOT) not in sys.path:
 
 from app_config import load_app_config
 from calibration.config_loader import load_calibration_files
+from correction.stage_a_height_scale import (
+    StageAHeightResult,
+    resolve_stage_a_height_scale,
+)
 from laser.backends import create_extraction_params
 from laser.laser_extractor import extract_laser_center
 from measurement.height_measure import HeightLineMeasurement, measure_height_line
@@ -229,6 +233,7 @@ def measurement_row(
     baseline_name: str,
     measurement: HeightLineMeasurement | None,
     error: Exception | None,
+    stage_a: StageAHeightResult,
 ) -> dict[str, Any]:
     row: dict[str, Any] = {
         "model": model_name,
@@ -238,6 +243,7 @@ def measurement_row(
         "height_mean_mm": None,
         "height_median_mm": None,
         "height_std_mm": None,
+        **stage_a.as_dict(),
         "error_to_true_20mm": None,
         "absolute_error_mm": None,
         "length_mm": None,
@@ -283,6 +289,8 @@ def measure_three_baselines(
     model_name: str,
     result: Any,
     measurement_params: Any,
+    system: str,
+    correction: Any,
 ) -> list[dict[str, Any]]:
     uv = result.pixels_uv
     ground = result.points_ground
@@ -306,9 +314,25 @@ def measure_three_baselines(
                 measurement_params,
             )
         except Exception as error:
-            rows.append(measurement_row(model_name, baseline_name, None, error))
+            stage_a = resolve_stage_a_height_scale(
+                None,
+                system=system,
+                correction=correction,
+            )
+            rows.append(
+                measurement_row(model_name, baseline_name, None, error, stage_a)
+            )
         else:
-            rows.append(measurement_row(model_name, baseline_name, measurement, None))
+            stage_a = resolve_stage_a_height_scale(
+                measurement.height_mean_mm,
+                system=system,
+                correction=correction,
+            )
+            rows.append(
+                measurement_row(
+                    model_name, baseline_name, measurement, None, stage_a
+                )
+            )
     return rows
 
 
@@ -707,8 +731,12 @@ def main() -> int:
         comparison_rows.append(comparison_row)
 
     height_rows = (
-        measure_three_baselines("c0", c0_result, app.measurement)
-        + measure_three_baselines("c1", c1_result, app.measurement)
+        measure_three_baselines(
+            "c0", c0_result, app.measurement, app.system, app.correction
+        )
+        + measure_three_baselines(
+            "c1", c1_result, app.measurement, app.system, app.correction
+        )
     )
     height_success = all(row["status"] == "success" for row in height_rows)
 

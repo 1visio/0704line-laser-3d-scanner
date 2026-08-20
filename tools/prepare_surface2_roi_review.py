@@ -420,7 +420,7 @@ def audit_and_extract(
         "protocol": {
             "steger": "one call per input TIFF; no residual/height value used",
             "quality_warning_policy": "retain warning frames; do not auto-delete",
-            "expected_layout": "3 heights x 5 poses x 5 repeats",
+            "expected_layout": f"{len(DATASETS)} heights x 5 poses x 5 repeats",
         },
     }
     return entries, audit_rows, summary
@@ -619,17 +619,50 @@ def report_text(
                 tiff=item.get("tiff_count", ""),
                 poses="5×5" if item.get("pose_repeat_counts") == {p: 5 for p in POSE_IDS} else item.get("pose_repeat_counts", ""),
                 status=manifest.get("status", ""),
-                passed=item.get("quality_failed_frame_count", 0) == 0,
+                passed=(
+                    "N/A"
+                    if not item.get("tiff_count", 0)
+                    else item.get("quality_failed_frame_count", 0) == 0
+                ),
                 warnings=item.get("quality_warning_frame_count", 0),
                 errors=len(item.get("errors", [])),
             )
         )
     dataset_table = "\n".join(dataset_lines)
+    quality_lines = []
+    for dataset in DATASETS:
+        item = audit_summary["dataset_summaries"].get(dataset, {})
+        warning_count = item.get("quality_warning_frame_count", 0)
+        failed_count = item.get("quality_failed_frame_count", 0)
+        if warning_count or failed_count:
+            quality_lines.append(
+                f"- {dataset}：warning={warning_count}，quality_failed={failed_count}；"
+                "这些是采集质量告警，不是本轮 ROI 删除规则。"
+            )
+    if not quality_lines:
+        if int(audit_summary.get("extracted_frame_count", 0)) == 0:
+            quality_lines.append("- 当前没有可审计帧；不能据此判定采集质量通过。")
+        else:
+            quality_lines.append(
+                "- 本次完整性审计未发现 manifest quality warning/failed frame；仍需人工复核图像几何。"
+            )
+    quality_summary = "\n".join(quality_lines)
     registry_state = "not generated"
     if registry_summary is not None:
         registry_state = (
-            f"15 geometry candidates generated; "
+            f"{len(DATASETS) * len(POSE_IDS)} geometry candidates generated; "
             f"manual_review_required={registry_summary.get('manual_review_required')}"
+        )
+    expected_frames = int(audit_summary.get("expected_frame_count", 0))
+    extracted_frames = int(audit_summary.get("extracted_frame_count", 0))
+    steger_calls = int(audit_summary.get("steger_call_count", 0))
+    review_group_count = len(DATASETS) * len(POSE_IDS) if registry_summary is not None else 0
+    if extracted_frames == expected_frames and expected_frames > 0:
+        stage_statement = "本轮已完成新数据完整性审计、一次/帧 Steger 中心线提取、五帧 median 与几何 overlay 准备。"
+    else:
+        stage_statement = (
+            f"当前仅完成输入目录审计：{extracted_frames}/{expected_frames} 帧已提取中心线，"
+            "尚未具备生成 median、overlay 或人工 ROI draft 的数据条件。"
         )
     extra = f"\n运行错误：`{error}`\n" if error else ""
     return f"""# Surface-2A/2B 数据接入、ROI 准备与 q-domain 审计
@@ -638,7 +671,7 @@ def report_text(
 
 `SURFACE2_STATUS=ROI_REVIEW_PENDING`
 
-本轮已完成新数据完整性审计、一次/帧 Steger 中心线提取、五帧 median 与几何 overlay 准备。ROI 仍是 draft，尚未人工冻结；因此本轮**停止在 ROI review**，没有生成 q1/q2、height residual 或 Surface-2C 的最终结论。
+{stage_statement} ROI 仍是 draft，尚未人工冻结；因此本轮**停止在 ROI review**，没有生成 q1/q2、height residual 或 Surface-2C 的最终结论。
 
 `Q2_GAP_FILLED=UNDECIDED`  
 `Q1Q2_STATE_CONSISTENCY=UNDECIDED`  
@@ -651,7 +684,7 @@ def report_text(
 - 配置：`{config_path.resolve()}`；仅用于同一 Steger extraction 参数，未调用重建。
 - 复用 `evaluate_daheng_c1_gauge_blocks.py` 的 `load_image_and_centers()`、`profile_candidates()`、`build_roi_registry()`。
 - 复用 `annotate_daheng_gauge_rois.py` 的 `median_image()`、`binned_centerline()`、`render_overlay()`。
-- 新增计算：75 帧完整性/manifest/尺寸/hash 审计、75 次 Steger（每 TIFF 一次）、15 组 median/centerline/geometry overlay 和 draft registry。
+- 实际新增计算：{extracted_frames}/{expected_frames} 帧完整性/manifest/尺寸/hash 审计、{steger_calls} 次 Steger（每 TIFF 一次）、{review_group_count} 组 median/centerline/geometry overlay 和 draft registry。
 - 未执行：Frozen C0、Frozen C1、q1/q2 计算、残差驱动筛点、residual/height 计算、任何补偿拟合。
 - warning 帧保留在审计和 Steger 输入中，没有因 `dynamic_range_low` 自动删除。
 
@@ -663,13 +696,11 @@ def report_text(
 
 整体：`{audit_summary.get('extracted_frame_count')}/{audit_summary.get('expected_frame_count')}` 帧成功完成中心线提取；Steger call count=`{audit_summary.get('steger_call_count')}`；缺失 key=`{len(audit_summary.get('missing_keys', []))}`；提取异常=`{len(audit_summary.get('extraction_errors', []))}`。
 
-### 已知质量异常
+### 质量告警
 
-- 36 mm：pose 005 的 5 帧 manifest 标记 `dynamic_range_low` / `quality_passed=False`。
-- 40 mm：25 帧均标记 `dynamic_range_low` / `quality_passed=False`。
-- 46 mm：25 帧均标记 `dynamic_range_low` / `quality_passed=False`。
+{quality_summary}
 
-这些是采集质量告警，不是本轮的 ROI 删除规则；是否可用于 q-domain 只能在几何 ROI 人工确认、中心线质量复核后再决定。
+是否可用于 q-domain 只能在几何 ROI 人工确认、中心线质量复核后再决定。
 
 ## ROI review 输出
 
@@ -681,7 +712,7 @@ def report_text(
 - centerline profile：`surface2_centerline_profiles.csv`
 - 未冻结 draft：`surface2_roi_registry_manual_draft.json`
 
-人工确认时，只允许依据上述 median 图像、五帧 Steger 点和 physical ground plane geometry 调整 `height_v_range` 与 `baseline_v_ranges`；不要查看或使用 height error/residual。确认后应写出完整的 15-entry manual registry，并将每个 entry 与顶层 `manual_confirmed` 明确置为 true，再进入 Surface-2B。
+人工确认时，只允许依据上述 median 图像、五帧 Steger 点和 physical ground plane geometry 调整 `height_v_range` 与 `baseline_v_ranges`；不要查看或使用 height error/residual。确认后应写出完整的 {len(DATASETS) * len(POSE_IDS)}-entry manual registry，并将每个 entry 与顶层 `manual_confirmed` 明确置为 true，再进入 Surface-2B。
 
 ## Surface-2B 尚未执行的项目
 
@@ -689,7 +720,7 @@ ROI 冻结后，下一轮才可在同一 frozen Ground-1 q 坐标定义下：复
 
 ## 下一步
 
-`Surface-2C` 当前不允许进入。先完成 15 组 ROI 的人工 geometry confirmation；若任一 pose 的物理 ground plane、包边/突起边界或 centerline 质量无法确认，应在 registry/report 中标记该项并重新采集或人工处理，不用 residual 阈值补救。
+`Surface-2C` 当前不允许进入。先完成 {len(DATASETS) * len(POSE_IDS)} 组 ROI 的人工 geometry confirmation；若任一 pose 的物理 ground plane、包边/突起边界或 centerline 质量无法确认，应在 registry/report 中标记该项并重新采集或人工处理，不用 residual 阈值补救。
 """
 
 
@@ -784,7 +815,9 @@ def main() -> int:
                 "annotation_impl": str((REPO_ROOT / "tools" / "annotate_daheng_gauge_rois.py").resolve()),
                 "annotation_impl_sha256": sha256(REPO_ROOT / "tools" / "annotate_daheng_gauge_rois.py"),
             },
-            "steger_rerun": True,
+            "steger_rerun": bool(audit_summary.get("steger_call_count", 0)),
+            "steger_call_count": int(audit_summary.get("steger_call_count", 0)),
+            "expected_frame_count": int(audit_summary.get("expected_frame_count", 0)),
             "steger_calls_per_tiff": 1,
             "c0_c1_reconstruction": False,
             "q_domain_analysis": False,

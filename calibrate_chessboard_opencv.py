@@ -8,6 +8,11 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+from laser_measurement_tool.calibration.session_ground import (
+    create_object_points,
+    detect_corners,
+)
+
 
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff"}
 
@@ -90,49 +95,6 @@ def write_image(path: Path, image: np.ndarray) -> None:
         encoded.tofile(path)
     except OSError as exc:
         raise OSError(f"无法写入图像：{path}") from exc
-
-
-def detect_corners(
-    gray: np.ndarray,
-    pattern_size: tuple[int, int],
-) -> tuple[bool, np.ndarray | None]:
-    if hasattr(cv2, "findChessboardCornersSB"):
-        try:
-            found, corners = cv2.findChessboardCornersSB(
-                gray,
-                pattern_size,
-                flags=cv2.CALIB_CB_NORMALIZE_IMAGE,
-            )
-        except cv2.error:
-            found, corners = False, None
-        if found:
-            return True, corners.astype(np.float32)
-
-    flags = cv2.CALIB_CB_ADAPTIVE_THRESH | cv2.CALIB_CB_NORMALIZE_IMAGE
-    found, corners = cv2.findChessboardCorners(gray, pattern_size, flags)
-    if not found:
-        return False, None
-
-    criteria = (
-        cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_MAX_ITER,
-        30,
-        0.001,
-    )
-    refined = cv2.cornerSubPix(gray, corners, (11, 11), (-1, -1), criteria)
-    return True, refined
-
-
-def create_object_points(
-    pattern_cols: int,
-    pattern_rows: int,
-    square_size_mm: float,
-) -> np.ndarray:
-    points = np.zeros((pattern_cols * pattern_rows, 3), dtype=np.float32)
-    points[:, :2] = (
-        np.mgrid[0:pattern_cols, 0:pattern_rows].T.reshape(-1, 2)
-        * square_size_mm
-    )
-    return points
 
 
 def calculate_reprojection_errors(

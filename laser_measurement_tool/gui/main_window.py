@@ -30,6 +30,10 @@ from calibration.config_loader import (
     load_calibration_files,
 )
 from calibration.manifest import load_calibration_package
+from correction.stage_a_height_scale import (
+    StageAHeightResult,
+    apply_stage_a_height_scale,
+)
 from gui.image_view import ImageView, _to_uint8_display
 from gui.point_cloud_view import PointCloudView
 from gui.section_view import SectionView
@@ -84,10 +88,21 @@ class MainWindow(QMainWindow):
     reconstruction_requested = Signal()
     save_requested = Signal()
 
-    def __init__(self, config: AppConfig | None = None) -> None:
+    def __init__(
+        self,
+        config: AppConfig | None = None,
+        *,
+        system: str | None = None,
+        runtime_calibration: dict[str, Any] | None = None,
+        ground_extrinsic_source: str = "reference",
+    ) -> None:
         super().__init__()
         self._app_config = config
-        self._calibration: dict[str, Any] | None = None
+        self._system = (
+            system or (config.system if config is not None else "mvs")
+        ).strip().lower()
+        self._calibration: dict[str, Any] | None = runtime_calibration
+        self._ground_extrinsic_source = ground_extrinsic_source
         self._image: np.ndarray | None = None
         self._image_path: Path | None = None
         # 实时相机通常输出传感器 ROI。图像/ROI 仍使用 ROI 局部坐标，
@@ -1088,8 +1103,10 @@ class MainWindow(QMainWindow):
     ) -> dict[str, Any]:
         common = self._common_result_payload(bool(measurements))
         if not measurements:
+            stage_a = self._stage_a_height_result(None)
             return {
                 **common,
+                **stage_a.as_dict(),
                 "point_counts": {
                     "laser_centers_2d": len(self._laser_centers),
                     "full_laser_reconstructed": (
@@ -1106,6 +1123,11 @@ class MainWindow(QMainWindow):
             }
 
         primary = measurements[0]
+        stage_a_results = [
+            self._stage_a_height_result(measurement.height_mean_mm)
+            for measurement in measurements
+        ]
+        primary_stage_a = stage_a_results[0]
         obstacles = [
             {
                 "index": index,
@@ -1114,17 +1136,18 @@ class MainWindow(QMainWindow):
                     if len(measurements) == 1
                     else f"obstacle_{index}_points.csv"
                 ),
-                "results_mm": self._measurement_values(measurement),
+                "results_mm": self._measurement_values(measurement, stage_a),
                 "point_counts": {
                     "total": measurement.height_point_count,
                     "inliers": measurement.height_inlier_count,
                 },
                 "reconstruction_filtered": reconstruction.filtered,
             }
-            for index, (measurement, reconstruction) in enumerate(
+            for index, (measurement, reconstruction, stage_a) in enumerate(
                 zip(
                     measurements,
                     self._last_obstacle_reconstructions,
+                    stage_a_results,
                     strict=True,
                 ),
                 start=1,
@@ -1132,9 +1155,10 @@ class MainWindow(QMainWindow):
         ]
         return {
             **common,
+            **primary_stage_a.as_dict(),
             "ground_reference_mode": primary.ground_reference_mode,
             # 兼容旧版单障碍物读取：顶层结果仍对应障碍物 1。
-            "results_mm": self._measurement_values(primary),
+            "results_mm": self._measurement_values(primary, primary_stage_a),
             "obstacles": obstacles,
             "point_counts": {
                 "laser_centers_2d": len(self._laser_centers),
@@ -1158,6 +1182,24 @@ class MainWindow(QMainWindow):
                 else None
             ),
         }
+
+    def _stage_a_height_result(self, height_raw: float | None) -> StageAHeightResult:
+        config = self._app_config
+        if config is None:
+            return apply_stage_a_height_scale(
+                height_raw,
+                system="mvs",
+                enabled=False,
+                correction_mode="none",
+                config=None,
+            )
+        return apply_stage_a_height_scale(
+            height_raw,
+            system=self._system,
+            enabled=config.correction.stage_a_height_scale_enabled,
+            correction_mode=config.correction.mode,
+            config=config.correction.stage_a_height_scale,
+        )
 
     def _common_result_payload(self, measurement_performed: bool) -> dict[str, Any]:
         config = self._app_config
@@ -1186,7 +1228,27 @@ class MainWindow(QMainWindow):
                 else None
             ),
             "measurement_performed": measurement_performed,
+            "ground_extrinsic_source": self._ground_extrinsic_source,
             "laser_center_csv": "laser_center.csv",
+            "correction": (
+                {
+                    "mode": config.correction.mode,
+                    "stage_a_height_scale_enabled": (
+                        config.correction.stage_a_height_scale_enabled
+                    ),
+                    "stage_a_height_scale_config": (
+                        str(config.correction.stage_a_height_scale_config)
+                        if config.correction.stage_a_height_scale_config
+                        else None
+                    ),
+                }
+                if config
+                else {
+                    "mode": "none",
+                    "stage_a_height_scale_enabled": False,
+                    "stage_a_height_scale_config": None,
+                }
+            ),
         }
         if self._image_offset != (0, 0):
             payload["image_offset"] = {
@@ -1195,9 +1257,9 @@ class MainWindow(QMainWindow):
             }
         return payload
 
-    @staticmethod
     def _measurement_values(
         measurement: HeightLineMeasurement,
+        stage_a: StageAHeightResult,
     ) -> dict[str, Any]:
         ground_profile = None
         if measurement.ground_profile_fit is not None:
@@ -1215,6 +1277,11 @@ class MainWindow(QMainWindow):
             "height_mean": measurement.height_mean_mm,
             "height_median": measurement.height_median_mm,
             "height_std": measurement.height_std_mm,
+            "height_raw": stage_a.height_raw,
+            "height_stage_a": stage_a.height_stage_a,
+            "stage_a_enabled": stage_a.stage_a_enabled,
+            "stage_a_valid": stage_a.stage_a_valid,
+            "stage_a_status": stage_a.stage_a_status,
             "length": measurement.length_mm,
             "angle_with_baseline_deg": measurement.angle_with_baseline_deg,
             "ground_baseline_zg": measurement.ground_baseline_zg_mm,

@@ -197,6 +197,7 @@ class OnlineCoreTests(unittest.TestCase):
             pipeline.package.calibration,
             app_config.reconstruction,
         )
+        np.testing.assert_array_equal(result.pixels_uv, expected.pixels_uv)
         np.testing.assert_array_equal(result.points_camera, expected.points_camera)
         np.testing.assert_array_equal(result.points_ground, expected.points_ground)
 

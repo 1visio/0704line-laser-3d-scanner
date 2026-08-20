@@ -14,6 +14,12 @@ from typing import Any
 
 import yaml
 
+from correction.stage_a_height_scale import (
+    CorrectionConfig,
+    StageAConfigError,
+    load_stage_a_height_scale,
+)
+from calibration.session_ground import SessionGroundBoardConfig
 from measurement.height_measure import MeasurementParams
 from reconstruction.reconstructor import ReconstructionParams
 
@@ -84,6 +90,86 @@ class CameraStartupConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class SessionGroundSanityConfig:
+    """Session 棋盘基准面激光一致性检查的诊断阈值。"""
+
+    mask_enabled: bool = True
+    mask_inset_mm: float = 0.0
+    min_valid_points: int = 20
+    max_abs_bias_mm: float = 2.0
+    max_rmse_mm: float = 2.0
+    max_p95_abs_mm: float = 3.0
+    max_abs_mm: float = 5.0
+    max_abs_slope_mm_per_mm: float = 0.02
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.mask_enabled, bool):
+            raise ValueError("mask_enabled 必须是布尔值")
+        if (
+            not isinstance(self.mask_inset_mm, (int, float))
+            or not math.isfinite(float(self.mask_inset_mm))
+            or float(self.mask_inset_mm) < 0.0
+        ):
+            raise ValueError("mask_inset_mm 必须是有限非负数")
+        if isinstance(self.min_valid_points, bool) or self.min_valid_points < 1:
+            raise ValueError("min_valid_points 必须是正整数")
+        for name in (
+            "max_abs_bias_mm",
+            "max_rmse_mm",
+            "max_p95_abs_mm",
+            "max_abs_mm",
+            "max_abs_slope_mm_per_mm",
+        ):
+            value = getattr(self, name)
+            if not isinstance(value, (int, float)) or not math.isfinite(float(value)):
+                raise ValueError(f"{name} 必须是有限数")
+            if float(value) <= 0.0:
+                raise ValueError(f"{name} 必须大于 0")
+
+
+@dataclass(frozen=True, slots=True)
+class SessionGroundCalibrationConfig:
+    """在线 Session 基准标定策略与棋盘格协议。"""
+
+    mode: str = "optional"
+    pattern_cols: int = 11
+    pattern_rows: int = 8
+    square_size_mm: float = 20.0
+    detector: str = "sb_then_classic"
+    output: Path | None = None
+    sanity: SessionGroundSanityConfig = field(
+        default_factory=SessionGroundSanityConfig
+    )
+
+    def __post_init__(self) -> None:
+        normalized_mode = self.mode.strip().lower() if isinstance(self.mode, str) else ""
+        if normalized_mode not in {"disabled", "optional", "required"}:
+            raise ValueError("mode 必须是 disabled、optional 或 required")
+        if normalized_mode != self.mode:
+            object.__setattr__(self, "mode", normalized_mode)
+        try:
+            SessionGroundBoardConfig(
+                pattern_cols=self.pattern_cols,
+                pattern_rows=self.pattern_rows,
+                square_size_mm=self.square_size_mm,
+                detector=self.detector,
+            )
+        except ValueError as error:
+            raise ValueError(f"棋盘格配置非法: {error}") from error
+        if not isinstance(self.sanity, SessionGroundSanityConfig):
+            raise ValueError("sanity 必须是 SessionGroundSanityConfig")
+
+    def board_config(self) -> SessionGroundBoardConfig:
+        """返回 Session-1 使用的共享棋盘格配置。"""
+        return SessionGroundBoardConfig(
+            pattern_cols=self.pattern_cols,
+            pattern_rows=self.pattern_rows,
+            square_size_mm=self.square_size_mm,
+            detector=self.detector,
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class AppConfig:
     """加载并校验后的应用配置。"""
 
@@ -100,6 +186,11 @@ class AppConfig:
     measurement: MeasurementParams = field(default_factory=MeasurementParams)
     output: OutputConfig | None = None
     camera: CameraStartupConfig | None = None
+    system: str = "mvs"
+    correction: CorrectionConfig = field(default_factory=CorrectionConfig)
+    session_ground_calibration: SessionGroundCalibrationConfig = field(
+        default_factory=SessionGroundCalibrationConfig
+    )
 
 
 def load_app_config(config_path: str | Path | None = None) -> AppConfig:
@@ -116,6 +207,7 @@ def load_app_config(config_path: str | Path | None = None) -> AppConfig:
 
     base_dir = path.resolve().parent
 
+    system = _parse_system(document, path)
     calibration = _parse_calibration(document, base_dir, path)
     method, options, options_by_method = _parse_extraction(document, path)
     reconstruction = _build_dataclass(
@@ -125,6 +217,10 @@ def load_app_config(config_path: str | Path | None = None) -> AppConfig:
         document.get("measurement"), MeasurementParams, "measurement"
     )
     output = _parse_output(document, base_dir)
+    correction = _parse_correction(document, base_dir, path)
+    session_ground_calibration = _parse_session_ground_calibration(
+        document, base_dir, path
+    )
     camera = (
         None
         if document.get("camera") is None
@@ -143,7 +239,17 @@ def load_app_config(config_path: str | Path | None = None) -> AppConfig:
         measurement=measurement,
         output=output,
         camera=camera,
+        system=system,
+        correction=correction,
+        session_ground_calibration=session_ground_calibration,
     )
+
+
+def _parse_system(document: Mapping[str, Any], path: Path) -> str:
+    value = document.get("system", "mvs")
+    if not isinstance(value, str) or not value.strip():
+        raise AppConfigError(f"{path} 的 system 必须是非空字符串")
+    return value.strip().lower()
 
 
 def _resolve_path(value: Any, base_dir: Path, name: str) -> Path:
@@ -303,3 +409,102 @@ def _parse_output(
             section.get("save_full_pointcloud_ply", True)
         ),
     )
+
+
+def _parse_session_ground_calibration(
+    document: Mapping[str, Any], base_dir: Path, path: Path
+) -> SessionGroundCalibrationConfig:
+    section = document.get("session_ground_calibration")
+    if section is None:
+        return SessionGroundCalibrationConfig()
+    if not isinstance(section, Mapping):
+        raise AppConfigError("session_ground_calibration 段必须是映射")
+    valid_fields = {
+        "mode",
+        "pattern_cols",
+        "pattern_rows",
+        "square_size_mm",
+        "detector",
+        "output",
+        "sanity",
+    }
+    unknown = set(section) - valid_fields
+    if unknown:
+        raise AppConfigError(
+            f"session_ground_calibration 段包含未知参数: {sorted(unknown)}"
+        )
+    output_value = section.get("output")
+    output = (
+        None
+        if output_value in (None, "")
+        else _resolve_path(
+            output_value, base_dir, "session_ground_calibration.output"
+        )
+    )
+    values = dict(section)
+    values["output"] = output
+    sanity_section = section.get("sanity")
+    if sanity_section is None:
+        sanity = SessionGroundSanityConfig()
+    else:
+        sanity = _build_dataclass(
+            sanity_section,
+            SessionGroundSanityConfig,
+            "session_ground_calibration.sanity",
+        )
+    values["sanity"] = sanity
+    try:
+        return SessionGroundCalibrationConfig(**values)
+    except (TypeError, ValueError) as error:
+        raise AppConfigError(
+            f"session_ground_calibration 段参数非法: {error}"
+        ) from error
+
+
+def _parse_correction(
+    document: Mapping[str, Any], base_dir: Path, path: Path
+) -> CorrectionConfig:
+    section = document.get("correction")
+    if section is None:
+        return CorrectionConfig()
+    if not isinstance(section, Mapping):
+        raise AppConfigError("correction 段必须是映射")
+    valid_fields = {
+        "mode",
+        "stage_a_height_scale_enabled",
+        "stage_a_height_scale_config",
+    }
+    unknown = set(section) - valid_fields
+    if unknown:
+        raise AppConfigError(f"correction 段包含未知参数: {sorted(unknown)}")
+
+    mode = section.get("mode", "none")
+    if not isinstance(mode, str) or not mode.strip():
+        raise AppConfigError("correction.mode 必须是非空字符串")
+    enabled = section.get("stage_a_height_scale_enabled", False)
+    if not isinstance(enabled, bool):
+        raise AppConfigError("correction.stage_a_height_scale_enabled 必须是布尔值")
+
+    config_value = section.get("stage_a_height_scale_config")
+    config_path = (
+        None
+        if config_value in (None, "")
+        else _resolve_path(
+            config_value, base_dir, "correction.stage_a_height_scale_config"
+        )
+    )
+    stage_a_config = None
+    if config_path is not None:
+        try:
+            stage_a_config = load_stage_a_height_scale(config_path)
+        except StageAConfigError as error:
+            raise AppConfigError(str(error)) from error
+    try:
+        return CorrectionConfig(
+            mode=mode,
+            stage_a_height_scale_enabled=enabled,
+            stage_a_height_scale_config=config_path,
+            stage_a_height_scale=stage_a_config,
+        )
+    except ValueError as error:
+        raise AppConfigError(f"correction 段参数非法: {error}") from error

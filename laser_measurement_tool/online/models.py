@@ -76,7 +76,18 @@ class FrameResult:
     calibration_package_id: str
     calibration_manifest_sha256: str
     algorithm_config_sha256: str
+    ground_extrinsic_source: str = "reference"
+    height_raw: float | None = None
+    height_stage_a: float | None = None
+    stage_a_enabled: bool = False
+    stage_a_valid: bool = False
+    stage_a_status: str = "not_measured"
     filtered: dict[str, int] = field(default_factory=dict)
+    # pixels_uv is aligned one-to-one with points_camera/points_ground after
+    # reconstruction filtering. It is optional for fake FrameResult objects.
+    pixels_uv: np.ndarray | None = field(
+        default=None, repr=False, compare=False
+    )
     _overlay_rgb: np.ndarray | None = field(
         default=None, repr=False, compare=False
     )

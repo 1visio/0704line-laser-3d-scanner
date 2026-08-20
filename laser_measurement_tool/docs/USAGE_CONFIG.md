@@ -128,14 +128,47 @@ reconstruction:
 measurement:
   outlier_sigma_multiplier: 2.0 # 残差>该倍数稳健σ的点剔除；想更宽松调大
   outlier_max_iterations: 5
-  min_baseline_points: 30       # 框选点太少时的报错门槛
-  min_height_points: 30
+  min_baseline_points: 20       # 框选点太少时的报错门槛
+  min_height_points: 20
 output:
   dir: ../output                # 结果输出目录
   save_pointcloud_csv: true
   save_overlay_png: true
   save_full_pointcloud_ply: true  # 整幅激光线的 Xg/Yg/Zg，ASCII PLY，mm
 ```
+
+在线工具还支持可选的 Session 基准标定。开发阶段默认 `optional`，成功后只替换
+当前进程的 ground `R/t`，不覆盖 reference 外参 YAML：
+
+```yaml
+session_ground_calibration:
+  mode: optional              # disabled / optional / required
+  pattern_cols: 11
+  pattern_rows: 8
+  square_size_mm: 20.0
+  detector: sb_then_classic
+  output: null                # 默认写入 output.dir/session_ground_calibration.json
+  sanity:
+    mask_enabled: true
+    mask_inset_mm: 0.0        # 完整物理边界；0 mm，不做腐蚀/膨胀
+    min_valid_points: 20
+    max_abs_bias_mm: 2.0
+    max_rmse_mm: 2.0
+    max_p95_abs_mm: 3.0
+    max_abs_mm: 5.0
+    max_abs_slope_mm_per_mm: 0.02
+```
+
+`required` 模式下必须先连接相机、点击“Session 基准标定”并获得 `VALID`，再开始
+在线重建；`disabled` 始终使用 reference。在线结果 JSON 会记录
+`ground_extrinsic_source: reference/session`。
+
+点击“激光地面一致性检查”前保持棋盘不动并打开激光。该检查会复用 Session PnP 的
+pose、内参和畸变，投影完整棋盘物理边界生成 mask，先筛选源像素位于 mask 内的
+重建点，再统计当前正式链路的原始 `Zg`，默认至少 20 个有限点；阈值超限时报警并写入
+`session_ground_calibration.json.laser_ground_sanity`，不会自动做 bias offset、
+`a*S+b` 拟合或 Surface correction。检查要求当前在线处理算法为 `steger`，并且
+`reconstruction.enable_laser_ray_correction: true`。
 
 `image_roi_polygon` 是在线重建前的像素门控。启用时，只有多边形内部的激光
 中心点才会进入射线-激光表面求交，结果中的 `filtered.outside_image_roi` 会记录

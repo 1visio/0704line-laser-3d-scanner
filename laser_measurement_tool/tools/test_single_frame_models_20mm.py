@@ -26,6 +26,10 @@ if str(TOOL_ROOT) not in sys.path:
 
 from app_config import load_app_config
 from calibration.config_loader import load_calibration_files
+from correction.stage_a_height_scale import (
+    StageAHeightResult,
+    resolve_stage_a_height_scale,
+)
 from laser.backends import create_extraction_params
 from laser.laser_extractor import extract_laser_center
 from measurement.height_measure import HeightLineMeasurement, measure_height_line
@@ -139,6 +143,7 @@ def measurement_record(
     measurement: HeightLineMeasurement,
     baseline_ground: np.ndarray,
     height_ground: np.ndarray,
+    stage_a: StageAHeightResult,
 ) -> dict[str, Any]:
     height_inliers = height_ground[measurement.height_fit.inlier_mask]
     if measurement.ground_profile_fit is None:
@@ -164,6 +169,7 @@ def measurement_record(
         "height_mean_mm": measurement.height_mean_mm,
         "height_median_mm": measurement.height_median_mm,
         "height_std_mm": measurement.height_std_mm,
+        **stage_a.as_dict(),
         "error_to_true_20mm": measurement.height_mean_mm - TRUE_HEIGHT_MM,
         "absolute_error_mm": abs(measurement.height_mean_mm - TRUE_HEIGHT_MM),
         "length_mm": measurement.length_mm,
@@ -179,13 +185,17 @@ def measurement_record(
     }
 
 
-def measurement_detail(measurement: HeightLineMeasurement) -> dict[str, Any]:
+def measurement_detail(
+    measurement: HeightLineMeasurement,
+    stage_a: StageAHeightResult,
+) -> dict[str, Any]:
     return {
         "ground_baseline_zg_mm": measurement.ground_baseline_zg_mm,
         "ground_noise_sigma_mm": measurement.ground_noise_sigma_mm,
         "height_mean_mm": measurement.height_mean_mm,
         "height_median_mm": measurement.height_median_mm,
         "height_std_mm": measurement.height_std_mm,
+        **stage_a.as_dict(),
         "length_mm": measurement.length_mm,
         "endpoints_ground_mm": measurement.endpoints_ground.tolist(),
         "baseline_point_count": measurement.baseline_point_count,
@@ -396,6 +406,11 @@ def main() -> int:
                 model_ground[height_mask],
                 app.measurement,
             )
+            stage_a = resolve_stage_a_height_scale(
+                measurement.height_mean_mm,
+                system=app.system,
+                correction=app.correction,
+            )
             measurements.append(
                 measurement_record(
                     model_name,
@@ -403,13 +418,21 @@ def main() -> int:
                     measurement,
                     model_ground[baseline_mask],
                     model_ground[height_mask],
+                    stage_a,
                 )
             )
-            details[model_name][baseline_name] = measurement_detail(measurement)
+            details[model_name][baseline_name] = measurement_detail(
+                measurement, stage_a
+            )
         fixed_measurement = measure_height_line(
             None,
             model_ground[height_mask],
             app.measurement,
+        )
+        fixed_stage_a = resolve_stage_a_height_scale(
+            fixed_measurement.height_mean_mm,
+            system=app.system,
+            correction=app.correction,
         )
         measurements.append(
             measurement_record(
@@ -418,9 +441,12 @@ def main() -> int:
                 fixed_measurement,
                 None,
                 model_ground[height_mask],
+                fixed_stage_a,
             )
         )
-        details[model_name]["fixed_zg_zero"] = measurement_detail(fixed_measurement)
+        details[model_name]["fixed_zg_zero"] = measurement_detail(
+            fixed_measurement, fixed_stage_a
+        )
     write_rows(output / "height_measurements.csv", list(measurements[0]), measurements)
     (output / "height_measurements.json").write_text(
         json.dumps(details, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"

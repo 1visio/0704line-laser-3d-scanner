@@ -62,6 +62,15 @@ class LoadAppConfigTest(unittest.TestCase):
         self.assertFalse(config.output.save_overlay_png)
         self.assertTrue(config.output.save_pointcloud_csv)
         self.assertFalse(config.output.save_full_pointcloud_ply)
+        self.assertEqual(config.session_ground_calibration.mode, "optional")
+        self.assertEqual(
+            config.session_ground_calibration.square_size_mm,
+            20.0,
+        )
+        self.assertEqual(
+            config.session_ground_calibration.sanity.min_valid_points,
+            20,
+        )
 
     def test_absolute_paths_are_kept(self) -> None:
         directory = Path(tempfile.mkdtemp())
@@ -121,6 +130,56 @@ class LoadAppConfigTest(unittest.TestCase):
         path = self._write_config(content)
         with self.assertRaises(AppConfigError):
             load_app_config(path)
+
+    def test_session_ground_calibration_modes_and_output_parse(self) -> None:
+        content = _VALID_CONFIG + """
+session_ground_calibration:
+  mode: required
+  pattern_cols: 11
+  pattern_rows: 8
+  square_size_mm: 20.0
+  detector: classic
+  output: session/session_ground_calibration.json
+  sanity:
+    min_valid_points: 24
+    max_abs_bias_mm: 1.5
+"""
+        path = self._write_config(content)
+        config = load_app_config(path)
+        self.assertEqual(config.session_ground_calibration.mode, "required")
+        self.assertEqual(config.session_ground_calibration.detector, "classic")
+        self.assertEqual(
+            config.session_ground_calibration.output,
+            (path.parent / "session/session_ground_calibration.json").resolve(),
+        )
+        self.assertEqual(
+            config.session_ground_calibration.sanity.min_valid_points,
+            24,
+        )
+        self.assertEqual(
+            config.session_ground_calibration.sanity.max_abs_bias_mm,
+            1.5,
+        )
+        self.assertTrue(config.session_ground_calibration.sanity.mask_enabled)
+        self.assertEqual(config.session_ground_calibration.sanity.mask_inset_mm, 0.0)
+
+    def test_invalid_session_ground_calibration_mode_raises(self) -> None:
+        content = _VALID_CONFIG + "session_ground_calibration:\n  mode: always\n"
+        path = self._write_config(content)
+        with self.assertRaises(AppConfigError):
+            load_app_config(path)
+
+    def test_session_ground_calibration_accepts_all_modes(self) -> None:
+        for mode in ("disabled", "optional", "required"):
+            with self.subTest(mode=mode):
+                path = self._write_config(
+                    _VALID_CONFIG
+                    + f"session_ground_calibration:\n  mode: {mode}\n"
+                )
+                self.assertEqual(
+                    load_app_config(path).session_ground_calibration.mode,
+                    mode,
+                )
 
     def test_default_config_and_calibration_are_self_contained(self) -> None:
         config = load_app_config(DEFAULT_CONFIG_PATH)

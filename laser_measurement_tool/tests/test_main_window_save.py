@@ -63,6 +63,10 @@ class MainWindowSaveTests(unittest.TestCase):
             self.assertNotIn("obstacles", payload)
             self.assertNotIn("ground_reference_mode", payload)
             self.assertNotIn("results_mm", payload)
+            self.assertIsNone(payload["height_raw"])
+            self.assertIsNone(payload["height_stage_a"])
+            self.assertFalse(payload["stage_a_enabled"])
+            self.assertFalse(payload["stage_a_valid"])
             self.assertEqual(
                 window.last_laser_csv_path,
                 result_directory / "laser_center.csv",
