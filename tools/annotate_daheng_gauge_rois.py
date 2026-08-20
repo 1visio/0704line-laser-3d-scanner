@@ -8,8 +8,8 @@ The annotation window deliberately contains only image geometry:
 * editable baseline-before, height, and baseline-after v ranges.
 
 It never displays gauge truth, C0/C1 heights, errors, or any reconstruction
-result.  The final registry is written only after all 30 height x position
-entries have been manually confirmed.
+result.  The final registry is written only after every selected height x
+position entry has been manually confirmed.
 """
 
 from __future__ import annotations
@@ -131,8 +131,12 @@ def read_auto_registry(path: Path) -> tuple[dict[str, Any], list[dict[str, Any]]
         summary = document.get("summary") or {}
     else:
         raise ValueError("auto registry must be a JSON object or list")
-    if len(entries) != 30:
-        raise ValueError(f"auto registry must contain 30 entries, got {len(entries)}")
+    expected_count = len(DATASETS) * len(POSE_IDS)
+    if len(entries) != expected_count:
+        raise ValueError(
+            f"auto registry must contain {expected_count} entries for "
+            f"{len(DATASETS)} selected datasets, got {len(entries)}"
+        )
     for entry in entries:
         for field in (
             "dataset",
@@ -878,7 +882,7 @@ def build_draft_payload(
         "manual_confirmed_count": sum(
             bool(entry.get("manual_confirmed")) for entry in entries
         ),
-        "manual_confirmed_expected": 30,
+        "manual_confirmed_expected": len(DATASETS) * len(POSE_IDS),
         "source_auto_registry": auto_info,
         "centerline_source": {
             "method": center_source,
@@ -898,8 +902,24 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--data-root", type=Path, default=DEFAULT_DATA_ROOT)
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     parser.add_argument("--auto-registry", type=Path, default=DEFAULT_AUTO_REGISTRY)
+    parser.add_argument(
+        "--candidate-csv",
+        type=Path,
+        default=None,
+        help="geometry-only candidate CSV; defaults to roi_candidates.csv beside --auto-registry",
+    )
     parser.add_argument("--pointwise-cache", type=Path, default=DEFAULT_POINTWISE_CACHE)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument(
+        "--dataset",
+        dest="datasets",
+        action="append",
+        default=[],
+        help=(
+            "dataset directory to annotate; repeat for multiple datasets. "
+            "Omit to retain the original obs_1/2/6/10/20/30mm scope."
+        ),
+    )
     parser.add_argument(
         "--prepare-only",
         action="store_true",
@@ -942,6 +962,7 @@ def parse_reselect_keys(values: list[str]) -> set[tuple[str, str]]:
 
 
 def main() -> int:
+    global DATASETS, DATASET_ORDER
     args = parse_args()
     # Select the backend before any function can import pyplot.  The
     # prepare-only path must remain headless; the annotation path requires a
@@ -959,6 +980,12 @@ def main() -> int:
     config_path = args.config.resolve()
     output_dir = args.output.resolve()
     auto_path = args.auto_registry.resolve()
+    if args.datasets:
+        selected = tuple(dict.fromkeys(str(value) for value in args.datasets))
+        if len(selected) != len(args.datasets):
+            raise ValueError("--dataset values must be unique")
+        DATASETS = selected
+        DATASET_ORDER = {name: index for index, name in enumerate(DATASETS)}
     pointwise_path = args.pointwise_cache.resolve()
     reselect_keys = parse_reselect_keys(args.reselect)
     if args.prepare_only and reselect_keys:
@@ -968,9 +995,12 @@ def main() -> int:
     (output_dir / "manual_median_images").mkdir(exist_ok=True)
 
     auto_info, auto_entries = read_auto_registry(auto_path)
-    candidate_map = read_auto_candidates(
-        auto_path.parent / "roi_candidates.csv"
+    candidate_path = (
+        args.candidate_csv.resolve()
+        if args.candidate_csv is not None
+        else auto_path.parent / "roi_candidates.csv"
     )
+    candidate_map = read_auto_candidates(candidate_path)
     image_paths = locate_images(data_root)
     frame_offsets = read_frame_offsets(data_root)
     center_cache = read_center_cache(pointwise_path)
@@ -980,7 +1010,7 @@ def main() -> int:
     app = load_app_config(config_path)
     image_offset_x = int(app.camera.offset_x) if app.camera is not None else 0
 
-    # The 30 image/centerline evidence bundles are constructed before any
+    # All image/centerline evidence bundles are constructed before any
     # human interaction, so the median shown in each window is fixed.
     bundles: list[dict[str, Any]] = []
     for auto_entry in sorted(
@@ -1021,7 +1051,7 @@ def main() -> int:
             auto_entry,
             None,
             image_offset_x,
-            f"auto ROI evidence {len(bundles)}/30 | pose {pose_id}",
+            f"auto ROI evidence {len(bundles)}/{len(auto_entries)} | pose {pose_id}",
             "geometry preview; Enter accepts the shown bands",
             contrast_stretch=args.contrast_stretch,
         )
@@ -1104,10 +1134,14 @@ def main() -> int:
     finally:
         plt.close("all")
 
-    if len(draft_entries) != 30 or not all(
+    expected_count = len(DATASETS) * len(POSE_IDS)
+    if len(draft_entries) != expected_count or not all(
         entry.get("manual_confirmed") is True for entry in draft_entries
     ):
-        raise RuntimeError("manual registry is not 30/30 confirmed; final file not written")
+        raise RuntimeError(
+            f"manual registry is not {expected_count}/{expected_count} confirmed; "
+            "final file not written"
+        )
     reorder_positions(draft_entries)
     draft_entries.sort(
         key=lambda item: (DATASET_ORDER[item["dataset"]], item["position_rank"])
@@ -1116,7 +1150,7 @@ def main() -> int:
         auto_info, draft_entries, center_source, pointwise_path
     )
     final_payload["manual_confirmed"] = True
-    final_payload["manual_confirmed_count"] = 30
+    final_payload["manual_confirmed_count"] = expected_count
     final_payload["frozen_at"] = now_utc()
     final_payload["freeze_policy"] = {
         "all_entries_manual_confirmed": True,
@@ -1133,7 +1167,7 @@ def main() -> int:
         {
             "auto_registry": auto_info,
             "manual_registry": str(final_path.resolve()),
-            "manual_confirmed_count": 30,
+            "manual_confirmed_count": expected_count,
             "entries": differences,
         },
     )
@@ -1141,7 +1175,7 @@ def main() -> int:
         json.dumps(
             {
                 "manual_registry": str(final_path),
-                "manual_confirmed": 30,
+                "manual_confirmed": expected_count,
                 "auto_vs_manual_csv": str(output_dir / "roi_auto_vs_manual.csv"),
                 "centerline_source": center_source,
             },

@@ -7,6 +7,7 @@ directory so that no previous measurement result is overwritten.
 
 from __future__ import annotations
 
+import argparse
 import csv
 import hashlib
 import json
@@ -42,6 +43,23 @@ TRUE_HEIGHT_MM = 20.0
 HEIGHT_V_RANGE = (1600, 1693)
 BASELINE_LOCAL_V_RANGES = ((1365, 1572), (1778, 1985))
 OUTPUT_NAME = "frame_000667_model_test_20mm_v2"
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--data-root",
+        type=Path,
+        default=REPO_ROOT / "data" / "tif",
+        help="Directory containing frame_000667.png and its JSON metadata.",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=TOOL_ROOT / "output_daheng_0811" / OUTPUT_NAME,
+        help="Output directory for the generated comparison artifact.",
+    )
+    return parser.parse_args()
 
 
 def sha256(path: Path) -> str:
@@ -184,9 +202,10 @@ def measurement_detail(measurement: HeightLineMeasurement) -> dict[str, Any]:
 
 
 def main() -> int:
+    args = parse_args()
     config_path = TOOL_ROOT / "configs" / "measure_tool_daheng_0811.yaml"
     app = load_app_config(config_path)
-    data_root = REPO_ROOT / "data" / "tif"
+    data_root = args.data_root.resolve()
     image_path = data_root / f"{FRAME_NAME}.png"
     metadata_path = data_root / f"{FRAME_NAME}.json"
     if not image_path.is_file():
@@ -259,7 +278,7 @@ def main() -> int:
     if local_baseline_mask.sum() < app.measurement.min_baseline_points:
         raise RuntimeError("local baseline ROI has too few points")
 
-    output = TOOL_ROOT / "output_daheng_0811" / OUTPUT_NAME
+    output = args.output.resolve()
     if output.exists():
         raise FileExistsError(f"output already exists: {output}")
     output.mkdir(parents=True)
