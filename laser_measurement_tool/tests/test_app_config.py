@@ -71,6 +71,14 @@ class LoadAppConfigTest(unittest.TestCase):
             config.session_ground_calibration.sanity.min_valid_points,
             20,
         )
+        self.assertEqual(
+            config.session_ground_calibration.ground_reference.support_source,
+            "pnp_board_mask",
+        )
+        self.assertEqual(
+            config.session_ground_calibration.ground_reference.mask_inset_mm,
+            0.0,
+        )
 
     def test_absolute_paths_are_kept(self) -> None:
         directory = Path(tempfile.mkdtemp())
@@ -143,6 +151,9 @@ session_ground_calibration:
   sanity:
     min_valid_points: 24
     max_abs_bias_mm: 1.5
+  ground_reference:
+    support_source: manual_ground_roi
+    mask_inset_mm: 3.5
 """
         path = self._write_config(content)
         config = load_app_config(path)
@@ -162,6 +173,14 @@ session_ground_calibration:
         )
         self.assertTrue(config.session_ground_calibration.sanity.mask_enabled)
         self.assertEqual(config.session_ground_calibration.sanity.mask_inset_mm, 0.0)
+        self.assertEqual(
+            config.session_ground_calibration.ground_reference.support_source,
+            "manual_ground_roi",
+        )
+        self.assertEqual(
+            config.session_ground_calibration.ground_reference.mask_inset_mm,
+            3.5,
+        )
 
     def test_invalid_session_ground_calibration_mode_raises(self) -> None:
         content = _VALID_CONFIG + "session_ground_calibration:\n  mode: always\n"

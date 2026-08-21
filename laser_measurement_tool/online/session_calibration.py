@@ -321,6 +321,7 @@ def build_session_ground_payload(
         "message": result.message,
         "runtime": {
             "ground_extrinsic_source": runtime_source,
+            "ground_extrinsic_generation": session_generation,
         },
         "board": {
             "pattern_cols": board_config.pattern_cols,
@@ -391,6 +392,23 @@ def save_session_ground_payload(path: str | Path, payload: dict[str, Any]) -> Pa
             current_runtime = record.get("runtime")
             if isinstance(previous_runtime, dict) and isinstance(current_runtime, dict):
                 record["runtime"] = {**previous_runtime, **current_runtime}
+            previous_reference = previous.get("session_ground_reference")
+            current_generation = record.get("runtime", {}).get(
+                "ground_extrinsic_generation"
+            )
+            if (
+                isinstance(previous_reference, dict)
+                and current_generation is not None
+                and previous_reference.get("ground_extrinsic_generation") is not None
+                and previous_reference.get("ground_extrinsic_generation")
+                != current_generation
+            ):
+                # Keep the old record as history, but make its runtime state
+                # explicit: a new ground-extrinsic generation cannot reuse it.
+                record["session_ground_reference_status"] = (
+                    "STALE_EXTRINSIC_GENERATION"
+                )
+                record["session_ground_reference_runtime_valid"] = False
     temporary = target.with_name(f".{target.name}.tmp")
     temporary.write_text(
         json.dumps(record, ensure_ascii=False, indent=2) + "\n",
@@ -469,6 +487,10 @@ def merge_session_ground_reference(
         existing["runtime"] = runtime
     runtime["ground_extrinsic_source"] = ground_extrinsic_source
     runtime["ground_reference_source"] = reference_payload.get("source")
+    if "ground_extrinsic_generation" in reference_payload:
+        runtime["ground_extrinsic_generation"] = reference_payload[
+            "ground_extrinsic_generation"
+        ]
     existing["saved_at_utc"] = datetime.now(timezone.utc).isoformat()
     return save_session_ground_payload(target, existing)
 

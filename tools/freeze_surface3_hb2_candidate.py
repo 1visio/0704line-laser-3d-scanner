@@ -362,7 +362,9 @@ def condition_replay_row(
         "point_count_evaluated": int(np.count_nonzero(accepted)),
         "out_of_domain_point_count": int(np.count_nonzero(~in_domain)),
         "out_of_domain_rate": float(np.mean(~in_domain)),
-        "clamped_point_count": int(np.count_nonzero(in_domain != (q2_used == q2))),
+        "clamped_point_count": int(
+            np.count_nonzero((strategy == "clamp") & (~in_domain))
+        ),
         "q2_min": float(np.min(q2)),
         "q2_p05": float(np.percentile(q2, 5.0)),
         "q2_median": float(np.median(q2)),
@@ -490,7 +492,7 @@ def full_replay(data: dict[str, Any], beta: np.ndarray, q2_domain: dict[str, Any
     aggregate: list[dict[str, Any]] = []
     aggregate.append(aggregate_condition_rows(rows, "pooled", "development_pooled", "development"))
     for height in DEV_HEIGHTS:
-        aggregate.append(aggregate_condition_rows(rows, "height", f"{height:g}mm", "development"))
+        aggregate.append(aggregate_condition_rows(rows, "height", f"{height:g}", "development"))
     for rank in range(1, 6):
         aggregate.append(aggregate_condition_rows(rows, "position_rank", str(rank), "development"))
     aggregate.append(aggregate_condition_rows(rows, "strict_50mm", "50mm", "strict_50mm"))
@@ -763,6 +765,10 @@ acceptance decision. Historical Q2_GAP_FILLED=NO and SURFACE2C_ALLOWED=NO are
 preserved; they do not invalidate this candidate freeze and do not authorize
 online enablement.
 
+IMMEDIATE_MORE_HEIGHT_ACQUISITION_REQUIRED=YES is a production/domain-coverage
+recommendation inherited from the grouped evidence; it is not a precondition
+for freezing this candidate, and no new data were acquired in this round.
+
 ## Frozen candidate
 
 - Model: H-B2, height layer, q1 excluded.
@@ -837,6 +843,9 @@ required H-B2 metrics are finite.
 This is a retrospective application of the one frozen full-development
 candidate. Development rows are in-sample and therefore are not engineering
 acceptance evidence. The 50 mm row is strict diagnostic only.
+Its corrected value uses the historical raw-formula replay for comparability;
+it is not an operational out-of-domain result and does not authorize
+unbounded extrapolation.
 
 | group type | group | conditions | raw Bias | raw MAE | raw RMSE | raw P95 | corrected Bias | corrected MAE | corrected RMSE | corrected P95 | corrected Max | worst condition |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
@@ -891,6 +900,7 @@ Current status:
 
 - HB2_CANDIDATE_FREEZE={statuses['HB2_CANDIDATE_FREEZE']}
 - HB2_PRODUCTION_ACCEPTED=NO
+- IMMEDIATE_MORE_HEIGHT_ACQUISITION_REQUIRED={statuses['IMMEDIATE_MORE_HEIGHT_ACQUISITION_REQUIRED']}
 - MORE_DOMAIN_COVERAGE_REQUIRED_FOR_PRODUCTION=YES
 - UNTOUCHED_ENGINEERING_VALIDATION_REQUIRED=YES
 
@@ -1060,7 +1070,6 @@ def main() -> int:
     }
     training_data_sha = sha256_text(canonical_json(training_data_names))
     provenance = {
-        "created_at_utc": now_utc(),
         "git_commit": git_commit(),
         **code_sha,
         "config_sha256": data["source_sha"]["config"],
@@ -1119,6 +1128,7 @@ def main() -> int:
         **candidate_core,
         "parameter_sha256": parameter_sha,
         "candidate_sha256": candidate_sha,
+        "created_at_utc": now_utc(),
     }
 
     condition_rows, full_aggregate = full_replay(data, beta, domain)

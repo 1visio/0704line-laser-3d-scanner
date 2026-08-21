@@ -7,10 +7,17 @@ additional surface model or calibration parameter is introduced here.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 import numpy as np
+
+
+GROUND_SUPPORT_PNP_BOARD_MASK = "pnp_board_mask"
+GROUND_SUPPORT_MANUAL_ROI = "manual_ground_roi"
+SUPPORTED_GROUND_SUPPORT_SOURCES = frozenset(
+    {GROUND_SUPPORT_PNP_BOARD_MASK, GROUND_SUPPORT_MANUAL_ROI}
+)
 
 
 class MeasurementError(RuntimeError):
@@ -69,6 +76,15 @@ class SessionGroundReference:
     inlier_mask: np.ndarray | None = None
     point_count: int = 0
     inlier_count: int = 0
+    # ``source`` remains the fitter/runtime identifier for compatibility.
+    # ``support_source`` is mandatory for runtime activation and records how
+    # the points were explicitly known to belong to a real ground plane.
+    support_source: str | None = None
+    active_ground_extrinsic_source: str | None = None
+    ground_extrinsic_generation: int | None = None
+    frame_host_monotonic_ns: int | None = None
+    mask_inset_mm: float | None = None
+    support_metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
     def slope(self) -> float:
@@ -85,6 +101,11 @@ class SessionGroundReference:
     @property
     def valid_s_range(self) -> tuple[float, float]:
         return self.valid_s_range_mm
+
+    @property
+    def provenance_source(self) -> str:
+        """Return the explicit support source used for this reference."""
+        return self.support_source or self.source
 
     def project_s(self, points_xy: np.ndarray) -> np.ndarray:
         points = np.asarray(points_xy, dtype=np.float64)
@@ -134,7 +155,14 @@ class SessionGroundReference:
         """Return a JSON-safe runtime snapshot."""
         return {
             "status": self.status,
-            "source": self.source,
+            "source": self.provenance_source,
+            "fit_source": self.source,
+            "support_source": self.support_source,
+            "active_ground_extrinsic_source": self.active_ground_extrinsic_source,
+            "ground_extrinsic_generation": self.ground_extrinsic_generation,
+            "frame_host_monotonic_ns": self.frame_host_monotonic_ns,
+            "mask_inset_mm": self.mask_inset_mm,
+            "support": dict(self.support_metadata),
             "origin_xy": np.asarray(self.origin_xy, dtype=np.float64).tolist(),
             "direction_xy": np.asarray(self.direction_xy, dtype=np.float64).tolist(),
             "slope": float(self.slope_z_per_mm),
@@ -322,14 +350,66 @@ def fit_session_ground_reference(
     )
 
 
+def fit_session_ground_reference_from_support(
+    points_ground: np.ndarray,
+    params: Any | None = None,
+    *,
+    support_source: str,
+    active_ground_extrinsic_source: str,
+    ground_extrinsic_generation: int,
+    frame_host_monotonic_ns: int,
+    mask_inset_mm: float | None = None,
+    support_metadata: dict[str, Any] | None = None,
+) -> SessionGroundReference:
+    """Fit the existing kernel and bind explicit runtime provenance.
+
+    The fitter itself intentionally keeps the historical
+    ``fit_session_ground_reference(points_ground, params)`` signature.  This
+    wrapper is the only supported path for creating a runtime reference: it
+    records the ground-support source and binds the result to the active
+    ground-extrinsic generation.
+    """
+    normalized_source = str(support_source).strip().lower()
+    if normalized_source not in SUPPORTED_GROUND_SUPPORT_SOURCES:
+        allowed = ", ".join(sorted(SUPPORTED_GROUND_SUPPORT_SOURCES))
+        raise ValueError(f"ground support source 必须是: {allowed}")
+    normalized_extrinsic_source = str(active_ground_extrinsic_source).strip().lower()
+    if normalized_extrinsic_source not in {"reference", "session"}:
+        raise ValueError("active ground extrinsic source 必须是 reference 或 session")
+    if isinstance(ground_extrinsic_generation, bool) or int(
+        ground_extrinsic_generation
+    ) < 0:
+        raise ValueError("ground_extrinsic_generation 必须是非负整数")
+    if isinstance(frame_host_monotonic_ns, bool) or int(frame_host_monotonic_ns) < 0:
+        raise ValueError("frame_host_monotonic_ns 必须是非负整数")
+    if mask_inset_mm is not None and (
+        not np.isfinite(float(mask_inset_mm)) or float(mask_inset_mm) < 0.0
+    ):
+        raise ValueError("mask_inset_mm 必须是有限非负数")
+    reference = fit_session_ground_reference(points_ground, params)
+    return replace(
+        reference,
+        support_source=normalized_source,
+        active_ground_extrinsic_source=normalized_extrinsic_source,
+        ground_extrinsic_generation=int(ground_extrinsic_generation),
+        frame_host_monotonic_ns=int(frame_host_monotonic_ns),
+        mask_inset_mm=(None if mask_inset_mm is None else float(mask_inset_mm)),
+        support_metadata=dict(support_metadata or {}),
+    )
+
+
 __all__ = [
     "GroundProfileFit",
+    "GROUND_SUPPORT_MANUAL_ROI",
+    "GROUND_SUPPORT_PNP_BOARD_MASK",
     "LineFitXY",
     "MeasurementError",
     "SessionGroundReference",
+    "SUPPORTED_GROUND_SUPPORT_SOURCES",
     "fit_ground_profile",
     "fit_line_xy",
     "fit_session_ground_reference",
+    "fit_session_ground_reference_from_support",
     "robust_sigma",
     "validate_points",
 ]

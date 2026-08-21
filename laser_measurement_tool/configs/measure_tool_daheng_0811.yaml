@@ -44,6 +44,9 @@ session_ground_calibration:
     saturation_ratio_warn: 0.05
     dynamic_range_p95_p5_warn: 20.0
     edge_margin_warn_px: 20.0
+  ground_reference:
+    support_source: pnp_board_mask
+    mask_inset_mm: 0.0
   sanity:
     # 使用 PnP 投影的完整棋盘物理边界；0 mm 表示完整 12x9 方格，
     # 不做像素腐蚀/膨胀；仅用于报警判定，不自动减 Bias、不拟合 a*S+b。

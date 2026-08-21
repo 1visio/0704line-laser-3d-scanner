@@ -8,7 +8,10 @@ from pathlib import Path
 import numpy as np
 
 from app_config import DEFAULT_CONFIG_PATH, load_app_config
-from measurement.ground_reference import fit_session_ground_reference
+from measurement.ground_reference import (
+    fit_session_ground_reference,
+    fit_session_ground_reference_from_support,
+)
 from online.fake_camera import SyntheticCameraSession
 from online.models import CameraConfig
 from online.pipeline import FramePipeline
@@ -26,6 +29,18 @@ def _empty_ground_points() -> np.ndarray:
             np.zeros_like(s),
             0.02 * s + 1.5,
         ]
+    )
+
+
+def _bound_reference(points: np.ndarray, config, pipeline: FramePipeline):
+    return fit_session_ground_reference_from_support(
+        points,
+        config.measurement,
+        support_source="manual_ground_roi",
+        active_ground_extrinsic_source=pipeline.ground_extrinsic_source,
+        ground_extrinsic_generation=pipeline.ground_extrinsic_generation,
+        frame_host_monotonic_ns=1,
+        support_metadata={"roi_count": 1},
     )
 
 
@@ -69,14 +84,21 @@ class SessionGroundReferenceTests(unittest.TestCase):
     def test_reference_survives_switch_between_reference_and_session_pnp(self) -> None:
         config = load_app_config(DEFAULT_CONFIG_PATH)
         pipeline = FramePipeline(config)
-        reference = fit_session_ground_reference(
-            _empty_ground_points(), config.measurement
+        pipeline.apply_session_ground_extrinsic(
+            np.eye(3), np.zeros(3), generation=1
         )
+        reference = _bound_reference(_empty_ground_points(), config, pipeline)
         pipeline.apply_session_ground_reference(reference)
 
         points = _empty_ground_points()
         first, first_meta = pipeline.apply_ground_reference_to_points(points)
-        pipeline.apply_session_ground_extrinsic(np.eye(3), np.zeros(3))
+        self.assertEqual(reference.provenance_source, "manual_ground_roi")
+        self.assertEqual(reference.ground_extrinsic_generation, 1)
+
+        # Re-applying the same active session pose must preserve the reference.
+        pipeline.apply_session_ground_extrinsic(
+            np.eye(3), np.zeros(3), generation=1
+        )
         second, second_meta = pipeline.apply_ground_reference_to_points(points)
 
         np.testing.assert_allclose(first, second)
@@ -85,9 +107,26 @@ class SessionGroundReferenceTests(unittest.TestCase):
         self.assertEqual(pipeline.ground_extrinsic_source, "session")
         self.assertIs(pipeline.session_ground_reference, reference)
 
-        pipeline.reset_ground_extrinsic()
+        # A genuinely new PnP generation invalidates the fitted reference.
+        pipeline.apply_session_ground_extrinsic(
+            np.eye(3), np.zeros(3), generation=2
+        )
+        self.assertIsNone(pipeline.session_ground_reference)
+        _, stale_meta = pipeline.apply_ground_reference_to_points(points)
+        self.assertEqual(stale_meta["ground_reference_status"], "inactive")
+
+        pipeline.reset_ground_extrinsic(generation=3)
         self.assertEqual(pipeline.ground_extrinsic_source, "reference")
-        self.assertIs(pipeline.session_ground_reference, reference)
+        self.assertIsNone(pipeline.session_ground_reference)
+
+    def test_unbound_reference_cannot_enter_runtime_pipeline(self) -> None:
+        config = load_app_config(DEFAULT_CONFIG_PATH)
+        pipeline = FramePipeline(config)
+        reference = fit_session_ground_reference(
+            _empty_ground_points(), config.measurement
+        )
+        with self.assertRaises(ValueError):
+            pipeline.apply_session_ground_reference(reference)
 
     def test_pipeline_exposes_corrected_and_raw_ground_views(self) -> None:
         config = load_app_config(DEFAULT_CONFIG_PATH)
@@ -99,9 +138,7 @@ class SessionGroundReferenceTests(unittest.TestCase):
         try:
             frame = camera.get_frame()
             raw_result = pipeline.run_frame(frame)
-            reference = fit_session_ground_reference(
-                raw_result.points_ground, config.measurement
-            )
+            reference = _bound_reference(raw_result.points_ground, config, pipeline)
             pipeline.apply_session_ground_reference(reference)
             corrected_result = pipeline.run_frame(frame)
         finally:
@@ -122,8 +159,14 @@ class SessionGroundReferenceTests(unittest.TestCase):
 
     def test_pnp_record_update_preserves_frozen_ground_reference_record(self) -> None:
         config = load_app_config(DEFAULT_CONFIG_PATH)
-        reference = fit_session_ground_reference(
-            _empty_ground_points(), config.measurement
+        reference = fit_session_ground_reference_from_support(
+            _empty_ground_points(),
+            config.measurement,
+            support_source="manual_ground_roi",
+            active_ground_extrinsic_source="reference",
+            ground_extrinsic_generation=0,
+            frame_host_monotonic_ns=1,
+            support_metadata={"roi_count": 1},
         )
         with tempfile.TemporaryDirectory() as directory:
             path = f"{directory}/session_ground_calibration.json"
@@ -132,7 +175,10 @@ class SessionGroundReferenceTests(unittest.TestCase):
                 {
                     "schema_version": 2,
                     "status": "VALID",
-                    "runtime": {"ground_extrinsic_source": "reference"},
+                    "runtime": {
+                        "ground_extrinsic_source": "reference",
+                        "ground_extrinsic_generation": 0,
+                    },
                 },
             )
             merge_session_ground_reference(
@@ -145,13 +191,21 @@ class SessionGroundReferenceTests(unittest.TestCase):
                 {
                     "schema_version": 2,
                     "status": "VALID",
-                    "runtime": {"ground_extrinsic_source": "session"},
+                    "runtime": {
+                        "ground_extrinsic_source": "session",
+                        "ground_extrinsic_generation": 1,
+                    },
                 },
             )
             saved = json.loads(Path(path).read_text(encoding="utf-8"))
 
         self.assertEqual(saved["session_ground_reference"]["status"], "VALID")
         self.assertEqual(saved["runtime"]["ground_extrinsic_source"], "session")
+        self.assertEqual(
+            saved["session_ground_reference_status"],
+            "STALE_EXTRINSIC_GENERATION",
+        )
+        self.assertFalse(saved["session_ground_reference_runtime_valid"])
 
 
 if __name__ == "__main__":

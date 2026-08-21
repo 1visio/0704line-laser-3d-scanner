@@ -20,6 +20,7 @@ from correction.stage_a_height_scale import (
     load_stage_a_height_scale,
 )
 from calibration.session_ground import SessionGroundBoardConfig
+from measurement.ground_reference import SUPPORTED_GROUND_SUPPORT_SOURCES
 from measurement.height_measure import MeasurementParams
 from reconstruction.reconstructor import ReconstructionParams
 
@@ -128,6 +129,28 @@ class SessionGroundSanityConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class SessionGroundReferenceConfig:
+    """Explicit support policy for runtime Session ground-reference fitting."""
+
+    support_source: str = "pnp_board_mask"
+    mask_inset_mm: float = 0.0
+
+    def __post_init__(self) -> None:
+        source = self.support_source.strip().lower()
+        if source not in SUPPORTED_GROUND_SUPPORT_SOURCES:
+            allowed = ", ".join(sorted(SUPPORTED_GROUND_SUPPORT_SOURCES))
+            raise ValueError(f"support_source 必须是: {allowed}")
+        if source != self.support_source:
+            object.__setattr__(self, "support_source", source)
+        if (
+            not isinstance(self.mask_inset_mm, (int, float))
+            or not math.isfinite(float(self.mask_inset_mm))
+            or float(self.mask_inset_mm) < 0.0
+        ):
+            raise ValueError("mask_inset_mm 必须是有限非负数")
+
+
+@dataclass(frozen=True, slots=True)
 class SessionGroundQualityConfig:
     """Configurable quality policy for the five-frame Session workflow."""
 
@@ -173,6 +196,9 @@ class SessionGroundCalibrationConfig:
     quality: SessionGroundQualityConfig = field(
         default_factory=SessionGroundQualityConfig
     )
+    ground_reference: SessionGroundReferenceConfig = field(
+        default_factory=SessionGroundReferenceConfig
+    )
     sanity: SessionGroundSanityConfig = field(
         default_factory=SessionGroundSanityConfig
     )
@@ -196,6 +222,8 @@ class SessionGroundCalibrationConfig:
             raise ValueError("sanity 必须是 SessionGroundSanityConfig")
         if not isinstance(self.quality, SessionGroundQualityConfig):
             raise ValueError("quality 必须是 SessionGroundQualityConfig")
+        if not isinstance(self.ground_reference, SessionGroundReferenceConfig):
+            raise ValueError("ground_reference 必须是 SessionGroundReferenceConfig")
 
     def board_config(self) -> SessionGroundBoardConfig:
         """返回 Session-1 使用的共享棋盘格配置。"""
@@ -465,6 +493,7 @@ def _parse_session_ground_calibration(
         "detector",
         "output",
         "quality",
+        "ground_reference",
         "sanity",
     }
     unknown = set(section) - valid_fields
@@ -492,6 +521,16 @@ def _parse_session_ground_calibration(
             "session_ground_calibration.quality",
         )
     values["quality"] = quality
+    ground_reference_section = section.get("ground_reference")
+    if ground_reference_section is None:
+        ground_reference = SessionGroundReferenceConfig()
+    else:
+        ground_reference = _build_dataclass(
+            ground_reference_section,
+            SessionGroundReferenceConfig,
+            "session_ground_calibration.ground_reference",
+        )
+    values["ground_reference"] = ground_reference
     sanity_section = section.get("sanity")
     if sanity_section is None:
         sanity = SessionGroundSanityConfig()

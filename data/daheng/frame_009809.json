@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "source": "online_snapshot",
+  "ground_extrinsic_source": "session",
+  "image": {
+    "filename": "frame_009809.tif",
+    "width": 480,
+    "height": 3000,
+    "dtype": "uint8"
+  },
+  "image_offset": {
+    "u": 1760,
+    "v": 0
+  },
+  "frame": {
+    "camera_frame_number": 11258,
+    "camera_timestamp_ticks": 5323100727900,
+    "host_timestamp_ns": 1787293624490860800
+  }
+}

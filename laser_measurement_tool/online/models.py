@@ -77,6 +77,7 @@ class FrameResult:
     calibration_manifest_sha256: str
     algorithm_config_sha256: str
     ground_extrinsic_source: str = "reference"
+    ground_extrinsic_generation: int | None = None
     ground_reference_source: str = "none"
     ground_reference_status: str = "inactive"
     ground_reference_valid_s_range_mm: tuple[float, float] | None = None

@@ -15,7 +15,10 @@ from correction.stage_a_height_scale import resolve_stage_a_height_scale
 from gui.image_view import _to_uint8_display
 from laser.backends import create_extraction_params
 from laser.laser_extractor import extract_laser_center
-from measurement.ground_reference import SessionGroundReference
+from measurement.ground_reference import (
+    SUPPORTED_GROUND_SUPPORT_SOURCES,
+    SessionGroundReference,
+)
 from reconstruction.reconstructor import reconstruct_uv_to_ground
 
 from .models import CapturedFrame, FrameResult
@@ -54,6 +57,7 @@ class FramePipeline:
         self._reference_t = np.ascontiguousarray(
             np.asarray(self.package.calibration["t"], dtype=np.float64).copy()
         )
+        self._ground_extrinsic_generation = 0
         self._session_ground_reference: SessionGroundReference | None = None
         self.extraction_params = create_extraction_params(
             self.extraction_method, self.extraction_options
@@ -82,6 +86,7 @@ class FramePipeline:
         with self._calibration_lock:
             calibration = dict(self.package.calibration)
             ground_extrinsic_source = self._ground_extrinsic_source
+            ground_extrinsic_generation = self._ground_extrinsic_generation
             ground_reference = self._session_ground_reference
         reconstructed = reconstruct_uv_to_ground(
             centers_full,
@@ -111,6 +116,7 @@ class FramePipeline:
             calibration_manifest_sha256=self.package.manifest_sha256,
             algorithm_config_sha256=self.algorithm_config_sha256,
             ground_extrinsic_source=ground_extrinsic_source,
+            ground_extrinsic_generation=ground_extrinsic_generation,
             **ground_reference_metadata,
             **self._stage_a_frame_metadata.as_dict(),
             points_ground_raw=np.ascontiguousarray(
@@ -125,6 +131,17 @@ class FramePipeline:
         """当前运行时 ground 外参来源：``reference`` 或 ``session``。"""
         with self._calibration_lock:
             return self._ground_extrinsic_source
+
+    @property
+    def calibration_package_identity(self) -> tuple[str, str]:
+        """Return the immutable package identity used by this pipeline."""
+        return self.package.package_id, self.package.manifest_sha256
+
+    @property
+    def ground_extrinsic_generation(self) -> int:
+        """当前 active ground extrinsic 的轻量 generation token。"""
+        with self._calibration_lock:
+            return self._ground_extrinsic_generation
 
     @property
     def reference_ground_extrinsic(self) -> tuple[np.ndarray, np.ndarray]:
@@ -145,6 +162,15 @@ class FramePipeline:
             raise TypeError("Session ground reference 类型不正确")
         if str(reference.status).upper() != "VALID":
             raise ValueError("只能应用 VALID 的 Session ground reference")
+        if reference.support_source not in SUPPORTED_GROUND_SUPPORT_SOURCES:
+            raise ValueError(
+                "Session ground reference 必须带有明确的 ground support source"
+            )
+        with self._calibration_lock:
+            if reference.active_ground_extrinsic_source != self._ground_extrinsic_source:
+                raise ValueError("Session ground reference 的 active extrinsic source 已失效")
+            if reference.ground_extrinsic_generation != self._ground_extrinsic_generation:
+                raise ValueError("Session ground reference 的 extrinsic generation 已失效")
         lower, upper = reference.valid_s_range_mm
         if not np.isfinite([lower, upper]).all() or lower > upper:
             raise ValueError("Session ground reference 的 S 范围无效")
@@ -180,6 +206,8 @@ class FramePipeline:
         self,
         R_camera_to_ground: np.ndarray,
         t_camera_to_ground: np.ndarray,
+        *,
+        generation: int | None = None,
     ) -> None:
         """仅替换当前进程内的 ground R/t，不写入 reference 文件。"""
         rotation = np.asarray(R_camera_to_ground, dtype=np.float64)
@@ -188,17 +216,36 @@ class FramePipeline:
             raise ValueError("Session ground 外参必须是 R(3x3) 和 t(3)")
         if not np.isfinite(rotation).all() or not np.isfinite(translation).all():
             raise ValueError("Session ground 外参必须包含有限数值")
+        if generation is None:
+            generation = self._ground_extrinsic_generation + 1
+        if isinstance(generation, bool) or int(generation) < 0:
+            raise ValueError("ground extrinsic generation 必须是非负整数")
         with self._calibration_lock:
+            generation_changed = (
+                self._ground_extrinsic_source != "session"
+                or int(generation) != self._ground_extrinsic_generation
+            )
             self.package.calibration["R"] = np.ascontiguousarray(rotation.copy())
             self.package.calibration["t"] = np.ascontiguousarray(translation.copy())
             self._ground_extrinsic_source = "session"
+            self._ground_extrinsic_generation = int(generation)
+            # A new PnP generation cannot safely reuse a reference fitted with
+            # the previous camera-to-ground transform.
+            if generation_changed:
+                self._session_ground_reference = None
 
-    def reset_ground_extrinsic(self) -> None:
+    def reset_ground_extrinsic(self, *, generation: int | None = None) -> None:
         """恢复当前进程内的 reference R/t；不写入 reference 文件。"""
+        if generation is None:
+            generation = self._ground_extrinsic_generation + 1
+        if isinstance(generation, bool) or int(generation) < 0:
+            raise ValueError("ground extrinsic generation 必须是非负整数")
         with self._calibration_lock:
             self.package.calibration["R"] = self._reference_R.copy()
             self.package.calibration["t"] = self._reference_t.copy()
             self._ground_extrinsic_source = "reference"
+            self._ground_extrinsic_generation = int(generation)
+            self._session_ground_reference = None
 
     @staticmethod
     def _apply_ground_reference(
@@ -224,7 +271,7 @@ class FramePipeline:
         else:
             status = "applied"
         return corrected, {
-            "ground_reference_source": reference.source,
+            "ground_reference_source": reference.provenance_source,
             "ground_reference_status": status,
             "ground_reference_valid_s_range_mm": reference.valid_s_range_mm,
             "ground_reference_applied_count": applied_count,

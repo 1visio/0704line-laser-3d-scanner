@@ -182,6 +182,21 @@ class MainWindow(QMainWindow):
         return self._baseline_points
 
     @property
+    def baseline_regions_full(self) -> tuple[tuple[float, float, float, float], ...]:
+        """返回用户确认的基准 ROI，坐标为 full-sensor 像素。"""
+        offset_x, offset_y = self._image_offset
+        return tuple(
+            (
+                float(region.left + offset_x),
+                float(region.top + offset_y),
+                float(region.right + offset_x),
+                float(region.bottom + offset_y),
+            )
+            for region in self._roi_manager.regions
+            if region.kind is RoiKind.BASELINE
+        )
+
+    @property
     def obstacle_points(self) -> np.ndarray:
         """返回障碍物 ROI 内的亚像素激光中心点。"""
         return self._obstacle_points

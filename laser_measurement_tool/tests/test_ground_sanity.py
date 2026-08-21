@@ -9,11 +9,16 @@ import numpy as np
 from online.ground_sanity import (
     evaluate_ground_sanity,
     full_board_physical_polygon,
+    select_board_ground_points,
     select_points_inside_board_mask,
 )
+from measurement.board_mask import select_manual_ground_roi_points
 
 
 class GroundSanityTests(unittest.TestCase):
+    def test_ground_sanity_uses_shared_board_selector(self) -> None:
+        self.assertIs(select_points_inside_board_mask, select_board_ground_points)
+
     def test_valid_metrics_use_raw_zg_and_report_slope(self) -> None:
         distance = np.linspace(0.0, 100.0, 25)
         zg = 0.01 * distance + 0.1
@@ -100,6 +105,23 @@ class GroundSanityTests(unittest.TestCase):
         )
         self.assertEqual(sanity.status, "VALID")
         self.assertEqual(sanity.as_dict()["mask"]["selected_point_count"], 2)
+
+    def test_manual_ground_roi_is_explicit_support_source(self) -> None:
+        pixels = np.asarray(
+            [[10.0, 10.0], [20.0, 20.0], [40.0, 40.0]], dtype=np.float64
+        )
+        points = np.column_stack(
+            (pixels, np.asarray([1.0, 2.0, 3.0], dtype=np.float64))
+        )
+        selected, metadata = select_manual_ground_roi_points(
+            pixels,
+            points,
+            [(5.0, 5.0, 25.0, 25.0)],
+        )
+        np.testing.assert_allclose(selected[:, 2], [1.0, 2.0])
+        self.assertEqual(metadata["source"], "manual_ground_roi")
+        self.assertEqual(metadata["status"], "applied")
+        self.assertEqual(metadata["selected_point_count"], 2)
 
     def test_threshold_failure_does_not_subtract_bias(self) -> None:
         points = np.column_stack(
