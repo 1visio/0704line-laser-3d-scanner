@@ -324,6 +324,130 @@ def _failure(
     )
 
 
+def estimate_session_ground_extrinsic_from_corners(
+    corners: np.ndarray,
+    intrinsics: CameraIntrinsics | Mapping[str, Any] | tuple[Any, Any],
+    board_config: SessionGroundBoardConfig | None = None,
+    *,
+    detection_method: str | None = "provided",
+) -> SessionGroundExtrinsic:
+    """Solve the existing Session-PnP semantics from ordered image corners.
+
+    This is the solve-only half of :func:`estimate_session_ground_extrinsic`.
+    It is intentionally public so the online five-frame workflow can robustly
+    aggregate same-order detections before running the exact same solvePnP and
+    camera-to-ground transform path.
+    """
+    board = board_config or SessionGroundBoardConfig()
+    try:
+        K, D = _normalise_intrinsics(intrinsics)
+    except (TypeError, ValueError) as error:
+        return _failure("invalid_intrinsics", str(error))
+
+    try:
+        array = np.asarray(corners, dtype=np.float32).reshape(-1, 2)
+    except (TypeError, ValueError) as error:
+        return _failure("invalid_corners", str(error), method=detection_method)
+    expected_count = board.pattern_cols * board.pattern_rows
+    if len(array) != expected_count:
+        return _failure(
+            "invalid_corner_count",
+            f"expected {expected_count} checkerboard corners, got {len(array)}",
+            corners=array,
+            method=detection_method,
+        )
+    if not np.isfinite(array).all():
+        return _failure(
+            "invalid_corners",
+            "checkerboard corners must be finite",
+            corners=array,
+            method=detection_method,
+        )
+    corners_array = np.ascontiguousarray(array)
+
+    object_points = board.object_points()
+    try:
+        solved, rvec, tvec = cv2.solvePnP(
+            object_points,
+            corners_array,
+            K,
+            D,
+        )
+    except cv2.error as error:
+        return _failure(
+            "solve_pnp_failed",
+            str(error),
+            corners=corners_array,
+            method=detection_method,
+        )
+    if not solved:
+        return _failure(
+            "solve_pnp_failed",
+            "cv2.solvePnP returned solved=False",
+            corners=corners_array,
+            method=detection_method,
+        )
+
+    # Keep OpenCV's float32 corner representation for solvePnP, matching the
+    # legacy implementation; use float64 only for reported residual arithmetic.
+    rvec = np.ascontiguousarray(np.asarray(rvec, dtype=np.float64).reshape(3, 1))
+    tvec = np.ascontiguousarray(np.asarray(tvec, dtype=np.float64).reshape(3, 1))
+    R_board_to_camera, _ = cv2.Rodrigues(rvec)
+    R_board_to_camera = np.ascontiguousarray(
+        np.asarray(R_board_to_camera, dtype=np.float64)
+    )
+    T_camera_from_board = np.eye(4, dtype=np.float64)
+    T_camera_from_board[:3, :3] = R_board_to_camera
+    T_camera_from_board[:3, 3] = tvec.reshape(3)
+
+    projected, _ = cv2.projectPoints(
+        object_points,
+        rvec,
+        tvec,
+        K,
+        D,
+    )
+    residual = corners_array.astype(np.float64) - projected.reshape(-1, 2)
+    reprojection_rmse = float(np.sqrt(np.mean(np.sum(residual**2, axis=1))))
+
+    try:
+        (
+            R_camera_to_ground,
+            t_camera_to_ground,
+            T_ground_from_camera,
+            T_camera_from_ground,
+        ) = build_camera_to_ground_transform(R_board_to_camera, tvec)
+    except ValueError as error:
+        return _failure(
+            "invalid_pose",
+            str(error),
+            corners=corners_array,
+            method=detection_method,
+        )
+
+    normal = np.ascontiguousarray(R_board_to_camera[:, 2], dtype=np.float64)
+    if normal[2] > 0.0:
+        normal = -normal
+    origin = np.ascontiguousarray(T_camera_from_ground[:3, 3], dtype=np.float64)
+    return SessionGroundExtrinsic(
+        status="success",
+        message="session ground calibration succeeded",
+        detected_corners=np.ascontiguousarray(corners_array),
+        detection_method=detection_method,
+        reprojection_rmse_px=reprojection_rmse,
+        rvec=rvec,
+        tvec=tvec,
+        R_board_to_camera=R_board_to_camera,
+        T_camera_from_board=np.ascontiguousarray(T_camera_from_board),
+        ground_normal_in_camera=normal,
+        ground_origin_in_camera=origin,
+        R=R_camera_to_ground,
+        t=t_camera_to_ground,
+        T_ground_from_camera=T_ground_from_camera,
+        T_camera_from_ground=T_camera_from_ground,
+    )
+
+
 def estimate_session_ground_extrinsic(
     image: np.ndarray,
     intrinsics: CameraIntrinsics | Mapping[str, Any] | tuple[Any, Any],
@@ -357,86 +481,14 @@ def estimate_session_ground_extrinsic(
             method=detection.method,
         )
 
-    # Keep OpenCV's float32 corner representation for solvePnP, matching the
-    # legacy implementation; use float64 only for reported residual arithmetic.
     corners = np.ascontiguousarray(
         np.asarray(detection.corners, dtype=np.float32).reshape(-1, 2)
     )
-    object_points = board.object_points()
-    try:
-        solved, rvec, tvec = cv2.solvePnP(
-            object_points,
-            corners,
-            K,
-            D,
-        )
-    except cv2.error as error:
-        return _failure(
-            "solve_pnp_failed",
-            str(error),
-            corners=corners,
-            method=detection.method,
-        )
-    if not solved:
-        return _failure(
-            "solve_pnp_failed",
-            "cv2.solvePnP returned solved=False",
-            corners=corners,
-            method=detection.method,
-        )
-
-    rvec = np.ascontiguousarray(np.asarray(rvec, dtype=np.float64).reshape(3, 1))
-    tvec = np.ascontiguousarray(np.asarray(tvec, dtype=np.float64).reshape(3, 1))
-    R_board_to_camera, _ = cv2.Rodrigues(rvec)
-    R_board_to_camera = np.ascontiguousarray(
-        np.asarray(R_board_to_camera, dtype=np.float64)
-    )
-    T_camera_from_board = np.eye(4, dtype=np.float64)
-    T_camera_from_board[:3, :3] = R_board_to_camera
-    T_camera_from_board[:3, 3] = tvec.reshape(3)
-
-    projected, _ = cv2.projectPoints(
-        object_points,
-        rvec,
-        tvec,
-        K,
-        D,
-    )
-    residual = corners.astype(np.float64) - projected.reshape(-1, 2)
-    reprojection_rmse = float(np.sqrt(np.mean(np.sum(residual**2, axis=1))))
-
-    try:
-        R_camera_to_ground, t_camera_to_ground, T_ground_from_camera, T_camera_from_ground = (
-            build_camera_to_ground_transform(R_board_to_camera, tvec)
-        )
-    except ValueError as error:
-        return _failure(
-            "invalid_pose",
-            str(error),
-            corners=corners,
-            method=detection.method,
-        )
-
-    normal = np.ascontiguousarray(R_board_to_camera[:, 2], dtype=np.float64)
-    if normal[2] > 0.0:
-        normal = -normal
-    origin = np.ascontiguousarray(T_camera_from_ground[:3, 3], dtype=np.float64)
-    return SessionGroundExtrinsic(
-        status="success",
-        message="session ground calibration succeeded",
-        detected_corners=np.ascontiguousarray(corners),
+    return estimate_session_ground_extrinsic_from_corners(
+        corners,
+        {"K": K, "D": D},
+        board,
         detection_method=detection.method,
-        reprojection_rmse_px=reprojection_rmse,
-        rvec=rvec,
-        tvec=tvec,
-        R_board_to_camera=R_board_to_camera,
-        T_camera_from_board=np.ascontiguousarray(T_camera_from_board),
-        ground_normal_in_camera=normal,
-        ground_origin_in_camera=origin,
-        R=R_camera_to_ground,
-        t=t_camera_to_ground,
-        T_ground_from_camera=T_ground_from_camera,
-        T_camera_from_ground=T_camera_from_ground,
     )
 
 
@@ -450,4 +502,5 @@ __all__ = [
     "create_object_points",
     "detect_corners",
     "estimate_session_ground_extrinsic",
+    "estimate_session_ground_extrinsic_from_corners",
 ]

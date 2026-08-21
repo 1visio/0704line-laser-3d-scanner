@@ -235,16 +235,25 @@ python -c "import gxipy; print(gxipy.__file__); print(gxipy.__version__)"
 
 ### 4.4 Session 基准标定
 
-在线窗口的“Session 基准标定”使用当前无障碍棋盘格帧调用 Session-1 的
-`solvePnP` API。棋盘格默认是 `11 × 8` 内角点、方格边长 `20 mm`；如果当前帧是
-硬件 ROI，程序会自动把内参主点换算到 ROI 局部坐标。
+在线窗口的“Session 基准标定”会原地进入 Daheng Session calibration mode：保存当前
+完整 `CameraConfig`，切到 `OffsetX/Y=0、Width=4096、Height=3000` 的全幅预览，并在
+界面下方显示角点 overlay。曝光/增益可在模式内编辑，程序自动执行停流配置后恢复取流；
+退出或取消时恢复原 ROI、曝光、增益和像素格式，不写入持久相机配置。
+
+进入模式只启动全幅预览，不会自动消耗 PnP 尝试次数。调好曝光/增益、确认上下预览已经
+显示完整棋盘后，点击“采集 PnP 棋盘格（5 帧）”，工具才会连续收集最多配置允许尝试次数
+中的 `5` 个有效帧；每帧必须检测到完整 `88/88` 角点，然后对同序角点取 median，再调用
+Session-1 的同一 `solvePnP` API。棋盘检测在后台执行，GUI 仅更新最新预览和 overlay，界面
+还显示最终 RMSE、帧间 translation/rotation repeatability，以及棋盘饱和、动态范围和靠边
+warning。
 
 成功后只替换当前进程的 runtime ground `R/t`，reference YAML、manifest、C0/C1
 和激光模型均不修改。实时状态会显示：
 
 - `ground 外参`：`reference` 或 `session`；
 - `Session 状态`：`VALID/INVALID`；
-- 检测角点数、重投影 RMSE、相对 reference 的 `Δtranslation` 和 `Δrotation`。
+- 检测角点数、重投影 RMSE、相对 reference 的 `Δtranslation` 和 `Δrotation`；
+  `PnP 帧数`、帧间 repeatability 和质量 warning。
 
 最新尝试会保存为输出目录下的 `session_ground_calibration.json`。例如：
 
@@ -262,7 +271,8 @@ Session 标定，之后才允许开始在线重建；`disabled` 隐藏该入口�
 
 ### 4.5 Laser Ground Sanity Check
 
-完成 Session 基准标定后，保持棋盘不动并打开激光，点击“激光地面一致性检查”。
+Session PnP 成功后，退出标定模式会自动恢复测量参数；随后可切换到适合激光的曝光，
+保持棋盘不动并打开激光，点击“激光地面一致性检查”。
 在线取流时必须等待 Session 外参生效后的新帧；停流时按钮会单独采集一帧并调用同一
 正式链路：`Steger → Frozen C0 → Frozen C1 → Session ground extrinsic`。
 如果当前处理下拉框不是 `steger`，检查按钮会拒绝执行；请停流切回 `steger` 后重新开始。
@@ -273,7 +283,8 @@ ground slope 和有效点数。默认至少需要 20 个有限点；异常只报
 不拟合 `a*S+b`，也不执行 Surface correction 或 Stage-A。
 
 检查结果会合并保存到 `session_ground_calibration.json` 的
-`laser_ground_sanity` 节点，并记录 `ground_extrinsic_source`、帧号和正式链路。
+`laser_ground_sanity` 节点，并记录 `ground_extrinsic_source`、camera 帧号、
+host monotonic 时间和正式链路；时序判断不依赖会在 stop/start 后重置的 camera 帧号。
 
 ## 5. FPS、处理耗时与丢帧解释
 
@@ -485,6 +496,13 @@ session_ground_calibration:
   square_size_mm: 20.0
   detector: sb_then_classic   # 或 classic
   output: null                # 默认写入 output.dir/session_ground_calibration.json
+  quality:
+    target_frames: 5
+    max_capture_attempts: 8
+    max_reprojection_rmse_px: 0.5
+    saturation_ratio_warn: 0.05
+    dynamic_range_p95_p5_warn: 20.0
+    edge_margin_warn_px: 20.0
   sanity:
     mask_enabled: true
     mask_inset_mm: 0.0         # 完整物理边界；0 mm，不做腐蚀/膨胀

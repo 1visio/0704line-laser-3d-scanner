@@ -69,6 +69,9 @@ from .ground_sanity import (
     select_points_inside_board_mask,
 )
 from .session_calibration import (
+    SessionGroundRepeatability,
+    aggregate_session_ground_extrinsic,
+    assess_checkerboard_image_quality,
     build_session_ground_payload,
     compare_ground_extrinsics,
     merge_session_ground_sanity,
@@ -241,6 +244,12 @@ class OnlineState(Enum):
 class OnlineCameraWindow(QMainWindow):
     """Connect, acquire, process, inspect, snapshot, and record camera frames."""
 
+    # Heavy checkerboard detection and camera reconfiguration must not run in
+    # the Qt GUI thread.  The worker payloads are deliberately plain Python
+    # objects so stale results can be discarded by a generation token.
+    _session_calibration_frame_ready = Signal(object)
+    _camera_config_ready = Signal(object)
+
     def __init__(
         self,
         config: AppConfig,
@@ -284,8 +293,29 @@ class OnlineCameraWindow(QMainWindow):
         self._active_session_ground_result: SessionGroundExtrinsic | None = None
         self._last_session_ground_result: SessionGroundExtrinsic | None = None
         self._session_ground_calibration_frame_number: int | None = None
+        self._session_ground_calibration_host_monotonic_ns: int | None = None
+        self._session_ground_generation = 0
         self._session_ground_calibration_offset: tuple[int, int] | None = None
         self._last_ground_sanity: GroundSanityResult | None = None
+        self._session_calibration_active = False
+        self._session_calibration_restore_config: CameraConfig | None = None
+        self._session_calibration_was_streaming = False
+        self._session_calibration_frames: list[tuple[SessionGroundExtrinsic, CapturedFrame, dict[str, object]]] = []
+        self._session_calibration_attempts = 0
+        self._session_calibration_repeatability: SessionGroundRepeatability | None = None
+        self._session_calibration_quality: dict[str, object] | None = None
+        self._session_calibration_capturing = False
+        self._session_calibration_capture_after_reconfigure = False
+        self._session_calibration_capture_generation = 0
+        self._session_calibration_capture_started_host_monotonic_ns: int | None = None
+        self._session_calibration_worker_busy = False
+        self._session_calibration_preview_image_initialized = False
+        self._camera_reconfigure_in_progress = False
+        self._camera_config_worker_busy = False
+        self._camera_reconfigure_token = 0
+        self._pending_camera_reconfigure: tuple[CameraConfig, bool, object | None] | None = None
+        self._suppress_stream_stopped_once = False
+        self._camera_config_syncing = False
         self._analysis_window: QMainWindow | None = None
         self._trail: deque[tuple[float, np.ndarray]] = deque(maxlen=30)
         self._displayed_frames = 0
@@ -296,6 +326,7 @@ class OnlineCameraWindow(QMainWindow):
         self._last_render_at = 0.0
         self._raw_view_shape: tuple[int, int] | None = None
         self._extracted_view_shape: tuple[int, int] | None = None
+        self._last_raw_preview_at = 0.0
         self._image_preview_rotated = False
         self._section_x_bounds: tuple[float, float] | None = None
         self._section_points = np.empty((0, 2), dtype=np.float64)
@@ -308,6 +339,12 @@ class OnlineCameraWindow(QMainWindow):
         self._closing = False
         self._build_ui()
         self._connect_signals()
+        self._session_calibration_debounce_timer = QTimer(self)
+        self._session_calibration_debounce_timer.setSingleShot(True)
+        self._session_calibration_debounce_timer.setInterval(250)
+        self._session_calibration_debounce_timer.timeout.connect(
+            self._apply_session_calibration_camera_controls
+        )
         self._set_online_state(OnlineState.DISCONNECTED)
         self._record_timer = QTimer(self)
         self._record_timer.setInterval(250)
@@ -424,6 +461,19 @@ class OnlineCameraWindow(QMainWindow):
         )
         self.extracted_image_boundary.setZValue(10)
         self.extracted_image_view.addItem(self.extracted_image_boundary)
+        self.extracted_corner_boundary = pg.PlotDataItem(
+            pen=pg.mkPen("#24d7ff", width=2.0)
+        )
+        self.extracted_corner_boundary.setZValue(20)
+        self.extracted_image_view.addItem(self.extracted_corner_boundary)
+        self.extracted_corner_scatter = pg.ScatterPlotItem(
+            size=7.0,
+            pen=pg.mkPen("#ffffff", width=1.0),
+            brush=pg.mkBrush("#ffb000"),
+            pxMode=True,
+        )
+        self.extracted_corner_scatter.setZValue(21)
+        self.extracted_image_view.addItem(self.extracted_corner_scatter)
         image_splitter.addWidget(self.raw_image_view)
         image_splitter.addWidget(self.extracted_image_view)
         image_splitter.setStretchFactor(0, 1)
@@ -1046,6 +1096,26 @@ class OnlineCameraWindow(QMainWindow):
         self.height_min_label.setText(f"{minimum[2]:.1f}")
         self.height_max_label.setText(f"{maximum[2]:.1f} mm")
 
+    def _invalidate_live_reconstruction_after_ground_update(self) -> None:
+        """Discard the displayed reconstruction from the previous ground pose.
+
+        Applying a Session pose does not retroactively change a
+        ``FrameResult`` that was already reconstructed with the reference
+        pose. Keep the raw frame/Session metadata, but require one new
+        pipeline result before showing or exporting a live point cloud.
+        """
+        self._last_result = None
+        self._trail.clear()
+        self._update_point_summary(np.empty((0, 3), dtype=np.float64))
+        self.current_point_item.setData(
+            pos=np.empty((0, 3), dtype=np.float32)
+        )
+        self.trail_point_item.setData(
+            pos=np.empty((0, 3), dtype=np.float32)
+        )
+        self._reset_section_view()
+        self._last_render_at = 0.0
+
     def _height_colors(self, points_ground: np.ndarray) -> np.ndarray:
         zg = np.asarray(points_ground[:, 2], dtype=np.float64)
         minimum = float(zg.min())
@@ -1296,6 +1366,13 @@ class OnlineCameraWindow(QMainWindow):
             "将当前无障碍棋盘格帧用于 Session-1 PnP；成功后仅更新本次运行时外参"
         )
         stream_layout.addWidget(self.session_ground_button)
+        self.session_capture_button = QPushButton(
+            "采集 PnP 棋盘格（5 帧）", stream_group
+        )
+        self.session_capture_button.setToolTip(
+            "先在上方全幅预览中调好曝光/增益；点击后才开始连续采集有效棋盘帧"
+        )
+        stream_layout.addWidget(self.session_capture_button)
         self.ground_sanity_button = QPushButton(
             "激光地面一致性检查", stream_group
         )
@@ -1338,6 +1415,17 @@ class OnlineCameraWindow(QMainWindow):
         self.session_ground_rmse_label = QLabel("—", stats)
         self.session_ground_delta_translation_label = QLabel("—", stats)
         self.session_ground_delta_rotation_label = QLabel("—", stats)
+        self.session_ground_frames_label = QLabel("—", stats)
+        self.session_ground_repeat_translation_label = QLabel("—", stats)
+        self.session_ground_repeat_rotation_label = QLabel("—", stats)
+        self.session_ground_quality_label = QLabel("棋盘质量：—", stats)
+        self.session_ground_quality_label.setWordWrap(True)
+        self.session_ground_quality_label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+        self.session_ground_quality_label.setToolTip(
+            "仅显示配置阈值产生的 warning；不会自动修改图像或标定参数"
+        )
         self.session_sanity_status_label = QLabel(
             "SESSION_CALIBRATION = 未检查", stats
         )
@@ -1364,6 +1452,9 @@ class OnlineCameraWindow(QMainWindow):
             ("重投影 RMSE", self.session_ground_rmse_label),
             ("Δtranslation", self.session_ground_delta_translation_label),
             ("Δrotation", self.session_ground_delta_rotation_label),
+            ("PnP 帧数", self.session_ground_frames_label),
+            ("帧间 translation", self.session_ground_repeat_translation_label),
+            ("帧间 rotation", self.session_ground_repeat_rotation_label),
             ("Bias Zg", self.session_sanity_bias_label),
             ("Sanity RMSE", self.session_sanity_rmse_label),
             ("Sanity P95", self.session_sanity_p95_label),
@@ -1373,6 +1464,9 @@ class OnlineCameraWindow(QMainWindow):
             ("Valid points", self.session_sanity_valid_count_label),
         ):
             stats_layout.addRow(title, label)
+        # Quality warnings can be long.  Give them the full panel width so
+        # they wrap instead of being clipped or painted over the value column.
+        stats_layout.addRow(self.session_ground_quality_label)
         # Keep the long machine-readable result on one full-width row instead
         # of letting QFormLayout wrap and overlap the two columns.
         stats_layout.addRow(self.session_sanity_status_label)
@@ -1393,16 +1487,30 @@ class OnlineCameraWindow(QMainWindow):
         self.session_ground_button.clicked.connect(
             self._prompt_session_ground_calibration
         )
+        self.session_capture_button.clicked.connect(
+            self._start_session_calibration_capture
+        )
         self.ground_sanity_button.clicked.connect(self.run_ground_sanity_check)
         self.export_button.clicked.connect(self._export_current_frame)
         self.analysis_button.clicked.connect(self.open_frame_analysis)
         self.record_button.clicked.connect(self.start_recording)
+        self.exposure.editingFinished.connect(self._schedule_camera_control_update)
+        self.gain.editingFinished.connect(self._schedule_camera_control_update)
+        self.pixel_format.currentTextChanged.connect(
+            self._schedule_camera_control_update
+        )
         queued = Qt.ConnectionType.QueuedConnection
         self._controller.raw_frame_ready.connect(self._show_raw_frame, queued)
         self._controller.result_ready.connect(self._show_result, queued)
         self._controller.stats_updated.connect(self._show_stats, queued)
         self._controller.failed.connect(self._show_error, queued)
         self._controller.stopped.connect(self._on_stream_stopped, queued)
+        self._session_calibration_frame_ready.connect(
+            self._on_session_calibration_worker_result, queued
+        )
+        self._camera_config_ready.connect(
+            self._on_camera_config_worker_result, queued
+        )
 
     def _set_online_state(
         self, state: OnlineState, message: str | None = None
@@ -1420,6 +1528,11 @@ class OnlineCameraWindow(QMainWindow):
             }[state]
             if state is OnlineState.DISCONNECTED and self._device_count:
                 message = f"未连接 · 发现 {self._device_count} 台设备"
+            if self._session_calibration_active and state in {
+                OnlineState.CONNECTED,
+                OnlineState.STREAMING,
+            }:
+                message = f"{message} · Session 标定模式"
         self.state_label.setText(message)
         self._update_control_states()
 
@@ -1438,6 +1551,10 @@ class OnlineCameraWindow(QMainWindow):
             OnlineState.STARTING,
             OnlineState.STOPPING,
         }
+        camera_reconfigure_busy = (
+            self._camera_reconfigure_in_progress
+            or self._camera_config_worker_busy
+        )
         self.device_combo.setEnabled(recoverable_disconnected)
         self.refresh_button.setEnabled(recoverable_disconnected)
         self.connect_button.setEnabled(
@@ -1453,7 +1570,24 @@ class OnlineCameraWindow(QMainWindow):
         editable = disconnected or idle or (
             state is OnlineState.ERROR and not has_session
         )
-        self.camera_settings_group.setEnabled(editable)
+        calibration_controls = (
+            self._session_calibration_active
+            and has_session
+            and not busy
+            and not camera_reconfigure_busy
+            and not self._session_calibration_capturing
+        )
+        self.camera_settings_group.setEnabled(editable or calibration_controls)
+        for control in (self.exposure, self.gain):
+            control.setEnabled(editable or calibration_controls)
+        for control in (
+            self.pixel_format,
+            self.offset_x,
+            self.offset_y,
+            self.roi_width,
+            self.roi_height,
+        ):
+            control.setEnabled(editable and not self._session_calibration_active)
         self.processing_group.setEnabled(editable)
         self.snapshot_button.setEnabled(
             self._last_result is not None and not busy
@@ -1462,10 +1596,35 @@ class OnlineCameraWindow(QMainWindow):
             self._session_ground_mode != "disabled"
             and has_session
             and not busy
+            and not camera_reconfigure_busy
+            and not self._session_calibration_capturing
         )
         self.session_ground_button.setEnabled(session_available)
+        capture_available = (
+            self._session_ground_mode != "disabled"
+            and self._session_calibration_active
+            and has_session
+            and streaming
+            and not busy
+            and not camera_reconfigure_busy
+            and not self._session_calibration_capturing
+        )
+        self.session_capture_button.setEnabled(capture_available)
+        if self._session_calibration_capturing:
+            target = self._config.session_ground_calibration.quality.target_frames
+            self.session_capture_button.setText(
+                f"采集中… {len(self._session_calibration_frames)}/{target}"
+            )
+        else:
+            self.session_capture_button.setText("采集 PnP 棋盘格（5 帧）")
         if self._session_ground_mode == "disabled":
             self.session_ground_button.setText("Session 基准标定（禁用）")
+        elif self._session_calibration_active:
+            self.session_ground_button.setText(
+                "退出 Session 标定模式"
+                if self._active_session_ground_result is not None
+                else "取消 Session 标定模式"
+            )
         elif self._active_session_ground_result is not None:
             self.session_ground_button.setText("重新 Session 基准标定")
         else:
@@ -1474,6 +1633,7 @@ class OnlineCameraWindow(QMainWindow):
             self._session_ground_mode != "disabled"
             and self._active_session_ground_result is not None
             and has_session
+            and not self._session_calibration_active
             and not busy
         )
         self.ground_sanity_button.setEnabled(sanity_available)
@@ -1490,9 +1650,33 @@ class OnlineCameraWindow(QMainWindow):
         self.capture_fps_label.setText("0.0")
         self.process_fps_label.setText("0.0")
         self.display_fps_label.setText("0.0")
+        if self._suppress_stream_stopped_once:
+            self._suppress_stream_stopped_once = False
+            if self._controller.running:
+                self._set_online_state(OnlineState.STREAMING)
+            else:
+                self._set_online_state(
+                    OnlineState.CONNECTED
+                    if self._session is not None
+                    else OnlineState.DISCONNECTED
+                )
+            return
         if self._pending_disconnect:
             self._pending_disconnect = False
+            self._pending_camera_reconfigure = None
+            self._camera_reconfigure_in_progress = False
             self._close_camera_session()
+            return
+        if self._pending_camera_reconfigure is not None:
+            requested, was_streaming, callback = self._pending_camera_reconfigure
+            self._pending_camera_reconfigure = None
+            self._start_camera_config_worker(
+                requested,
+                was_streaming=was_streaming,
+                callback=callback,
+            )
+            return
+        if self._camera_reconfigure_in_progress:
             return
         if self._stop_due_to_error:
             self._stop_due_to_error = False
@@ -1521,7 +1705,7 @@ class OnlineCameraWindow(QMainWindow):
                 return False
         self._session = None
         self._last_result = None
-        self._reset_session_ground_runtime()
+        self._clear_session_ground_runtime()
         self._set_online_state(OnlineState.DISCONNECTED)
         if self._closing:
             QTimer.singleShot(0, self.close)
@@ -1567,13 +1751,210 @@ class OnlineCameraWindow(QMainWindow):
         )
 
     def _sync_camera_config(self, config: CameraConfig) -> None:
-        self.pixel_format.setCurrentText(config.pixel_format)
-        self.exposure.setValue(config.exposure_us)
-        self.gain.setValue(config.gain_db)
-        self.offset_x.setValue(config.offset_x)
-        self.offset_y.setValue(config.offset_y)
-        self.roi_width.setValue(config.width)
-        self.roi_height.setValue(config.height)
+        self._camera_config_syncing = True
+        try:
+            self.pixel_format.setCurrentText(config.pixel_format)
+            self.exposure.setValue(config.exposure_us)
+            self.gain.setValue(config.gain_db)
+            self.offset_x.setValue(config.offset_x)
+            self.offset_y.setValue(config.offset_y)
+            self.roi_width.setValue(config.width)
+            self.roi_height.setValue(config.height)
+        finally:
+            self._camera_config_syncing = False
+
+    def _schedule_camera_control_update(self, *_args) -> None:
+        """Debounce live Daheng exposure/gain changes in calibration mode."""
+        if self._camera_config_syncing or not self._session_calibration_active:
+            return
+        if self._session is None or self._online_state in {
+            OnlineState.CONNECTING,
+            OnlineState.STARTING,
+            OnlineState.STOPPING,
+        }:
+            return
+        self._session_calibration_debounce_timer.start()
+
+    def _apply_session_calibration_camera_controls(self) -> None:
+        if not self._session_calibration_active or self._session is None:
+            return
+        current = self._session.config
+        requested = CameraConfig(
+            exposure_us=self.exposure.value(),
+            gain_db=self.gain.value(),
+            pixel_format=self.pixel_format.currentText(),
+            offset_x=0,
+            offset_y=0,
+            width=4096,
+            height=3000,
+            timeout_ms=current.timeout_ms,
+        )
+        if requested == current:
+            self._on_session_camera_controls_applied(None)
+            return
+        try:
+            if self._controller.running:
+                self._request_camera_reconfigure(
+                    requested,
+                    callback=self._on_session_camera_controls_applied,
+                )
+            else:
+                self._configure_session_preserving_runtime(requested)
+                self._on_session_camera_controls_applied(None)
+        except (OSError, RuntimeError, TypeError, ValueError) as error:
+            self._on_session_camera_controls_applied(error)
+
+    def _configure_session_preserving_runtime(self, requested: CameraConfig) -> None:
+        """Pause/configure/resume without changing the Session PnP runtime."""
+        if self._session is None:
+            return
+        was_streaming = self._controller.running
+        if was_streaming:
+            self._request_camera_reconfigure(requested)
+            return
+        self._camera_reconfigure_in_progress = True
+        try:
+            applied = self._session.configure(requested)
+            self._sync_camera_config(applied)
+            self._set_online_state(OnlineState.CONNECTED)
+        finally:
+            self._camera_reconfigure_in_progress = False
+            self._update_control_states()
+
+    def _request_camera_reconfigure(
+        self,
+        requested: CameraConfig,
+        *,
+        callback=None,
+    ) -> None:
+        """Queue pause/configure/resume without blocking the GUI thread."""
+        if self._session is None:
+            if callable(callback):
+                callback(RuntimeError("相机尚未连接"))
+            return
+        if self._camera_reconfigure_in_progress:
+            self._pending_camera_reconfigure = (
+                requested,
+                self._controller.running,
+                callback,
+            )
+            return
+        was_streaming = self._controller.running
+        self._camera_reconfigure_in_progress = True
+        if was_streaming:
+            self._pending_camera_reconfigure = (requested, True, callback)
+            self.statusBar().showMessage("正在停流应用相机参数，请稍候…")
+            self.stop_stream()
+            self._update_control_states()
+            return
+        self._start_camera_config_worker(
+            requested,
+            was_streaming=False,
+            callback=callback,
+        )
+
+    def _start_camera_config_worker(
+        self,
+        requested: CameraConfig,
+        *,
+        was_streaming: bool,
+        callback=None,
+    ) -> None:
+        if self._session is None:
+            self._camera_reconfigure_in_progress = False
+            if callable(callback):
+                callback(RuntimeError("相机尚未连接"))
+            return
+        session = self._session
+        self._camera_reconfigure_token += 1
+        token = self._camera_reconfigure_token
+        self._camera_config_worker_busy = True
+        self._update_control_states()
+
+        def configure() -> None:
+            try:
+                applied = session.configure(requested)
+            except Exception as error:  # delivered to the GUI thread
+                payload = (token, session, None, error, was_streaming, callback)
+            else:
+                payload = (token, session, applied, None, was_streaming, callback)
+            self._camera_config_ready.emit(payload)
+
+        threading.Thread(
+            target=configure,
+            name="camera-configure",
+            daemon=True,
+        ).start()
+
+    def _on_camera_config_worker_result(self, payload) -> None:
+        (
+            token,
+            session,
+            applied,
+            error,
+            was_streaming,
+            callback,
+        ) = payload
+        if token != self._camera_reconfigure_token or session is not self._session:
+            return
+        self._camera_config_worker_busy = False
+        self._camera_reconfigure_in_progress = False
+        if error is not None:
+            self._set_online_state(
+                OnlineState.CONNECTED
+                if self._session is not None
+                else OnlineState.DISCONNECTED
+            )
+            if callable(callback):
+                callback(error)
+            else:
+                self.statusBar().showMessage(f"应用相机参数失败：{error}")
+                QMessageBox.warning(self, "应用相机参数", str(error))
+            self._update_control_states()
+            return
+        try:
+            self._sync_camera_config(applied)
+            if self._active_session_ground_result is not None:
+                active = self._active_session_ground_result
+                if active.R is not None and active.t is not None:
+                    self._pipeline.apply_session_ground_extrinsic(active.R, active.t)
+            if (
+                was_streaming
+                and not self._pending_disconnect
+                and self._session is session
+                and not self._controller.running
+            ):
+                self._controller.start(self._session, self._pipeline, self._recorder)
+                self._set_online_state(OnlineState.STREAMING)
+            else:
+                self._set_online_state(OnlineState.CONNECTED)
+        except (OSError, RuntimeError, TypeError, ValueError) as apply_error:
+            error = apply_error
+        if callable(callback):
+            callback(error)
+        elif error is not None:
+            self.statusBar().showMessage(f"应用相机参数失败：{error}")
+            QMessageBox.warning(self, "应用相机参数", str(error))
+        self._update_control_states()
+
+    def _on_session_camera_controls_applied(self, error) -> None:
+        if error is not None:
+            self._session_calibration_capture_after_reconfigure = False
+            self.statusBar().showMessage(f"标定预览参数应用失败：{error}")
+            QMessageBox.warning(self, "标定预览参数", str(error))
+            self._update_control_states()
+            return
+        self.statusBar().showMessage(
+            "Session 标定预览参数已应用；标定模式和已完成的 PnP 保持有效"
+        )
+        if (
+            self._session_calibration_capture_after_reconfigure
+            and self._session_calibration_active
+            and self._controller.running
+        ):
+            self._session_calibration_capture_after_reconfigure = False
+            self._begin_session_calibration_capture()
+        self._update_control_states()
 
     def _apply_camera_config(self) -> None:
         if self._session is None:
@@ -1602,7 +1983,10 @@ class OnlineCameraWindow(QMainWindow):
                 ) from configure_error
             applied = self._session.config
         self._sync_camera_config(applied)
-        self._reset_session_ground_runtime()
+        if self._active_session_ground_result is not None:
+            active = self._active_session_ground_result
+            if active.R is not None and active.t is not None:
+                self._pipeline.apply_session_ground_extrinsic(active.R, active.t)
 
     def connect_camera(self) -> None:
         if self._session is not None:
@@ -1627,7 +2011,7 @@ class OnlineCameraWindow(QMainWindow):
             return
         self._sync_camera_config(self._session.config)
         self._last_result = None
-        self._reset_session_ground_runtime()
+        self._clear_session_ground_runtime()
         self._set_online_state(OnlineState.CONNECTED)
 
     def disconnect_camera(self) -> None:
@@ -1788,26 +2172,533 @@ class OnlineCameraWindow(QMainWindow):
             )
 
     def _prompt_session_ground_calibration(self) -> None:
-        """Confirm the required board state before running the PnP attempt."""
-        answer = QMessageBox.question(
-            self,
-            "Session 基准标定",
-            "请确认当前画面满足：\n"
-            "1. 8×11 内角点、20 mm 棋盘完整可见；\n"
-            "2. 棋盘前无障碍物；\n"
-            "3. 相机已连接且当前帧稳定。\n\n"
-            "本操作只更新本次运行时 ground 外参，不覆盖 reference YAML。\n"
-            "是否继续？",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.Yes,
-        )
-        if answer == QMessageBox.StandardButton.Yes:
-            self.calibrate_session_ground()
-
-    def calibrate_session_ground(self) -> None:
-        """用当前无障碍棋盘格帧更新本次运行时 ground 外参。"""
+        """Toggle the in-place five-frame Session calibration mode."""
         if self._session_ground_mode == "disabled":
             self.statusBar().showMessage("Session 基准标定已在配置中禁用")
+            return
+        if self._session_calibration_active:
+            self._exit_session_calibration_mode()
+            return
+        self._enter_session_calibration_mode()
+
+    def _enter_session_calibration_mode(self) -> None:
+        if self._session is None:
+            self.statusBar().showMessage("请先连接相机，再进入 Session 标定模式")
+            return
+        if self._camera_backend.name != "daheng":
+            self.statusBar().showMessage("Session 全幅标定模式当前仅支持 Daheng 相机")
+            return
+        self._session_calibration_restore_config = self._session.config
+        self._session_calibration_was_streaming = self._controller.running
+        self._session_calibration_frames.clear()
+        self._session_calibration_attempts = 0
+        self._session_calibration_repeatability = None
+        self._session_calibration_quality = None
+        self._session_calibration_capturing = False
+        self._session_calibration_capture_after_reconfigure = False
+        self._session_calibration_capture_generation += 1
+        self._session_calibration_capture_started_host_monotonic_ns = None
+        self._session_calibration_worker_busy = False
+        self._session_calibration_preview_image_initialized = False
+        self._session_calibration_active = True
+        self._extracted_view_shape = None
+        self.extracted_image_view.setTitle("棋盘角点检测")
+        self.extracted_corner_scatter.setData([], [])
+        self.extracted_corner_boundary.setData([], [])
+        self._update_session_calibration_quality_display()
+        try:
+            saved = self._session_calibration_restore_config
+            full_frame = CameraConfig(
+                exposure_us=saved.exposure_us,
+                gain_db=saved.gain_db,
+                pixel_format=saved.pixel_format,
+                offset_x=0,
+                offset_y=0,
+                width=4096,
+                height=3000,
+                timeout_ms=saved.timeout_ms,
+            )
+            if self._controller.running:
+                self._request_camera_reconfigure(
+                    full_frame,
+                    callback=self._on_session_calibration_prepare_complete,
+                )
+            else:
+                self._configure_session_preserving_runtime(full_frame)
+                self._on_session_calibration_prepare_complete(None)
+        except (OSError, RuntimeError, TypeError, ValueError) as error:
+            self._on_session_calibration_prepare_complete(error)
+            return
+        self._update_control_states()
+        self.statusBar().showMessage("Session 标定模式：正在准备全幅预览，尚未开始采集")
+
+    def _on_session_calibration_prepare_complete(self, error) -> None:
+        if error is not None:
+            self._session_calibration_active = False
+            self._session_calibration_capturing = False
+            self._session_calibration_capture_generation += 1
+            self._session_calibration_restore_config = None
+            self.extracted_image_view.setTitle("激光中心提取")
+            self.statusBar().showMessage(f"无法进入 Session 标定模式：{error}")
+            QMessageBox.warning(self, "Session 基准标定", str(error))
+            self._update_control_states()
+            return
+        if not self._session_calibration_active or self._session is None:
+            return
+        try:
+            if not self._controller.running:
+                self._start_stream_for_session_calibration()
+        except (OSError, RuntimeError, TypeError, ValueError) as start_error:
+            self._on_session_calibration_prepare_complete(start_error)
+            return
+        self._update_control_states()
+        self.statusBar().showMessage(
+            "Session 标定预览已就绪；请调好曝光/增益后点击“采集 PnP 棋盘格”"
+        )
+
+    def _start_stream_for_session_calibration(self) -> None:
+        if self._session is None or self._controller.running:
+            return
+        self._pipeline = FramePipeline(
+            self._config,
+            self.extraction_method_combo.currentText(),
+            system=self._camera_backend.name,
+        )
+        if self._active_session_ground_result is not None:
+            active = self._active_session_ground_result
+            if active.R is not None and active.t is not None:
+                self._pipeline.apply_session_ground_extrinsic(active.R, active.t)
+        self._controller.start(self._session, self._pipeline, self._recorder)
+        self._set_online_state(OnlineState.STREAMING, "Session 标定预览中")
+
+    def _exit_session_calibration_mode(self) -> None:
+        saved = self._session_calibration_restore_config
+        was_streaming = self._session_calibration_was_streaming
+        self._session_calibration_active = False
+        self._session_calibration_capturing = False
+        self._session_calibration_capture_after_reconfigure = False
+        self._session_calibration_capture_generation += 1
+        self._session_calibration_capture_started_host_monotonic_ns = None
+        self._session_calibration_debounce_timer.stop()
+        if saved is None or self._session is None:
+            self._session_calibration_restore_config = None
+            self._restore_session_calibration_preview()
+            self._update_control_states()
+            return
+        try:
+            if self._controller.running:
+                self._request_camera_reconfigure(
+                    saved,
+                    callback=lambda error: self._finish_session_calibration_exit(
+                        error, was_streaming
+                    ),
+                )
+            else:
+                self._configure_session_preserving_runtime(saved)
+                self._finish_session_calibration_exit(None, was_streaming)
+        except (OSError, RuntimeError, TypeError, ValueError) as error:
+            self._finish_session_calibration_exit(error, was_streaming)
+
+    def _finish_session_calibration_exit(self, error, was_streaming: bool) -> None:
+        self._session_calibration_restore_config = None
+        if error is not None:
+            self.statusBar().showMessage(f"退出标定模式并恢复采集参数失败：{error}")
+            QMessageBox.warning(self, "恢复测量参数", str(error))
+        else:
+            self.statusBar().showMessage(
+                "已退出 Session 标定模式；已恢复原 ROI、曝光、增益等测量参数"
+            )
+        self._restore_session_calibration_preview()
+        self._update_control_states()
+
+    def _restore_session_calibration_preview(self) -> None:
+        self.extracted_image_view.setTitle("激光中心提取")
+        self.extracted_corner_scatter.setData([], [])
+        self.extracted_corner_boundary.setData([], [])
+
+    def _start_session_calibration_capture(self) -> None:
+        """Arm one continuous 5-frame PnP capture after preview adjustment."""
+        if not self._session_calibration_active:
+            return
+        if self._session is None or not self._controller.running:
+            self.statusBar().showMessage("请先等待 Session 全幅预览就绪")
+            return
+        if self._camera_reconfigure_in_progress or self._camera_config_worker_busy:
+            self.statusBar().showMessage("正在应用曝光/增益，请稍候再采集")
+            return
+        if self._session_calibration_capturing:
+            return
+        # If the user clicks immediately after editing a spinbox, flush the
+        # debounce timer first.  The capture starts only after the new camera
+        # parameters have actually been applied.
+        if self._session_calibration_debounce_timer.isActive():
+            self._session_calibration_debounce_timer.stop()
+            self._session_calibration_capture_after_reconfigure = True
+            self._apply_session_calibration_camera_controls()
+            if self._camera_reconfigure_in_progress or self._camera_config_worker_busy:
+                self.statusBar().showMessage("正在应用最新曝光/增益，完成后自动开始采集")
+                return
+            if self._session_calibration_capturing:
+                return
+            self._session_calibration_capture_after_reconfigure = False
+        self._begin_session_calibration_capture()
+
+    def _begin_session_calibration_capture(self) -> None:
+        if (
+            not self._session_calibration_active
+            or self._session is None
+            or not self._controller.running
+        ):
+            return
+        quality_config = self._config.session_ground_calibration.quality
+        self._session_calibration_capture_generation += 1
+        self._session_calibration_capture_started_host_monotonic_ns = (
+            time.perf_counter_ns()
+        )
+        self._session_calibration_capturing = True
+        self._session_calibration_worker_busy = False
+        self._session_calibration_frames.clear()
+        self._session_calibration_attempts = 0
+        self._session_calibration_repeatability = None
+        self._session_calibration_quality = None
+        self.extracted_corner_scatter.setData([], [])
+        self.extracted_corner_boundary.setData([], [])
+        self._update_session_calibration_quality_display()
+        self._update_control_states()
+        self.statusBar().showMessage(
+            "已开始采集 PnP 棋盘格；请保持棋盘静止，等待有效帧 "
+            f"0/{quality_config.target_frames}"
+        )
+
+    def _handle_session_calibration_frame(self, frame: CapturedFrame) -> None:
+        if not self._session_calibration_active or not self._session_calibration_capturing:
+            return
+        quality_config = self._config.session_ground_calibration.quality
+        if len(self._session_calibration_frames) >= quality_config.target_frames:
+            return
+        if self._session_calibration_attempts >= quality_config.max_capture_attempts:
+            return
+        if self._session_calibration_worker_busy:
+            return
+        started_at = self._session_calibration_capture_started_host_monotonic_ns
+        if started_at is not None and frame.host_monotonic_ns <= started_at:
+            return
+        self._session_calibration_attempts += 1
+        calibration = self._pipeline.calibration_for_reconstruction()
+        K = np.asarray(calibration["K"], dtype=np.float64).copy()
+        K[0, 2] -= float(frame.offset_x)
+        K[1, 2] -= float(frame.offset_y)
+        captured = CapturedFrame(
+            image=np.ascontiguousarray(frame.image.copy()),
+            camera_frame_number=frame.camera_frame_number,
+            camera_timestamp_ticks=frame.camera_timestamp_ticks,
+            host_timestamp_ns=frame.host_timestamp_ns,
+            host_monotonic_ns=frame.host_monotonic_ns,
+            offset_x=frame.offset_x,
+            offset_y=frame.offset_y,
+        )
+        token = self._session_calibration_capture_generation
+        board = self._config.session_ground_calibration.board_config()
+        self._session_calibration_worker_busy = True
+        self._update_control_states()
+
+        def detect() -> None:
+            result = None
+            quality = None
+            error = None
+            try:
+                result = estimate_session_ground_extrinsic(
+                    captured.image,
+                    {"K": K, "D": np.asarray(calibration["D"]).copy()},
+                    board,
+                )
+                expected = board.pattern_cols * board.pattern_rows
+                if result.status != "success" or result.detected_corners is None:
+                    raise ValueError(result.message)
+                if len(result.detected_corners) != expected:
+                    raise ValueError(
+                        f"角点数 {len(result.detected_corners)}/{expected}，本帧拒绝"
+                    )
+                quality = assess_checkerboard_image_quality(
+                    captured.image,
+                    result.detected_corners,
+                    pattern_cols=board.pattern_cols,
+                    pattern_rows=board.pattern_rows,
+                    saturation_ratio_warn=quality_config.saturation_ratio_warn,
+                    dynamic_range_p95_p5_warn=quality_config.dynamic_range_p95_p5_warn,
+                    edge_margin_warn_px=quality_config.edge_margin_warn_px,
+                )
+            except Exception as detect_error:  # delivered to the GUI thread
+                error = detect_error
+            self._session_calibration_frame_ready.emit(
+                {
+                    "token": token,
+                    "frame": captured,
+                    "result": result,
+                    "quality": quality,
+                    "error": error,
+                }
+            )
+
+        threading.Thread(
+            target=detect,
+            name="session-checkerboard-detect",
+            daemon=True,
+        ).start()
+
+    def _on_session_calibration_worker_result(self, payload) -> None:
+        if payload.get("token") != self._session_calibration_capture_generation:
+            return
+        self._session_calibration_worker_busy = False
+        frame = payload["frame"]
+        result = payload["result"]
+        quality = payload["quality"]
+        error = payload["error"]
+        if not self._session_calibration_active or not self._session_calibration_capturing:
+            self._update_control_states()
+            return
+        # Update the lower preview once per submitted candidate, not once per
+        # raw camera frame.  This keeps the two views responsive at 4096x3000.
+        self._show_session_calibration_image(frame.image)
+        quality_config = self._config.session_ground_calibration.quality
+        expected = (
+            self._config.session_ground_calibration.pattern_cols
+            * self._config.session_ground_calibration.pattern_rows
+        )
+        if error is None and result is not None and quality is not None:
+            self._session_calibration_frames.append((result, frame, quality))
+            self._show_session_calibration_overlay(frame.image, result.detected_corners)
+            self._update_session_calibration_quality_display()
+            accepted = len(self._session_calibration_frames)
+            self.statusBar().showMessage(
+                f"Session 标定采集中：已接受 {accepted}/{quality_config.target_frames} 帧，"
+                f"角点 {len(result.detected_corners)}/{expected}"
+            )
+            if accepted >= quality_config.target_frames:
+                self._session_calibration_capturing = False
+                self._finalize_session_calibration()
+        else:
+            message = str(error or "棋盘检测失败")
+            remaining = quality_config.max_capture_attempts - self._session_calibration_attempts
+            self.statusBar().showMessage(
+                f"Session 标定本帧重试：{message}；剩余尝试 {max(remaining, 0)}"
+            )
+            if remaining <= 0:
+                self._session_calibration_capturing = False
+                self.statusBar().showMessage(
+                    "Session 基准标定 INVALID：未能在配置的尝试次数内收集完整 5 帧"
+                )
+        self._update_control_states()
+
+    def _show_session_calibration_overlay(
+        self, image: np.ndarray, corners: np.ndarray
+    ) -> None:
+        self._show_session_calibration_image(image)
+        corners_array = np.asarray(corners, dtype=np.float64).reshape(-1, 2)
+        self.extracted_corner_scatter.setData(
+            x=corners_array[:, 0], y=corners_array[:, 1]
+        )
+        rows = self._config.session_ground_calibration.pattern_rows
+        cols = self._config.session_ground_calibration.pattern_cols
+        grid = corners_array.reshape(rows, cols, 2)
+        boundary = np.vstack((grid[0, 0], grid[0, -1], grid[-1, -1], grid[-1, 0], grid[0, 0]))
+        self.extracted_corner_boundary.setData(boundary[:, 0], boundary[:, 1])
+
+    def _show_session_calibration_image(self, image: np.ndarray) -> None:
+        shape_changed = image.shape[:2] != self._extracted_view_shape
+        levels = (0, 255) if image.dtype == np.uint8 else (0, 4095)
+        self.extracted_image_item.setImage(image, autoLevels=False, levels=levels)
+        _set_image_boundary(self.extracted_image_boundary, image)
+        if shape_changed:
+            self._extracted_view_shape = image.shape[:2]
+            transform = _image_preview_transform(image, self._image_preview_rotated)
+            self.extracted_image_item.setTransform(transform)
+            self.extracted_image_boundary.setTransform(transform)
+            self.extracted_corner_boundary.setTransform(transform)
+            self.extracted_corner_scatter.setTransform(transform)
+            _fit_image_view(
+                self.extracted_image_view,
+                image,
+                self._image_view_mode,
+                rotated=self._image_preview_rotated,
+            )
+
+    def _finalize_session_calibration(self) -> None:
+        observations = self._session_calibration_frames
+        quality_config = self._config.session_ground_calibration.quality
+        try:
+            calibration = self._pipeline.calibration_for_reconstruction()
+            first_frame = observations[0][1]
+            K = np.asarray(calibration["K"], dtype=np.float64).copy()
+            K[0, 2] -= float(first_frame.offset_x)
+            K[1, 2] -= float(first_frame.offset_y)
+            frame_results = [item[0] for item in observations]
+            final, repeatability = aggregate_session_ground_extrinsic(
+                frame_results,
+                {"K": K, "D": np.asarray(calibration["D"]).copy()},
+                self._config.session_ground_calibration.board_config(),
+                required_frames=quality_config.target_frames,
+            )
+            if (
+                final.reprojection_rmse_px is None
+                or final.reprojection_rmse_px > quality_config.max_reprojection_rmse_px
+            ):
+                raise ValueError(
+                    "最终 PnP reprojection RMSE 超过配置阈值："
+                    f"{final.reprojection_rmse_px} > {quality_config.max_reprojection_rmse_px} px"
+                )
+            reference_R, reference_t = self._pipeline.reference_ground_extrinsic
+            delta = compare_ground_extrinsics(
+                reference_R,
+                reference_t,
+                final.R,
+                final.t,
+            )
+            self._pipeline.apply_session_ground_extrinsic(final.R, final.t)
+            self._invalidate_live_reconstruction_after_ground_update()
+            self._active_session_ground_result = final
+            self._last_session_ground_result = final
+            self._session_calibration_repeatability = repeatability
+            self._session_calibration_quality = self._aggregate_session_quality()
+            last_frame = observations[-1][1]
+            self._session_ground_calibration_frame_number = int(
+                last_frame.camera_frame_number
+            )
+            self._session_ground_calibration_host_monotonic_ns = int(
+                last_frame.host_monotonic_ns
+            )
+            self._session_ground_calibration_offset = (
+                int(last_frame.offset_x),
+                int(last_frame.offset_y),
+            )
+            self._session_ground_generation += 1
+            self._last_ground_sanity = None
+            self._reset_ground_sanity_display()
+            self._show_session_calibration_overlay(
+                last_frame.image,
+                final.detected_corners,
+            )
+            self._update_session_ground_display(final, delta)
+            self._update_ground_source_label()
+            reference_R, reference_t = self._pipeline.reference_ground_extrinsic
+            payload = build_session_ground_payload(
+                final,
+                self._config.session_ground_calibration.board_config(),
+                frame_number=int(last_frame.camera_frame_number),
+                frame_offset=(int(last_frame.offset_x), int(last_frame.offset_y)),
+                reference_R=reference_R,
+                reference_t=reference_t,
+                runtime_source=self._pipeline.ground_extrinsic_source,
+                frame_host_monotonic_ns=int(last_frame.host_monotonic_ns),
+                session_generation=self._session_ground_generation,
+                repeatability=repeatability,
+                quality=self._session_calibration_quality,
+            )
+            json_path = save_session_ground_payload(
+                self._session_ground_json_path(), payload
+            )
+            self._update_session_calibration_quality_display()
+            self.statusBar().showMessage(
+                "Session 基准标定 VALID；"
+                f"5/5 帧，RMSE {final.reprojection_rmse_px:.4f} px，"
+                f"帧间 Δt max {repeatability.translation_max_mm:.4f} mm，"
+                f"ΔR max {repeatability.rotation_max_deg:.4f}°；已保存 {json_path}"
+            )
+        except (OSError, RuntimeError, TypeError, ValueError) as error:
+            self._last_session_ground_result = SessionGroundExtrinsic(
+                status="invalid_quality",
+                message=str(error),
+                detected_corners=observations[-1][0].detected_corners
+                if observations
+                else None,
+            )
+            if observations:
+                self._session_calibration_quality = self._aggregate_session_quality()
+                try:
+                    last_frame = observations[-1][1]
+                    reference_R, reference_t = self._pipeline.reference_ground_extrinsic
+                    payload = build_session_ground_payload(
+                        self._last_session_ground_result,
+                        self._config.session_ground_calibration.board_config(),
+                        frame_number=int(last_frame.camera_frame_number),
+                        frame_offset=(int(last_frame.offset_x), int(last_frame.offset_y)),
+                        reference_R=reference_R,
+                        reference_t=reference_t,
+                        runtime_source=self._pipeline.ground_extrinsic_source,
+                        frame_host_monotonic_ns=int(last_frame.host_monotonic_ns),
+                        session_generation=self._session_ground_generation,
+                        quality=self._session_calibration_quality,
+                    )
+                    save_session_ground_payload(self._session_ground_json_path(), payload)
+                except (OSError, TypeError, ValueError):
+                    pass
+            self._update_session_ground_display(self._last_session_ground_result, None)
+            self._update_session_calibration_quality_display()
+            self.statusBar().showMessage(f"Session 基准标定 INVALID：{error}")
+
+    def _aggregate_session_quality(self) -> dict[str, object]:
+        frames = [item[2] for item in self._session_calibration_frames]
+        warnings = sorted(
+            {
+                warning
+                for item in frames
+                for warning in item.get("warnings", [])
+            }
+        )
+        return {
+            "accepted_frames": len(frames),
+            "saturation_ratio_max": max(
+                float(item["saturation_ratio"]) for item in frames
+            ),
+            "dynamic_range_p95_p5_min": min(
+                float(item["dynamic_range_p95_p5"]) for item in frames
+            ),
+            "edge_margin_min_px": min(float(item["edge_margin_px"]) for item in frames),
+            "warnings": warnings,
+            "frames": frames,
+        }
+
+    def _update_session_calibration_quality_display(self) -> None:
+        if not hasattr(self, "session_ground_frames_label"):
+            return
+        target = self._config.session_ground_calibration.quality.target_frames
+        self.session_ground_frames_label.setText(
+            f"{len(self._session_calibration_frames)}/{target}"
+        )
+        repeatability = self._session_calibration_repeatability
+        if repeatability is None:
+            self.session_ground_repeat_translation_label.setText("—")
+            self.session_ground_repeat_rotation_label.setText("—")
+        else:
+            self.session_ground_repeat_translation_label.setText(
+                f"max {repeatability.translation_max_mm:.4f} mm"
+            )
+            self.session_ground_repeat_rotation_label.setText(
+                f"max {repeatability.rotation_max_deg:.4f}°"
+            )
+        quality = self._session_calibration_quality
+        if quality is None:
+            self.session_ground_quality_label.setText("棋盘质量：—")
+        else:
+            warnings = quality.get("warnings", [])
+            self.session_ground_quality_label.setText(
+                "棋盘质量：WARNING: " + ", ".join(str(item) for item in warnings)
+                if warnings
+                else "棋盘质量：OK"
+            )
+
+    def calibrate_session_ground(self) -> None:
+        """Compatibility entry point for Session calibration.
+
+        Daheng uses the live five-frame mode.  The legacy one-frame fallback is
+        retained for non-Daheng/synthetic integrations that still call this
+        method directly; the GUI button always enters the V2 mode above.
+        """
+        if self._session_ground_mode == "disabled":
+            self.statusBar().showMessage("Session 基准标定已在配置中禁用")
+            return
+        if self._camera_backend.name == "daheng" and not self._session_calibration_active:
+            self._enter_session_calibration_mode()
             return
         try:
             frame = self._session_calibration_frame()
@@ -1843,10 +2734,15 @@ class OnlineCameraWindow(QMainWindow):
                     result.t,
                 )
                 self._pipeline.apply_session_ground_extrinsic(result.R, result.t)
+                self._invalidate_live_reconstruction_after_ground_update()
                 self._active_session_ground_result = result
                 self._session_ground_calibration_frame_number = int(
                     frame.camera_frame_number
                 )
+                self._session_ground_calibration_host_monotonic_ns = int(
+                    frame.host_monotonic_ns
+                )
+                self._session_ground_generation += 1
                 self._session_ground_calibration_offset = (
                     int(frame.offset_x),
                     int(frame.offset_y),
@@ -1872,6 +2768,8 @@ class OnlineCameraWindow(QMainWindow):
                 reference_R=reference_R,
                 reference_t=reference_t,
                 runtime_source=self._pipeline.ground_extrinsic_source,
+                frame_host_monotonic_ns=int(frame.host_monotonic_ns),
+                session_generation=self._session_ground_generation,
             )
             json_path = save_session_ground_payload(
                 self._session_ground_json_path(), payload
@@ -1942,6 +2840,11 @@ class OnlineCameraWindow(QMainWindow):
                 session_calibration_frame_number=(
                     self._session_ground_calibration_frame_number
                 ),
+                frame_host_monotonic_ns=int(result.frame.host_monotonic_ns),
+                session_calibration_host_monotonic_ns=(
+                    self._session_ground_calibration_host_monotonic_ns
+                ),
+                session_generation=self._session_ground_generation,
                 thresholds=self._config.session_ground_calibration.sanity,
                 mask=mask_metadata,
             )
@@ -2079,12 +2982,12 @@ class OnlineCameraWindow(QMainWindow):
                     "当前尚无实时帧，请等待新的激光-on 帧后再检查。",
                 )
                 return None
-            frame_number = int(result.frame.camera_frame_number)
-            calibration_frame = self._session_ground_calibration_frame_number
+            frame_host = int(result.frame.host_monotonic_ns)
+            calibration_host = self._session_ground_calibration_host_monotonic_ns
             if (
                 result.ground_extrinsic_source != "session"
-                or calibration_frame is None
-                or frame_number <= calibration_frame
+                or calibration_host is None
+                or frame_host <= calibration_host
             ):
                 QMessageBox.information(
                     self,
@@ -2193,6 +3096,7 @@ class OnlineCameraWindow(QMainWindow):
             self.session_ground_rmse_label.setText("—")
             self.session_ground_delta_translation_label.setText("—")
             self.session_ground_delta_rotation_label.setText("—")
+            self._update_session_calibration_quality_display()
             return
         self.session_ground_valid_label.setText("VALID")
         self.session_ground_corner_label.setText(
@@ -2211,6 +3115,7 @@ class OnlineCameraWindow(QMainWindow):
         self.session_ground_delta_rotation_label.setText(
             "—" if delta is None else f"{delta[1]:.3f}°"
         )
+        self._update_session_calibration_quality_display()
 
     def _update_ground_sanity_display(
         self, result: GroundSanityResult | None
@@ -2267,11 +3172,29 @@ class OnlineCameraWindow(QMainWindow):
     def _update_ground_source_label(self) -> None:
         self.ground_source_label.setText(self._pipeline.ground_extrinsic_source)
 
-    def _reset_session_ground_runtime(self) -> None:
+    def _clear_session_ground_runtime(self) -> None:
+        self._session_calibration_active = False
+        self._session_calibration_capturing = False
+        self._session_calibration_capture_after_reconfigure = False
+        self._session_calibration_capture_generation += 1
+        self._session_calibration_capture_started_host_monotonic_ns = None
+        self._session_calibration_worker_busy = False
+        self._session_calibration_restore_config = None
+        self._session_calibration_debounce_timer.stop()
+        self._pending_camera_reconfigure = None
+        self._camera_reconfigure_token += 1
+        self._camera_reconfigure_in_progress = False
+        self._camera_config_worker_busy = False
+        if hasattr(self, "extracted_image_view"):
+            self._restore_session_calibration_preview()
         self._active_session_ground_result = None
         self._last_session_ground_result = None
         self._session_ground_calibration_frame_number = None
+        self._session_ground_calibration_host_monotonic_ns = None
+        self._session_ground_generation = 0
         self._session_ground_calibration_offset = None
+        self._session_calibration_repeatability = None
+        self._session_calibration_quality = None
         self._last_ground_sanity = None
         self._pipeline.reset_ground_extrinsic()
         if hasattr(self, "session_ground_valid_label"):
@@ -2280,8 +3203,17 @@ class OnlineCameraWindow(QMainWindow):
             self.session_ground_rmse_label.setText("—")
             self.session_ground_delta_translation_label.setText("—")
             self.session_ground_delta_rotation_label.setText("—")
+            self.session_ground_frames_label.setText("—")
+            self.session_ground_repeat_translation_label.setText("—")
+            self.session_ground_repeat_rotation_label.setText("—")
+            self.session_ground_quality_label.setText("棋盘质量：—")
             self._reset_ground_sanity_display()
             self._update_ground_source_label()
+
+    # Backward-compatible internal name for callers from older integrations;
+    # only explicit disconnect/new-device paths call the clearing operation.
+    def _reset_session_ground_runtime(self) -> None:
+        self._clear_session_ground_runtime()
 
     def export_current_frame(self) -> Path:
         """导出当前实时帧的中心点、重建点云和地面系 PLY。
@@ -2455,6 +3387,11 @@ class OnlineCameraWindow(QMainWindow):
             transform = _image_preview_transform(image, self._image_preview_rotated)
             item.setTransform(transform)
             boundary.setTransform(transform)
+        extracted_transform = _image_preview_transform(
+            self.extracted_image_item.image, self._image_preview_rotated
+        )
+        self.extracted_corner_boundary.setTransform(extracted_transform)
+        self.extracted_corner_scatter.setTransform(extracted_transform)
         self._reset_image_views()
 
     def _reset_image_views(self) -> None:
@@ -2472,10 +3409,22 @@ class OnlineCameraWindow(QMainWindow):
                 )
 
     def _show_raw_frame(self, frame: CapturedFrame) -> None:
+        self._handle_session_calibration_frame(frame)
+        if (
+            self._session_calibration_active
+            and not self._session_calibration_capturing
+            and not self._session_calibration_preview_image_initialized
+        ):
+            self._show_session_calibration_image(frame.image)
+            self._session_calibration_preview_image_initialized = True
         if self.tabs.currentIndex() != 0:
             return
         image_shape = frame.image.shape[:2]
         shape_changed = image_shape != self._raw_view_shape
+        now = time.monotonic()
+        if not shape_changed and now - self._last_raw_preview_at < 0.10:
+            return
+        self._last_raw_preview_at = now
         raw_levels = (0, 255) if frame.image.dtype == np.uint8 else (0, 4095)
         self.raw_image_item.setImage(
             frame.image,
@@ -2498,10 +3447,20 @@ class OnlineCameraWindow(QMainWindow):
             )
 
     def _show_result(self, result: FrameResult) -> None:
+        # A result may already be queued when Session PnP switches the
+        # pipeline from reference to session. Do not let that old result
+        # repopulate the point-cloud view after it was invalidated.
+        if (
+            self._pipeline.ground_extrinsic_source == "session"
+            and result.ground_extrinsic_source != "session"
+        ):
+            return
         first_result = self._last_result is None
         self._last_result = result
         if first_result:
             self._update_control_states()
+        if self._session_calibration_active:
+            return
         now = time.monotonic()
         if now - self._last_render_at < 0.075:
             return
