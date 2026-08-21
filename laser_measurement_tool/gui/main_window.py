@@ -18,6 +18,8 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPushButton,
+    QScrollArea,
+    QSizePolicy,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
@@ -50,6 +52,7 @@ from measurement.height_measure import (
     MeasurementError,
     measure_height_lines,
 )
+from measurement.ground_reference import SessionGroundReference
 from measurement.roi_manager import RoiKind, RoiManager
 from reconstruction.reconstructor import (
     ReconstructionInputError,
@@ -95,6 +98,7 @@ class MainWindow(QMainWindow):
         system: str | None = None,
         runtime_calibration: dict[str, Any] | None = None,
         ground_extrinsic_source: str = "reference",
+        runtime_ground_reference: SessionGroundReference | None = None,
     ) -> None:
         super().__init__()
         self._app_config = config
@@ -103,6 +107,7 @@ class MainWindow(QMainWindow):
         ).strip().lower()
         self._calibration: dict[str, Any] | None = runtime_calibration
         self._ground_extrinsic_source = ground_extrinsic_source
+        self._ground_reference = runtime_ground_reference
         self._image: np.ndarray | None = None
         self._image_path: Path | None = None
         # 实时相机通常输出传感器 ROI。图像/ROI 仍使用 ROI 局部坐标，
@@ -175,6 +180,21 @@ class MainWindow(QMainWindow):
     def baseline_points(self) -> np.ndarray:
         """返回基准 ROI 内的亚像素激光中心点。"""
         return self._baseline_points
+
+    @property
+    def baseline_regions_full(self) -> tuple[tuple[float, float, float, float], ...]:
+        """返回用户确认的基准 ROI，坐标为 full-sensor 像素。"""
+        offset_x, offset_y = self._image_offset
+        return tuple(
+            (
+                float(region.left + offset_x),
+                float(region.top + offset_y),
+                float(region.right + offset_x),
+                float(region.bottom + offset_y),
+            )
+            for region in self._roi_manager.regions
+            if region.kind is RoiKind.BASELINE
+        )
 
     @property
     def obstacle_points(self) -> np.ndarray:
@@ -420,18 +440,53 @@ class MainWindow(QMainWindow):
             points + np.asarray(self._image_offset, dtype=np.float64)
         )
 
+    def _apply_ground_reference_to_reconstruction(
+        self, reconstruction: ReconstructionResult
+    ) -> ReconstructionResult:
+        """Apply the online session reference without changing camera points."""
+        reference = self._ground_reference
+        if reference is None:
+            return reconstruction
+        points_ground, _ = reference.apply_to_points(reconstruction.points_ground)
+        return ReconstructionResult(
+            pixels_uv=reconstruction.pixels_uv,
+            points_camera=reconstruction.points_camera,
+            points_ground=points_ground,
+            filtered=reconstruction.filtered,
+        )
+
     def _build_central_widget(self) -> QWidget:
         central_widget = QWidget(self)
         layout = QHBoxLayout(central_widget)
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(8)
         layout.addWidget(self.view_stack, 1)
-        layout.addWidget(self._build_control_panel())
+        self._control_panel_scroll_area = QScrollArea(central_widget)
+        self._control_panel_scroll_area.setObjectName(
+            "controlPanelScrollArea"
+        )
+        # Reserve enough logical width for the result labels and the vertical
+        # scrollbar.  The panel itself follows the viewport width, so opening
+        # the scrollbar cannot clip the right side of a label.
+        self._control_panel_scroll_area.setMinimumWidth(320)
+        self._control_panel_scroll_area.setWidgetResizable(True)
+        self._control_panel_scroll_area.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self._control_panel_scroll_area.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded
+        )
+        self._control_panel_scroll_area.setWidget(self._build_control_panel())
+        layout.addWidget(self._control_panel_scroll_area)
         return central_widget
 
     def _build_control_panel(self) -> QWidget:
         panel = QWidget(self)
-        panel.setFixedWidth(260)
+        panel.setMinimumWidth(300)
+        panel.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Preferred,
+        )
         layout = QVBoxLayout(panel)
 
         self.load_button = QPushButton("加载图像", panel)
@@ -477,7 +532,6 @@ class MainWindow(QMainWindow):
         self._result_labels: dict[str, QLabel] = {}
         for key, title in (
             ("ground", "地面基准 Zg"),
-            ("ground_source", "ground 外参"),
             ("ground_sigma", "地面噪声 σ"),
             ("baseline_points", "内点/总点"),
         ):
@@ -491,6 +545,28 @@ class MainWindow(QMainWindow):
             self._result_labels[key] = label
             reference_form.addRow(f"{title}:", label)
         layout.addWidget(reference_group)
+
+        session_group = QGroupBox("本次测量状态", group)
+        session_form = QFormLayout(session_group)
+        for key, title in (
+            ("stage_a_enabled", "Stage-A 补偿"),
+            ("stage_a_domain", "Stage-A 有效域"),
+            ("session_ground_reference", "Session 地面基准"),
+            ("ground_reference_mode", "地面参考模式"),
+            ("ground_source", "ground 外参来源"),
+        ):
+            label = QLabel(
+                self._ground_extrinsic_source
+                if key == "ground_source"
+                else "—",
+                session_group,
+            )
+            label.setTextInteractionFlags(
+                Qt.TextInteractionFlag.TextSelectableByMouse
+            )
+            self._result_labels[key] = label
+            session_form.addRow(f"{title}:", label)
+        layout.addWidget(session_group)
         self._obstacle_results_layout = QVBoxLayout()
         self._obstacle_result_groups: list[QGroupBox] = []
         layout.addLayout(self._obstacle_results_layout)
@@ -781,23 +857,29 @@ class MainWindow(QMainWindow):
         try:
             baseline_recon = None
             if has_baseline_roi:
-                baseline_recon = reconstruct_uv_to_ground(
-                    self._centers_in_calibration_coordinates(self._baseline_points),
-                    calibration,
-                    config.reconstruction,
+                baseline_recon = self._apply_ground_reference_to_reconstruction(
+                    reconstruct_uv_to_ground(
+                        self._centers_in_calibration_coordinates(self._baseline_points),
+                        calibration,
+                        config.reconstruction,
+                    )
                 )
             obstacle_recons = [
-                reconstruct_uv_to_ground(
-                    self._centers_in_calibration_coordinates(points),
-                    calibration,
-                    config.reconstruction,
+                self._apply_ground_reference_to_reconstruction(
+                    reconstruct_uv_to_ground(
+                        self._centers_in_calibration_coordinates(points),
+                        calibration,
+                        config.reconstruction,
+                    )
                 )
                 for points in self._obstacle_point_groups
             ]
-            full_recon = reconstruct_uv_to_ground(
-                self._centers_in_calibration_coordinates(self._laser_centers),
-                calibration,
-                config.reconstruction,
+            full_recon = self._apply_ground_reference_to_reconstruction(
+                reconstruct_uv_to_ground(
+                    self._centers_in_calibration_coordinates(self._laser_centers),
+                    calibration,
+                    config.reconstruction,
+                )
             )
             measurements = measure_height_lines(
                 (
@@ -837,11 +919,12 @@ class MainWindow(QMainWindow):
         else:
             reference_status = "固定基准 Zg=0"
         height_status = "，".join(
-            f"障碍物{index} {measurement.height_mean_mm:.3f} mm"
+            self._format_height_status(index, measurement)
             for index, measurement in enumerate(measurements, start=1)
         )
         self.statusBar().showMessage(
-            f"{height_status} | {reference_status}"
+            f"{height_status} | {reference_status} | "
+            f"ground 外参 {self._ground_extrinsic_source}"
         )
 
     def _toggle_point_cloud_view(self) -> None:
@@ -915,10 +998,14 @@ class MainWindow(QMainWindow):
             return None
 
         if self._last_full_reconstruction is None:
-            self._last_full_reconstruction = reconstruct_uv_to_ground(
-                self._centers_in_calibration_coordinates(self._laser_centers),
-                calibration,
-                config.reconstruction,
+            self._last_full_reconstruction = (
+                self._apply_ground_reference_to_reconstruction(
+                    reconstruct_uv_to_ground(
+                        self._centers_in_calibration_coordinates(self._laser_centers),
+                        calibration,
+                        config.reconstruction,
+                    )
+                )
             )
         return self._last_full_reconstruction
 
@@ -986,17 +1073,46 @@ class MainWindow(QMainWindow):
             baseline_counts = "固定 Zg=0"
         self._result_labels["baseline_points"].setText(baseline_counts)
 
+        session_stage_a = self._stage_a_height_result(None)
+        self._result_labels["stage_a_enabled"].setText(
+            "开启" if session_stage_a.stage_a_enabled else "关闭"
+        )
+        self._result_labels["stage_a_domain"].setText(
+            self._stage_a_domain_text()
+        )
+        self._result_labels["session_ground_reference"].setText(
+            "VALID · 已应用" if self._ground_reference is not None else "未启用"
+        )
+        reference_modes = {measurement.ground_reference_mode for measurement in measurements}
+        self._result_labels["ground_reference_mode"].setText(
+            self._display_ground_reference_mode(
+                reference.ground_reference_mode
+                if len(reference_modes) == 1
+                else "mixed"
+            )
+        )
+
         for index, measurement in enumerate(measurements, start=1):
             group = QGroupBox(f"障碍物 {index}")
-            form = QFormLayout(group)
+            form = QVBoxLayout(group)
             angle = measurement.angle_with_baseline_deg
+            stage_a = self._stage_a_height_result(measurement.height_mean_mm)
+            raw_height = (
+                "—"
+                if stage_a.height_raw is None
+                else f"{stage_a.height_raw:.3f} mm"
+            )
+            stage_a_height = (
+                "—"
+                if stage_a.height_stage_a is None
+                else f"{stage_a.height_stage_a:.3f} mm"
+            )
             rows = (
-                (
-                    "高度 均值±σ",
-                    f"{measurement.height_mean_mm:.3f} ± "
-                    f"{measurement.height_std_mm:.3f}",
-                ),
-                ("高度 中位数", f"{measurement.height_median_mm:.3f}"),
+                ("原始高度 height_raw (均值)", raw_height),
+                ("补偿高度 height_stage_a", stage_a_height),
+                ("Stage-A 状态", self._display_stage_a_status(stage_a.stage_a_status)),
+                ("高度 σ (raw)", f"{measurement.height_std_mm:.3f} mm"),
+                ("高度 中位数 (raw)", f"{measurement.height_median_mm:.3f} mm"),
                 ("长度", f"{measurement.length_mm:.3f}"),
                 ("与基准线夹角", "—" if angle is None else f"{angle:.2f}°"),
                 ("拟合 RMSE", f"{measurement.height_fit.rmse_mm:.3f}"),
@@ -1007,13 +1123,63 @@ class MainWindow(QMainWindow):
                 ),
             )
             for title, value in rows:
-                label = QLabel(value, group)
+                label = QLabel(f"{title}: {value}", group)
+                label.setWordWrap(True)
                 label.setTextInteractionFlags(
                     Qt.TextInteractionFlag.TextSelectableByMouse
                 )
-                form.addRow(f"{title}:", label)
+                form.addWidget(label)
             self._obstacle_results_layout.addWidget(group)
             self._obstacle_result_groups.append(group)
+
+    def _format_height_status(
+        self, index: int, measurement: HeightLineMeasurement
+    ) -> str:
+        """Format both raw and Stage-A values without changing measurement data."""
+        stage_a = self._stage_a_height_result(measurement.height_mean_mm)
+        raw = "—" if stage_a.height_raw is None else f"{stage_a.height_raw:.3f}"
+        corrected = (
+            "—"
+            if stage_a.height_stage_a is None
+            else f"{stage_a.height_stage_a:.3f}"
+        )
+        return (
+            f"障碍物{index} raw {raw} mm / stage_a {corrected} mm "
+            f"({self._display_stage_a_status(stage_a.stage_a_status)})"
+        )
+
+    def _stage_a_domain_text(self) -> str:
+        config = self._app_config
+        stage_a_config = (
+            config.correction.stage_a_height_scale
+            if config is not None
+            else None
+        )
+        if stage_a_config is None:
+            return "—"
+        lower, upper = stage_a_config.valid_height_mm
+        return f"{lower:.1f}–{upper:.1f} mm"
+
+    @staticmethod
+    def _display_ground_reference_mode(mode: str) -> str:
+        return {
+            "baseline_roi_profile": "基准 ROI 地面拟合",
+            "zg_zero": "固定 Zg=0",
+            "mixed": "多个模式（请检查）",
+        }.get(mode, mode)
+
+    @staticmethod
+    def _display_stage_a_status(status: str) -> str:
+        return {
+            "applied": "已应用",
+            "out_of_valid_domain": "超出有效域，保留 raw",
+            "disabled": "未启用",
+            "unsupported_system": "非 Daheng，不适用",
+            "not_configured": "未配置",
+            "mode_not_stage_a": "当前模式非 Stage-A",
+            "not_measured": "未测量",
+            "invalid_height": "高度无效",
+        }.get(status, status)
 
     def _save_results(self) -> None:
         """保存二维提取结果，并按当前处理阶段追加三维与测量结果。"""
@@ -1236,6 +1402,11 @@ class MainWindow(QMainWindow):
             ),
             "measurement_performed": measurement_performed,
             "ground_extrinsic_source": self._ground_extrinsic_source,
+            "session_ground_reference": (
+                None
+                if self._ground_reference is None
+                else self._ground_reference.as_dict()
+            ),
             "laser_center_csv": "laser_center.csv",
             "correction": (
                 {
@@ -1265,6 +1436,7 @@ class MainWindow(QMainWindow):
         return payload
 
     def _measurement_values(
+        self,
         measurement: HeightLineMeasurement,
         stage_a: StageAHeightResult,
     ) -> dict[str, Any]:
@@ -1293,6 +1465,8 @@ class MainWindow(QMainWindow):
             "angle_with_baseline_deg": measurement.angle_with_baseline_deg,
             "ground_baseline_zg": measurement.ground_baseline_zg_mm,
             "ground_noise_sigma": measurement.ground_noise_sigma_mm,
+            "ground_reference_mode": measurement.ground_reference_mode,
+            "ground_extrinsic_source": self._ground_extrinsic_source,
             "ground_profile": ground_profile,
             "height_line_fit_rmse": measurement.height_fit.rmse_mm,
             "endpoints_ground": measurement.endpoints_ground.tolist(),

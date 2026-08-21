@@ -9,6 +9,21 @@ from .height_measure import (
     measure_height_line,
     measure_height_lines,
 )
+from .ground_reference import (
+    GROUND_SUPPORT_MANUAL_ROI,
+    GROUND_SUPPORT_PNP_BOARD_MASK,
+    SessionGroundReference,
+    SUPPORTED_GROUND_SUPPORT_SOURCES,
+    fit_ground_profile,
+    fit_line_xy,
+    fit_session_ground_reference,
+    fit_session_ground_reference_from_support,
+)
+from .board_mask import (
+    full_board_physical_polygon,
+    select_board_ground_points,
+    select_manual_ground_roi_points,
+)
 from .roi_manager import RoiKind, RoiManager, RoiRegion
 
 __all__ = [
@@ -20,6 +35,17 @@ __all__ = [
     "RoiKind",
     "RoiManager",
     "RoiRegion",
+    "GROUND_SUPPORT_MANUAL_ROI",
+    "GROUND_SUPPORT_PNP_BOARD_MASK",
+    "SessionGroundReference",
+    "SUPPORTED_GROUND_SUPPORT_SOURCES",
+    "fit_ground_profile",
+    "fit_line_xy",
+    "fit_session_ground_reference",
+    "fit_session_ground_reference_from_support",
+    "full_board_physical_polygon",
     "measure_height_line",
     "measure_height_lines",
+    "select_board_ground_points",
+    "select_manual_ground_roi_points",
 ]

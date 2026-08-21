@@ -4,6 +4,7 @@ import json
 import os
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
@@ -12,9 +13,10 @@ import numpy as np
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QApplication, QLabel
 
-from app_config import load_app_config
+from app_config import DEFAULT_CONFIG_PATH, load_app_config
 from gui.main_window import MainWindow
 
 
@@ -97,6 +99,103 @@ class MainWindowSaveTests(unittest.TestCase):
                 )
             finally:
                 window.close()
+
+    def test_metric_chain_is_visible_without_changing_measurement_values(self) -> None:
+        config = load_app_config(
+            DEFAULT_CONFIG_PATH.parent / "measure_tool_daheng_0811.yaml"
+        )
+        measurement = SimpleNamespace(
+            ground_reference_mode="baseline_roi_profile",
+            ground_baseline_zg_mm=0.25,
+            ground_noise_sigma_mm=0.02,
+            baseline_fit=None,
+            baseline_point_count=20,
+            baseline_inlier_count=19,
+            height_mean_mm=12.5,
+            height_median_mm=12.4,
+            height_std_mm=0.1,
+            length_mm=6.0,
+            angle_with_baseline_deg=0.5,
+            height_fit=SimpleNamespace(rmse_mm=0.01),
+            height_inlier_count=30,
+            height_point_count=31,
+            ground_profile_fit=None,
+            endpoints_ground=np.zeros((2, 3), dtype=np.float64),
+        )
+        window = MainWindow(
+            config,
+            system="daheng",
+            ground_extrinsic_source="session",
+        )
+        try:
+            scroll_area = window._control_panel_scroll_area
+            self.assertTrue(scroll_area.widgetResizable())
+            self.assertEqual(
+                scroll_area.verticalScrollBarPolicy(),
+                Qt.ScrollBarPolicy.ScrollBarAsNeeded,
+            )
+            self.assertEqual(
+                scroll_area.horizontalScrollBarPolicy(),
+                Qt.ScrollBarPolicy.ScrollBarAlwaysOff,
+            )
+            window._update_results_panel([measurement])
+            labels = [
+                label.text()
+                for label in window._obstacle_result_groups[0].findChildren(QLabel)
+            ]
+            label_text = "\n".join(labels)
+            self.assertIn("原始高度 height_raw (均值): 12.500 mm", label_text)
+            self.assertIn("补偿高度 height_stage_a: 12.550 mm", label_text)
+            self.assertIn("Stage-A 状态: 已应用", label_text)
+            self.assertNotIn("ground_reference_mode", label_text)
+            self.assertNotIn("ground_extrinsic_source", label_text)
+            self.assertEqual(
+                window._result_labels["ground_reference_mode"].text(),
+                "基准 ROI 地面拟合",
+            )
+            self.assertEqual(
+                window._result_labels["ground_source"].text(),
+                "session",
+            )
+            self.assertEqual(
+                window._result_labels["stage_a_enabled"].text(),
+                "开启",
+            )
+            self.assertEqual(
+                window._result_labels["stage_a_domain"].text(),
+                "1.0–30.0 mm",
+            )
+            self.assertEqual(measurement.height_mean_mm, 12.5)
+
+            stage_a = window._stage_a_height_result(measurement.height_mean_mm)
+            window._last_obstacle_reconstructions = [
+                SimpleNamespace(filtered={})
+            ]
+            window._last_reconstruction = {
+                "height": SimpleNamespace(filtered={})
+            }
+            window._last_full_reconstruction = SimpleNamespace(
+                point_count=31,
+                filtered={},
+            )
+            payload = window._measurement_payload([measurement])
+            obstacle_values = payload["obstacles"][0]["results_mm"]
+            self.assertEqual(obstacle_values["height_raw"], 12.5)
+            self.assertAlmostEqual(
+                obstacle_values["height_stage_a"],
+                12.5504244891715,
+                places=14,
+            )
+            self.assertEqual(
+                obstacle_values["ground_reference_mode"],
+                "baseline_roi_profile",
+            )
+            self.assertEqual(
+                obstacle_values["ground_extrinsic_source"],
+                "session",
+            )
+        finally:
+            window.close()
 
 
 if __name__ == "__main__":

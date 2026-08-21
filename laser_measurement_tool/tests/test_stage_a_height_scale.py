@@ -103,6 +103,20 @@ class StageAHeightScaleTests(unittest.TestCase):
                 self.assertFalse(result.stage_a_valid)
                 self.assertEqual(result.stage_a_status, "out_of_valid_domain")
 
+    def test_raw_below_one_mm_is_not_rejected_but_is_not_corrected(self) -> None:
+        result = apply_stage_a_height_scale(
+            0.5,
+            system="daheng",
+            enabled=True,
+            correction_mode=STAGE_A_HEIGHT_SCALE_MODE,
+            config=self.stage_a_config,
+        )
+        self.assertEqual(result.height_raw, 0.5)
+        self.assertEqual(result.height_stage_a, 0.5)
+        self.assertTrue(result.stage_a_enabled)
+        self.assertFalse(result.stage_a_valid)
+        self.assertEqual(result.stage_a_status, "out_of_valid_domain")
+
     def test_frozen_numeric_reproduction(self) -> None:
         result = apply_stage_a_height_scale(
             12.5,

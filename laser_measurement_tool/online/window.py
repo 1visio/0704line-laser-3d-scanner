@@ -56,6 +56,17 @@ from correction.stage_a_height_scale import (
     resolve_stage_a_height_scale,
 )
 from laser.backends import AVAILABLE_METHODS
+from measurement.ground_reference import (
+    GROUND_SUPPORT_MANUAL_ROI,
+    GROUND_SUPPORT_PNP_BOARD_MASK,
+    MeasurementError,
+    SessionGroundReference,
+    fit_session_ground_reference_from_support,
+)
+from measurement.board_mask import (
+    select_board_ground_points,
+    select_manual_ground_roi_points,
+)
 
 from .controller import OnlineController
 from .camera_backend import CameraBackend, get_camera_backend
@@ -66,7 +77,6 @@ from .recording import FrameRecorder
 from .ground_sanity import (
     GroundSanityResult,
     evaluate_ground_sanity,
-    select_points_inside_board_mask,
 )
 from .session_calibration import (
     SessionGroundRepeatability,
@@ -75,6 +85,7 @@ from .session_calibration import (
     build_session_ground_payload,
     compare_ground_extrinsics,
     merge_session_ground_sanity,
+    merge_session_ground_reference,
     save_session_ground_payload,
 )
 from reconstruction.reconstructor import reconstruct_uv_to_ground
@@ -297,6 +308,8 @@ class OnlineCameraWindow(QMainWindow):
         self._session_ground_generation = 0
         self._session_ground_calibration_offset: tuple[int, int] | None = None
         self._last_ground_sanity: GroundSanityResult | None = None
+        self._last_ground_reference: SessionGroundReference | None = None
+        self._ground_reference_invalid_reason: str | None = None
         self._session_calibration_active = False
         self._session_calibration_restore_config: CameraConfig | None = None
         self._session_calibration_was_streaming = False
@@ -1373,6 +1386,34 @@ class OnlineCameraWindow(QMainWindow):
             "先在上方全幅预览中调好曝光/增益；点击后才开始连续采集有效棋盘帧"
         )
         stream_layout.addWidget(self.session_capture_button)
+        support_row = QHBoxLayout()
+        support_row.addWidget(QLabel("地面基准支撑", stream_group))
+        self.ground_reference_source_combo = QComboBox(stream_group)
+        self.ground_reference_source_combo.addItem(
+            "PnP 棋盘物理 mask", GROUND_SUPPORT_PNP_BOARD_MASK
+        )
+        self.ground_reference_source_combo.addItem(
+            "手工 ground ROI", GROUND_SUPPORT_MANUAL_ROI
+        )
+        configured_support_source = (
+            self._config.session_ground_calibration.ground_reference.support_source
+        )
+        configured_index = self.ground_reference_source_combo.findData(
+            configured_support_source
+        )
+        if configured_index >= 0:
+            self.ground_reference_source_combo.setCurrentIndex(configured_index)
+        support_row.addWidget(self.ground_reference_source_combo, 1)
+        stream_layout.addLayout(support_row)
+        self.ground_reference_button = QPushButton(
+            "Session 激光地面基准", stream_group
+        )
+        self.ground_reference_button.setToolTip(
+            "先选择明确的 ground 支撑源。PnP 模式使用完整棋盘物理 mask；"
+            "手工模式使用单帧工具中已确认的基准 ROI。仅拟合当前 active extrinsic，"
+            "不覆盖 reference 标定文件。"
+        )
+        stream_layout.addWidget(self.ground_reference_button)
         self.ground_sanity_button = QPushButton(
             "激光地面一致性检查", stream_group
         )
@@ -1410,6 +1451,13 @@ class OnlineCameraWindow(QMainWindow):
         self.drop_label = QLabel("—", stats)
         self.record_label = QLabel("未录制", stats)
         self.ground_source_label = QLabel("reference", stats)
+        self.ground_reference_status_label = QLabel("未启用", stats)
+        self.ground_reference_status_label.setWordWrap(True)
+        self.ground_reference_slope_label = QLabel("—", stats)
+        self.ground_reference_intercept_label = QLabel("—", stats)
+        self.ground_reference_rmse_label = QLabel("—", stats)
+        self.ground_reference_range_label = QLabel("—", stats)
+        self.ground_reference_points_label = QLabel("—", stats)
         self.session_ground_valid_label = QLabel("INVALID · 未标定", stats)
         self.session_ground_corner_label = QLabel("—", stats)
         self.session_ground_rmse_label = QLabel("—", stats)
@@ -1447,6 +1495,12 @@ class OnlineCameraWindow(QMainWindow):
             ("丢帧/覆盖", self.drop_label),
             ("录制", self.record_label),
             ("ground 外参", self.ground_source_label),
+            ("ground reference", self.ground_reference_status_label),
+            ("reference slope", self.ground_reference_slope_label),
+            ("reference intercept", self.ground_reference_intercept_label),
+            ("reference RMSE", self.ground_reference_rmse_label),
+            ("reference S range", self.ground_reference_range_label),
+            ("reference points", self.ground_reference_points_label),
             ("Session 状态", self.session_ground_valid_label),
             ("角点数", self.session_ground_corner_label),
             ("重投影 RMSE", self.session_ground_rmse_label),
@@ -1489,6 +1543,9 @@ class OnlineCameraWindow(QMainWindow):
         )
         self.session_capture_button.clicked.connect(
             self._start_session_calibration_capture
+        )
+        self.ground_reference_button.clicked.connect(
+            self.calibrate_session_ground_reference
         )
         self.ground_sanity_button.clicked.connect(self.run_ground_sanity_check)
         self.export_button.clicked.connect(self._export_current_frame)
@@ -1600,6 +1657,15 @@ class OnlineCameraWindow(QMainWindow):
             and not self._session_calibration_capturing
         )
         self.session_ground_button.setEnabled(session_available)
+        ground_reference_available = (
+            has_session
+            and not busy
+            and not camera_reconfigure_busy
+            and not self._session_calibration_active
+            and not self._session_calibration_capturing
+        )
+        self.ground_reference_button.setEnabled(ground_reference_available)
+        self.ground_reference_source_combo.setEnabled(ground_reference_available)
         capture_available = (
             self._session_ground_mode != "disabled"
             and self._session_calibration_active
@@ -1917,7 +1983,15 @@ class OnlineCameraWindow(QMainWindow):
             if self._active_session_ground_result is not None:
                 active = self._active_session_ground_result
                 if active.R is not None and active.t is not None:
-                    self._pipeline.apply_session_ground_extrinsic(active.R, active.t)
+                    self._pipeline.apply_session_ground_extrinsic(
+                        active.R,
+                        active.t,
+                        generation=self._session_ground_generation,
+                    )
+            if self._last_ground_reference is not None:
+                self._pipeline.apply_session_ground_reference(
+                    self._last_ground_reference
+                )
             if (
                 was_streaming
                 and not self._pending_disconnect
@@ -1986,7 +2060,15 @@ class OnlineCameraWindow(QMainWindow):
         if self._active_session_ground_result is not None:
             active = self._active_session_ground_result
             if active.R is not None and active.t is not None:
-                self._pipeline.apply_session_ground_extrinsic(active.R, active.t)
+                self._pipeline.apply_session_ground_extrinsic(
+                    active.R,
+                    active.t,
+                    generation=self._session_ground_generation,
+                )
+        if self._last_ground_reference is not None:
+            self._pipeline.apply_session_ground_reference(
+                self._last_ground_reference
+            )
 
     def connect_camera(self) -> None:
         if self._session is not None:
@@ -2045,17 +2127,25 @@ class OnlineCameraWindow(QMainWindow):
         QApplication.processEvents()
         try:
             self._apply_camera_config()
-            self._pipeline = FramePipeline(
-                self._config,
-                self.extraction_method_combo.currentText(),
-                system=self._camera_backend.name,
+            self._replace_pipeline(
+                FramePipeline(
+                    self._config,
+                    self.extraction_method_combo.currentText(),
+                    system=self._camera_backend.name,
+                )
             )
             if self._active_session_ground_result is not None:
                 active = self._active_session_ground_result
                 if active.R is not None and active.t is not None:
                     self._pipeline.apply_session_ground_extrinsic(
-                        active.R, active.t
+                        active.R,
+                        active.t,
+                        generation=self._session_ground_generation,
                     )
+            if self._last_ground_reference is not None:
+                self._pipeline.apply_session_ground_reference(
+                    self._last_ground_reference
+                )
             self._set_compensation_status()
             self._update_ground_source_label()
             self._trail.clear()
@@ -2259,15 +2349,25 @@ class OnlineCameraWindow(QMainWindow):
     def _start_stream_for_session_calibration(self) -> None:
         if self._session is None or self._controller.running:
             return
-        self._pipeline = FramePipeline(
-            self._config,
-            self.extraction_method_combo.currentText(),
-            system=self._camera_backend.name,
+        self._replace_pipeline(
+            FramePipeline(
+                self._config,
+                self.extraction_method_combo.currentText(),
+                system=self._camera_backend.name,
+            )
         )
         if self._active_session_ground_result is not None:
             active = self._active_session_ground_result
             if active.R is not None and active.t is not None:
-                self._pipeline.apply_session_ground_extrinsic(active.R, active.t)
+                self._pipeline.apply_session_ground_extrinsic(
+                    active.R,
+                    active.t,
+                    generation=self._session_ground_generation,
+                )
+        if self._last_ground_reference is not None:
+            self._pipeline.apply_session_ground_reference(
+                self._last_ground_reference
+            )
         self._controller.start(self._session, self._pipeline, self._recorder)
         self._set_online_state(OnlineState.STREAMING, "Session 标定预览中")
 
@@ -2554,7 +2654,15 @@ class OnlineCameraWindow(QMainWindow):
                 final.R,
                 final.t,
             )
-            self._pipeline.apply_session_ground_extrinsic(final.R, final.t)
+            self._session_ground_generation += 1
+            self._invalidate_ground_reference_for_extrinsic_change(
+                "Session PnP 已更新，激光地面基准需重新标定"
+            )
+            self._pipeline.apply_session_ground_extrinsic(
+                final.R,
+                final.t,
+                generation=self._session_ground_generation,
+            )
             self._invalidate_live_reconstruction_after_ground_update()
             self._active_session_ground_result = final
             self._last_session_ground_result = final
@@ -2571,7 +2679,6 @@ class OnlineCameraWindow(QMainWindow):
                 int(last_frame.offset_x),
                 int(last_frame.offset_y),
             )
-            self._session_ground_generation += 1
             self._last_ground_sanity = None
             self._reset_ground_sanity_display()
             self._show_session_calibration_overlay(
@@ -2733,7 +2840,15 @@ class OnlineCameraWindow(QMainWindow):
                     result.R,
                     result.t,
                 )
-                self._pipeline.apply_session_ground_extrinsic(result.R, result.t)
+                self._session_ground_generation += 1
+                self._invalidate_ground_reference_for_extrinsic_change(
+                    "Session PnP 已更新，激光地面基准需重新标定"
+                )
+                self._pipeline.apply_session_ground_extrinsic(
+                    result.R,
+                    result.t,
+                    generation=self._session_ground_generation,
+                )
                 self._invalidate_live_reconstruction_after_ground_update()
                 self._active_session_ground_result = result
                 self._session_ground_calibration_frame_number = int(
@@ -2742,7 +2857,6 @@ class OnlineCameraWindow(QMainWindow):
                 self._session_ground_calibration_host_monotonic_ns = int(
                     frame.host_monotonic_ns
                 )
-                self._session_ground_generation += 1
                 self._session_ground_calibration_offset = (
                     int(frame.offset_x),
                     int(frame.offset_y),
@@ -2902,7 +3016,7 @@ class OnlineCameraWindow(QMainWindow):
     ) -> tuple[np.ndarray, dict[str, object]]:
         """Apply the PnP-derived board interior mask before sanity metrics."""
         sanity_config = self._config.session_ground_calibration.sanity
-        points = np.asarray(result.points_ground, dtype=np.float64)
+        points = self._raw_ground_points(result)
         if not sanity_config.mask_enabled:
             return points, {
                 "enabled": False,
@@ -2911,6 +3025,30 @@ class OnlineCameraWindow(QMainWindow):
                 "input_point_count": int(len(points)),
                 "selected_point_count": int(len(points)),
             }
+
+        return self._select_pnp_board_ground_points(
+            result,
+            inset_mm=sanity_config.mask_inset_mm,
+        )
+
+    @staticmethod
+    def _raw_ground_points(result: FrameResult) -> np.ndarray:
+        """Return raw C0+C1+extrinsic points, never a corrected view."""
+        return np.asarray(
+            result.points_ground_raw
+            if result.points_ground_raw is not None
+            else result.points_ground,
+            dtype=np.float64,
+        )
+
+    def _select_pnp_board_ground_points(
+        self,
+        result: FrameResult,
+        *,
+        inset_mm: float,
+    ) -> tuple[np.ndarray, dict[str, object]]:
+        """Shared PnP board-mask selection for sanity and ground reference."""
+        points = self._raw_ground_points(result)
 
         corners = (
             None
@@ -2922,7 +3060,7 @@ class OnlineCameraWindow(QMainWindow):
             return np.empty((0, 3), dtype=np.float64), {
                 "enabled": True,
                 "status": "unavailable",
-                "source": "session_pnp_full_board_physical",
+                "source": GROUND_SUPPORT_PNP_BOARD_MASK,
                 "reason": "reconstructed_source_pixels_missing",
                 "input_point_count": int(len(points)),
                 "selected_point_count": 0,
@@ -2936,7 +3074,7 @@ class OnlineCameraWindow(QMainWindow):
             return np.empty((0, 3), dtype=np.float64), {
                 "enabled": True,
                 "status": "unavailable",
-                "source": "session_pnp_full_board_physical",
+                "source": GROUND_SUPPORT_PNP_BOARD_MASK,
                 "reason": "session_pnp_pose_missing",
                 "input_point_count": int(len(points)),
                 "selected_point_count": 0,
@@ -2946,7 +3084,7 @@ class OnlineCameraWindow(QMainWindow):
             camera_matrix = np.asarray(calibration["K"], dtype=np.float64).copy()
             camera_matrix[0, 2] -= float(mask_offset[0])
             camera_matrix[1, 2] -= float(mask_offset[1])
-            return select_points_inside_board_mask(
+            return select_board_ground_points(
                 pixels,
                 points,
                 rvec=session_result.rvec,
@@ -2957,19 +3095,74 @@ class OnlineCameraWindow(QMainWindow):
                 pattern_rows=self._config.session_ground_calibration.pattern_rows,
                 square_size_mm=self._config.session_ground_calibration.square_size_mm,
                 image_offset=mask_offset,
-                inset_mm=sanity_config.mask_inset_mm,
+                inset_mm=inset_mm,
                 detected_corners=corners,
             )
         except (TypeError, ValueError) as error:
             return np.empty((0, 3), dtype=np.float64), {
                 "enabled": True,
                 "status": "unavailable",
-                "source": "session_pnp_full_board_physical",
+                "source": GROUND_SUPPORT_PNP_BOARD_MASK,
                 "reason": str(error),
                 "corner_count": int(len(np.asarray(corners).reshape(-1, 2))),
                 "input_point_count": int(len(points)),
                 "selected_point_count": 0,
             }
+
+    def _ground_reference_support_points(
+        self,
+        result: FrameResult,
+    ) -> tuple[np.ndarray, dict[str, object], str, float | None]:
+        """Resolve an explicit support source before fitting the reference."""
+        support_config = self._config.session_ground_calibration.ground_reference
+        source = str(
+            self.ground_reference_source_combo.currentData()
+            or support_config.support_source
+        ).strip().lower()
+        if source == GROUND_SUPPORT_PNP_BOARD_MASK:
+            if self._active_session_ground_result is None:
+                raise MeasurementError(
+                    "pnp_board_mask 需要有效 Session PnP；"
+                    "如不做 PnP，请切换为 manual_ground_roi 并先选择基准区域。"
+                )
+            points, metadata = self._select_pnp_board_ground_points(
+                result,
+                inset_mm=float(support_config.mask_inset_mm),
+            )
+            if metadata.get("status") != "applied":
+                raise MeasurementError(
+                    "pnp_board_mask 未能从当前帧选出棋盘物理 mask 内的激光点"
+                )
+            return points, metadata, source, float(support_config.mask_inset_mm)
+
+        if source == GROUND_SUPPORT_MANUAL_ROI:
+            analysis = self._analysis_window
+            if analysis is None:
+                self.open_frame_analysis()
+                raise MeasurementError(
+                    "请先在“单帧测量与区域选择”中添加基准区域，"
+                    "再点击 Session 激光地面基准。"
+                )
+            roi_rects = getattr(analysis, "baseline_regions_full", ())
+            if not roi_rects:
+                raise MeasurementError(
+                    "manual_ground_roi 尚未选择基准区域；请在单帧工具中添加基准区域。"
+                )
+            pixels = getattr(result, "pixels_uv", None)
+            if pixels is None:
+                raise MeasurementError("当前帧没有可用于 manual_ground_roi 的像素坐标")
+            points, metadata = select_manual_ground_roi_points(
+                pixels,
+                self._raw_ground_points(result),
+                roi_rects,
+            )
+            if metadata.get("status") != "applied":
+                raise MeasurementError(
+                    "manual_ground_roi 内没有当前帧的有效激光点"
+                )
+            return points, metadata, source, None
+
+        raise MeasurementError(f"不支持的 ground support source: {source}")
 
     def _sanity_frame_result(self) -> FrameResult | None:
         """Return a post-PnP frame; idle mode captures and runs the formal pipeline."""
@@ -3022,6 +3215,154 @@ class OnlineCameraWindow(QMainWindow):
                 pass
         self._show_result(result)
         return result
+
+    def _ground_reference_frame_result(self) -> FrameResult | None:
+        """Return a current laser-on frame without requiring Session PnP."""
+        if self._controller.running:
+            result = self._last_result
+            if result is None:
+                QMessageBox.information(
+                    self,
+                    "等待激光帧",
+                    "当前尚无实时帧，请等待新的无障碍激光-on 帧后再标定。",
+                )
+                return None
+            return result
+
+        if self._session is None:
+            QMessageBox.information(self, "未连接", "请先连接相机")
+            return None
+        try:
+            self._session.start()
+            frame = self._session.get_frame(self._session.config.timeout_ms)
+            self._show_raw_frame(frame)
+            result = self._pipeline.run_frame(frame)
+        except (OSError, RuntimeError, TypeError, ValueError) as error:
+            QMessageBox.warning(
+                self,
+                "Session 激光地面基准",
+                f"无法采集或重建当前基准面激光帧：{error}",
+            )
+            return None
+        finally:
+            try:
+                self._session.stop()
+            except Exception:
+                pass
+        self._show_result(result)
+        return result
+
+    def calibrate_session_ground_reference(self) -> None:
+        """Fit and freeze an explicitly supported ground profile for this session.
+
+        The fitter itself remains the existing ``a*S+b`` implementation.  This
+        entry point is deliberately responsible for resolving provenance first,
+        so an arbitrary full-frame point cloud can never become a runtime ground
+        reference.
+        """
+        if self._pipeline.session_ground_reference is not None:
+            QMessageBox.information(
+                self,
+                "Session 激光地面基准",
+                "当前 Session 的线性地面基准已经冻结；如需重做，请断开并重新连接相机。",
+            )
+            return
+        result = self._ground_reference_frame_result()
+        if result is None:
+            return
+        try:
+            support_points, support_metadata, support_source, mask_inset_mm = (
+                self._ground_reference_support_points(result)
+            )
+            reference = fit_session_ground_reference_from_support(
+                support_points,
+                self._config.measurement,
+                support_source=support_source,
+                active_ground_extrinsic_source=self._pipeline.ground_extrinsic_source,
+                ground_extrinsic_generation=(
+                    self._pipeline.ground_extrinsic_generation
+                ),
+                frame_host_monotonic_ns=int(result.frame.host_monotonic_ns),
+                mask_inset_mm=mask_inset_mm,
+                support_metadata=support_metadata,
+            )
+            self._pipeline.apply_session_ground_reference(reference)
+        except (MeasurementError, TypeError, ValueError) as error:
+            QMessageBox.warning(
+                self,
+                "Session 激光地面基准失败",
+                f"当前帧不能作为空基准面拟合：{error}",
+            )
+            return
+
+        self._last_ground_reference = reference
+        payload = reference.as_dict()
+        payload["frame"] = {
+            "camera_frame_number": int(result.frame.camera_frame_number),
+            "host_monotonic_ns": int(result.frame.host_monotonic_ns),
+            "offset_x": int(result.frame.offset_x),
+            "offset_y": int(result.frame.offset_y),
+            "ground_extrinsic_source": self._pipeline.ground_extrinsic_source,
+            "ground_extrinsic_generation": (
+                self._pipeline.ground_extrinsic_generation
+            ),
+        }
+        payload["ground_extrinsic_source"] = self._pipeline.ground_extrinsic_source
+        payload["ground_extrinsic_generation"] = (
+            self._pipeline.ground_extrinsic_generation
+        )
+        payload["provenance"] = {
+            "source": reference.provenance_source,
+            "active_ground_extrinsic_source": (
+                reference.active_ground_extrinsic_source
+            ),
+            "ground_extrinsic_generation": reference.ground_extrinsic_generation,
+            "frame_host_monotonic_ns": reference.frame_host_monotonic_ns,
+            "mask_inset_mm": reference.mask_inset_mm,
+            "point_count": reference.point_count,
+            "inlier_count": reference.inlier_count,
+            "valid_s_range_mm": [
+                float(reference.valid_s_range_mm[0]),
+                float(reference.valid_s_range_mm[1]),
+            ],
+            "slope": reference.slope_z_per_mm,
+            "intercept": reference.intercept_z_mm,
+            "rmse_mm": reference.rmse_mm,
+            "support": dict(reference.support_metadata),
+        }
+        try:
+            merge_session_ground_reference(
+                self._session_ground_json_path(),
+                payload,
+                ground_extrinsic_source=self._pipeline.ground_extrinsic_source,
+            )
+        except (OSError, TypeError, ValueError) as error:
+            # Runtime activation is already complete; report persistence
+            # separately so a writable-output problem cannot undo the session.
+            self.statusBar().showMessage(f"地面基准已应用，但 Session JSON 保存失败：{error}")
+
+        self._invalidate_live_reconstruction_after_ground_update()
+        if not self._controller.running:
+            try:
+                refreshed = self._pipeline.run_frame(result.frame)
+            except (RuntimeError, TypeError, ValueError) as error:
+                self.statusBar().showMessage(
+                    f"地面基准已应用；等待下一帧刷新点云：{error}"
+                )
+            else:
+                self._show_result(refreshed)
+        self._update_ground_reference_display()
+        self._update_control_states()
+        lower, upper = reference.valid_s_range_mm
+        self.statusBar().showMessage(
+            "SESSION_GROUND_REFERENCE = VALID | "
+            f"source {reference.provenance_source} | "
+            f"points {reference.point_count}/{reference.inlier_count} | "
+            f"slope {reference.slope_z_per_mm:.7f} mm/mm | "
+            f"RMSE {reference.rmse_mm:.4f} mm | "
+            f"S {lower:.2f}~{upper:.2f} mm | "
+            "已冻结到当前 Session（不修改 reference 标定）"
+        )
 
     def _session_calibration_frame(self) -> CapturedFrame | None:
         if self._last_result is not None:
@@ -3171,6 +3512,84 @@ class OnlineCameraWindow(QMainWindow):
 
     def _update_ground_source_label(self) -> None:
         self.ground_source_label.setText(self._pipeline.ground_extrinsic_source)
+        self._update_ground_reference_display()
+
+    def _update_ground_reference_display(self) -> None:
+        reference = self._pipeline.session_ground_reference
+        if reference is None:
+            self.ground_reference_status_label.setText(
+                self._ground_reference_invalid_reason or "未启用"
+            )
+            self.ground_reference_slope_label.setText("—")
+            self.ground_reference_intercept_label.setText("—")
+            self.ground_reference_rmse_label.setText("—")
+            self.ground_reference_range_label.setText("—")
+            self.ground_reference_points_label.setText("—")
+            return
+        self._ground_reference_invalid_reason = None
+        self.ground_reference_status_label.setText(
+            f"{reference.status} · 已冻结 · {reference.provenance_source}"
+        )
+        self.ground_reference_status_label.setToolTip(
+            f"source={reference.provenance_source}; "
+            f"extrinsic={reference.active_ground_extrinsic_source}; "
+            f"generation={reference.ground_extrinsic_generation}"
+        )
+        self.ground_reference_slope_label.setText(
+            f"{reference.slope_z_per_mm:.7f} mm/mm"
+        )
+        self.ground_reference_intercept_label.setText(
+            f"{reference.intercept_z_mm:.4f} mm"
+        )
+        self.ground_reference_rmse_label.setText(
+            f"{reference.rmse_mm:.4f} mm"
+        )
+        lower, upper = reference.valid_s_range_mm
+        self.ground_reference_range_label.setText(
+            f"{lower:.2f} ~ {upper:.2f} mm"
+        )
+        self.ground_reference_points_label.setText(
+            f"{reference.inlier_count}/{reference.point_count}"
+        )
+
+    def _replace_pipeline(self, pipeline: FramePipeline) -> None:
+        """Install a pipeline and drop session state when its package changes."""
+        previous_identity = self._pipeline.calibration_package_identity
+        self._pipeline = pipeline
+        if previous_identity == pipeline.calibration_package_identity:
+            return
+
+        # A new calibration package changes the camera/laser geometry.  Do not
+        # replay either the old PnP pose or a ground model fitted from it into
+        # the newly created pipeline.  Normal stop/start with the same package
+        # takes the fast path above and preserves both runtime states.
+        self._active_session_ground_result = None
+        self._last_session_ground_result = SessionGroundExtrinsic(
+            status="invalid_package",
+            message="calibration package changed",
+        )
+        self._session_ground_generation = 0
+        self._session_ground_calibration_frame_number = None
+        self._session_ground_calibration_host_monotonic_ns = None
+        self._session_ground_calibration_offset = None
+        self._last_ground_sanity = None
+        self._last_ground_reference = None
+        self._ground_reference_invalid_reason = (
+            "标定包已切换，激光地面基准需重新标定"
+        )
+        self._pipeline.reset_ground_extrinsic(generation=0)
+        if hasattr(self, "session_ground_valid_label"):
+            self._update_session_ground_display(self._last_session_ground_result, None)
+            self._reset_ground_sanity_display()
+            self._update_ground_source_label()
+
+    def _invalidate_ground_reference_for_extrinsic_change(self, reason: str) -> None:
+        """Invalidate the fitted ground model when active R/t changes."""
+        self._last_ground_reference = None
+        self._pipeline.reset_session_ground_reference()
+        self._ground_reference_invalid_reason = reason
+        self._update_ground_reference_display()
+        self.statusBar().showMessage(reason)
 
     def _clear_session_ground_runtime(self) -> None:
         self._session_calibration_active = False
@@ -3196,7 +3615,10 @@ class OnlineCameraWindow(QMainWindow):
         self._session_calibration_repeatability = None
         self._session_calibration_quality = None
         self._last_ground_sanity = None
-        self._pipeline.reset_ground_extrinsic()
+        self._last_ground_reference = None
+        self._ground_reference_invalid_reason = None
+        self._pipeline.reset_ground_extrinsic(generation=0)
+        self._pipeline.reset_session_ground_reference()
         if hasattr(self, "session_ground_valid_label"):
             self.session_ground_valid_label.setText("INVALID · 未标定")
             self.session_ground_corner_label.setText("—")
@@ -3230,6 +3652,11 @@ class OnlineCameraWindow(QMainWindow):
             self._pipeline.calibration_for_reconstruction(),
             self._config.reconstruction,
         )
+        points_ground, ground_reference_metadata = (
+            self._pipeline.apply_ground_reference_to_points(
+                reconstruction.points_ground
+            )
+        )
         root = (
             self._config.output.directory / "online_measurements"
             if self._config.output is not None
@@ -3246,11 +3673,11 @@ class OnlineCameraWindow(QMainWindow):
             target_dir / "full_points.csv",
             reconstruction.pixels_uv,
             reconstruction.points_camera,
-            reconstruction.points_ground,
+            points_ground,
         )
         save_ground_pointcloud_ply(
             target_dir / "full_laser_ground.ply",
-            reconstruction.points_ground,
+            points_ground,
         )
         save_image_png(
             target_dir / "overlay.png",
@@ -3278,6 +3705,21 @@ class OnlineCameraWindow(QMainWindow):
             "calibration_manifest_sha256": result.calibration_manifest_sha256,
             "algorithm_config_sha256": result.algorithm_config_sha256,
             "ground_extrinsic_source": self._pipeline.ground_extrinsic_source,
+            "ground_extrinsic_generation": self._pipeline.ground_extrinsic_generation,
+            "ground_reference": (
+                None
+                if self._pipeline.session_ground_reference is None
+                else self._pipeline.session_ground_reference.as_dict()
+            ),
+            "ground_reference_runtime": {
+                **ground_reference_metadata,
+                "valid_s_range_mm": (
+                    list(ground_reference_metadata["ground_reference_valid_s_range_mm"])
+                    if ground_reference_metadata["ground_reference_valid_s_range_mm"]
+                    is not None
+                    else None
+                ),
+            },
             **height_result.as_dict(),
             "correction": {
                 "mode": self._config.correction.mode,
@@ -3351,6 +3793,7 @@ class OnlineCameraWindow(QMainWindow):
                 system=self._camera_backend.name,
                 runtime_calibration=self._pipeline.calibration_for_reconstruction(),
                 ground_extrinsic_source=self._pipeline.ground_extrinsic_source,
+                runtime_ground_reference=self._pipeline.session_ground_reference,
             )
             analysis.load_external_frame(
                 result.frame.image,
@@ -3453,6 +3896,31 @@ class OnlineCameraWindow(QMainWindow):
         if (
             self._pipeline.ground_extrinsic_source == "session"
             and result.ground_extrinsic_source != "session"
+        ):
+            return
+        active_generation = self._pipeline.ground_extrinsic_generation
+        if (
+            result.ground_extrinsic_generation is not None
+            and result.ground_extrinsic_generation != active_generation
+        ):
+            return
+        active_ground_reference = self._pipeline.session_ground_reference
+        if active_ground_reference is not None:
+            if (
+                result.ground_reference_source
+                != active_ground_reference.provenance_source
+            ):
+                return
+            if (
+                active_ground_reference.ground_extrinsic_generation is not None
+                and result.ground_extrinsic_generation is not None
+                and result.ground_extrinsic_generation
+                != active_ground_reference.ground_extrinsic_generation
+            ):
+                return
+        if (
+            active_ground_reference is None
+            and result.ground_reference_source != "none"
         ):
             return
         first_result = self._last_result is None
