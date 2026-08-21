@@ -15,6 +15,7 @@ from correction.stage_a_height_scale import resolve_stage_a_height_scale
 from gui.image_view import _to_uint8_display
 from laser.backends import create_extraction_params
 from laser.laser_extractor import extract_laser_center
+from measurement.ground_reference import SessionGroundReference
 from reconstruction.reconstructor import reconstruct_uv_to_ground
 
 from .models import CapturedFrame, FrameResult
@@ -53,6 +54,7 @@ class FramePipeline:
         self._reference_t = np.ascontiguousarray(
             np.asarray(self.package.calibration["t"], dtype=np.float64).copy()
         )
+        self._session_ground_reference: SessionGroundReference | None = None
         self.extraction_params = create_extraction_params(
             self.extraction_method, self.extraction_options
         )
@@ -80,13 +82,16 @@ class FramePipeline:
         with self._calibration_lock:
             calibration = dict(self.package.calibration)
             ground_extrinsic_source = self._ground_extrinsic_source
+            ground_reference = self._session_ground_reference
         reconstructed = reconstruct_uv_to_ground(
             centers_full,
             calibration,
             self.config.reconstruction,
         )
         reconstruction_ms = (time.perf_counter_ns() - reconstruction_start) / 1e6
-        points = reconstructed.points_ground
+        points, ground_reference_metadata = self._apply_ground_reference(
+            reconstructed.points_ground, ground_reference
+        )
         section = (
             np.ascontiguousarray(points[:, (0, 2)])
             if len(points)
@@ -106,7 +111,11 @@ class FramePipeline:
             calibration_manifest_sha256=self.package.manifest_sha256,
             algorithm_config_sha256=self.algorithm_config_sha256,
             ground_extrinsic_source=ground_extrinsic_source,
+            **ground_reference_metadata,
             **self._stage_a_frame_metadata.as_dict(),
+            points_ground_raw=np.ascontiguousarray(
+                reconstructed.points_ground
+            ),
             filtered=reconstructed.filtered,
             pixels_uv=reconstructed.pixels_uv,
         )
@@ -121,6 +130,39 @@ class FramePipeline:
     def reference_ground_extrinsic(self) -> tuple[np.ndarray, np.ndarray]:
         """返回 reference R/t 的副本，用于 Session 标定差异比较。"""
         return self._reference_R.copy(), self._reference_t.copy()
+
+    @property
+    def session_ground_reference(self) -> SessionGroundReference | None:
+        """当前会话冻结的线性 ground reference；与 PnP 外参独立。"""
+        with self._calibration_lock:
+            return self._session_ground_reference
+
+    def apply_session_ground_reference(
+        self, reference: SessionGroundReference
+    ) -> None:
+        """仅在当前进程启用 Session ground reference，不写 reference 文件。"""
+        if not isinstance(reference, SessionGroundReference):
+            raise TypeError("Session ground reference 类型不正确")
+        if str(reference.status).upper() != "VALID":
+            raise ValueError("只能应用 VALID 的 Session ground reference")
+        lower, upper = reference.valid_s_range_mm
+        if not np.isfinite([lower, upper]).all() or lower > upper:
+            raise ValueError("Session ground reference 的 S 范围无效")
+        with self._calibration_lock:
+            self._session_ground_reference = reference
+
+    def reset_session_ground_reference(self) -> None:
+        """清除当前进程的 Session ground reference，不修改 reference 文件。"""
+        with self._calibration_lock:
+            self._session_ground_reference = None
+
+    def apply_ground_reference_to_points(
+        self, points_ground: np.ndarray
+    ) -> tuple[np.ndarray, dict[str, object]]:
+        """对外提供与 ``run_frame`` 相同的 ground reference 应用路径。"""
+        with self._calibration_lock:
+            reference = self._session_ground_reference
+        return self._apply_ground_reference(points_ground, reference)
 
     def calibration_for_reconstruction(self) -> dict[str, object]:
         """返回线程安全的当前运行时标定快照。"""
@@ -157,6 +199,37 @@ class FramePipeline:
             self.package.calibration["R"] = self._reference_R.copy()
             self.package.calibration["t"] = self._reference_t.copy()
             self._ground_extrinsic_source = "reference"
+
+    @staticmethod
+    def _apply_ground_reference(
+        points_ground: np.ndarray,
+        reference: SessionGroundReference | None,
+    ) -> tuple[np.ndarray, dict[str, object]]:
+        points = np.ascontiguousarray(np.asarray(points_ground, dtype=np.float64))
+        if reference is None:
+            return points, {
+                "ground_reference_source": "none",
+                "ground_reference_status": "inactive",
+                "ground_reference_valid_s_range_mm": None,
+                "ground_reference_applied_count": 0,
+                "ground_reference_out_of_range_count": 0,
+            }
+        corrected, valid = reference.apply_to_points(points)
+        applied_count = int(valid.sum())
+        out_of_range_count = int(len(points) - applied_count)
+        if not len(points):
+            status = "active_no_points"
+        elif out_of_range_count:
+            status = "partial_out_of_valid_s_domain"
+        else:
+            status = "applied"
+        return corrected, {
+            "ground_reference_source": reference.source,
+            "ground_reference_status": status,
+            "ground_reference_valid_s_range_mm": reference.valid_s_range_mm,
+            "ground_reference_applied_count": applied_count,
+            "ground_reference_out_of_range_count": out_of_range_count,
+        }
 
     def _validate_frame_bounds(self, frame: CapturedFrame) -> None:
         height, width = frame.image.shape

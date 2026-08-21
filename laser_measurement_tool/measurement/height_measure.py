@@ -12,9 +12,15 @@ from dataclasses import dataclass
 
 import numpy as np
 
-
-class MeasurementError(RuntimeError):
-    """Raised when input points are insufficient or geometrically degenerate."""
+from .ground_reference import (
+    GroundProfileFit,
+    LineFitXY,
+    MeasurementError,
+    fit_ground_profile,
+    fit_line_xy,
+    robust_sigma,
+    validate_points,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,37 +44,6 @@ class MeasurementParams:
 
 
 @dataclass(frozen=True, slots=True)
-class LineFitXY:
-    """Orthogonal least-squares line fit in the ground XY plane."""
-
-    centre_xy: np.ndarray
-    direction_xy: np.ndarray
-    endpoints_xy: np.ndarray
-    rmse_mm: float
-    inlier_mask: np.ndarray
-
-
-@dataclass(frozen=True, slots=True)
-class GroundProfileFit:
-    """Local ground height model along the measured obstacle line."""
-
-    origin_xy: np.ndarray
-    direction_xy: np.ndarray
-    slope_z_per_mm: float
-    intercept_z_mm: float
-    rmse_mm: float
-    inlier_mask: np.ndarray
-
-    def project_s(self, points_xy: np.ndarray) -> np.ndarray:
-        points = np.asarray(points_xy, dtype=np.float64)
-        return (points - self.origin_xy) @ self.direction_xy
-
-    def predict_z(self, points_xy: np.ndarray) -> np.ndarray:
-        s = self.project_s(points_xy)
-        return self.slope_z_per_mm * s + self.intercept_z_mm
-
-
-@dataclass(frozen=True, slots=True)
 class HeightLineMeasurement:
     """Measured obstacle height-line result."""
 
@@ -89,133 +64,12 @@ class HeightLineMeasurement:
     height_point_count: int
     height_inlier_count: int
 
-
-def _validate_points(points: np.ndarray, name: str, minimum: int) -> np.ndarray:
-    array = np.asarray(points, dtype=np.float64)
-    if array.ndim != 2 or array.shape[1] != 3:
-        raise MeasurementError(f"{name} must have shape (N, 3)")
-    if not np.isfinite(array).all():
-        raise MeasurementError(f"{name} contains NaN or infinite values")
-    if len(array) < minimum:
-        raise MeasurementError(
-            f"{name} has too few points: {len(array)} < {minimum}"
-        )
-    return array
-
-
-def _robust_sigma(residuals: np.ndarray) -> float:
-    """MAD-based robust standard deviation, with std fallback."""
-    mad = float(np.median(np.abs(residuals - np.median(residuals))))
-    sigma = 1.4826 * mad
-    if sigma <= np.finfo(np.float64).eps:
-        sigma = float(np.std(residuals))
-    return sigma
-
-
-def _fit_line_xy(
-    points_xy: np.ndarray, params: MeasurementParams, name: str
-) -> LineFitXY:
-    """Fit a robust 2D line in XY and reject orthogonal outliers."""
-    mask = np.ones(len(points_xy), dtype=bool)
-    centre = np.zeros(2)
-    direction = np.array([1.0, 0.0])
-    for _ in range(params.outlier_max_iterations):
-        selected = points_xy[mask]
-        if len(selected) < 2:
-            raise MeasurementError(f"{name} has too few inliers")
-        centre = np.mean(selected, axis=0)
-        centred = selected - centre
-        _, singular_values, right_vectors = np.linalg.svd(
-            centred, full_matrices=False
-        )
-        if singular_values[0] <= np.finfo(np.float64).eps:
-            raise MeasurementError(f"{name} points are degenerate")
-        direction = right_vectors[0]
-        if direction[0] < 0.0 or (direction[0] == 0.0 and direction[1] < 0.0):
-            direction = -direction
-
-        normal = np.array([-direction[1], direction[0]])
-        signed_residuals = (points_xy - centre) @ normal
-        sigma = _robust_sigma(signed_residuals[mask])
-        if sigma <= np.finfo(np.float64).eps:
-            break
-        new_mask = (
-            np.abs(signed_residuals)
-            <= params.outlier_sigma_multiplier * sigma
-        )
-        if new_mask.sum() < 2 or bool(np.all(new_mask == mask)):
-            break
-        mask = new_mask
-
-    selected = points_xy[mask]
-    projections = (selected - centre) @ direction
-    endpoints = np.vstack(
-        [
-            centre + float(np.min(projections)) * direction,
-            centre + float(np.max(projections)) * direction,
-        ]
-    )
-    normal = np.array([-direction[1], direction[0]])
-    orthogonal = np.abs((selected - centre) @ normal)
-    return LineFitXY(
-        centre_xy=np.ascontiguousarray(centre),
-        direction_xy=np.ascontiguousarray(direction),
-        endpoints_xy=np.ascontiguousarray(endpoints),
-        rmse_mm=float(np.sqrt(np.mean(orthogonal**2))),
-        inlier_mask=mask,
-    )
-
-
-def _fit_ground_profile(
-    baseline_points: np.ndarray,
-    params: MeasurementParams,
-    origin_xy: np.ndarray,
-    direction_xy: np.ndarray,
-) -> tuple[GroundProfileFit, float]:
-    """Fit local ground ``Zg = a*s + b`` along the obstacle direction."""
-    s = (baseline_points[:, :2] - origin_xy) @ direction_xy
-    z = baseline_points[:, 2]
-    mask = np.ones(len(z), dtype=bool)
-
-    def fit_selected(
-        selected_s: np.ndarray, selected_z: np.ndarray
-    ) -> tuple[float, float]:
-        if float(np.ptp(selected_s)) < 1.0:
-            return 0.0, float(np.median(selected_z))
-        design = np.column_stack([selected_s, np.ones_like(selected_s)])
-        slope, intercept = np.linalg.lstsq(design, selected_z, rcond=None)[0]
-        return float(slope), float(intercept)
-
-    slope = 0.0
-    intercept = float(np.median(z))
-    sigma = _robust_sigma(z - intercept)
-    for _ in range(params.outlier_max_iterations):
-        selected_s = s[mask]
-        selected_z = z[mask]
-        if len(selected_z) < 2:
-            raise MeasurementError("baseline has too few ground-profile inliers")
-        slope, intercept = fit_selected(selected_s, selected_z)
-        residuals = z - (slope * s + intercept)
-        sigma = _robust_sigma(residuals[mask])
-        if sigma <= np.finfo(np.float64).eps:
-            break
-        new_mask = (
-            np.abs(residuals) <= params.outlier_sigma_multiplier * sigma
-        )
-        if new_mask.sum() < 2 or bool(np.all(new_mask == mask)):
-            break
-        mask = new_mask
-
-    selected_residuals = z[mask] - (slope * s[mask] + intercept)
-    profile = GroundProfileFit(
-        origin_xy=np.ascontiguousarray(origin_xy),
-        direction_xy=np.ascontiguousarray(direction_xy),
-        slope_z_per_mm=slope,
-        intercept_z_mm=intercept,
-        rmse_mm=float(np.sqrt(np.mean(selected_residuals**2))),
-        inlier_mask=mask,
-    )
-    return profile, sigma
+# Preserve the old private names for callers/tests while keeping the actual
+# fitter in the reusable module above.
+_validate_points = validate_points
+_robust_sigma = robust_sigma
+_fit_line_xy = fit_line_xy
+_fit_ground_profile = fit_ground_profile
 
 
 def measure_height_line(

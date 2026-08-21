@@ -365,12 +365,35 @@ def build_session_ground_payload(
 
 
 def save_session_ground_payload(path: str | Path, payload: dict[str, Any]) -> Path:
-    """Atomically save the latest session record, replacing that record only."""
+    """Atomically save the latest session record.
+
+    PnP retries must not erase independently acquired Session ground-reference
+    or laser-sanity records that are already in the same JSON file.
+    """
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
+    record = dict(payload)
+    if target.is_file():
+        try:
+            previous = json.loads(target.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError) as error:
+            raise ValueError(f"无法读取 Session 标定 JSON: {target}: {error}") from error
+        if isinstance(previous, dict):
+            for key in (
+                "session_ground_reference",
+                "session_ground_reference_status",
+                "laser_ground_sanity",
+                "session_calibration_status",
+            ):
+                if key not in record and key in previous:
+                    record[key] = previous[key]
+            previous_runtime = previous.get("runtime")
+            current_runtime = record.get("runtime")
+            if isinstance(previous_runtime, dict) and isinstance(current_runtime, dict):
+                record["runtime"] = {**previous_runtime, **current_runtime}
     temporary = target.with_name(f".{target.name}.tmp")
     temporary.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        json.dumps(record, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
     temporary.replace(target)
@@ -415,6 +438,41 @@ def merge_session_ground_sanity(
     return save_session_ground_payload(target, existing)
 
 
+def merge_session_ground_reference(
+    path: str | Path,
+    reference_payload: Mapping[str, Any],
+    *,
+    ground_extrinsic_source: str,
+) -> Path:
+    """Merge the frozen linear ground reference into the Session JSON."""
+    target = Path(path)
+    if target.is_file():
+        try:
+            existing = json.loads(target.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError) as error:
+            raise ValueError(f"无法读取 Session 标定 JSON: {target}: {error}") from error
+        if not isinstance(existing, dict):
+            raise ValueError(f"Session 标定 JSON 根节点必须是对象: {target}")
+    else:
+        existing = {
+            "schema_version": 2,
+            "source": "session_ground_calibration",
+        }
+
+    existing["session_ground_reference"] = dict(reference_payload)
+    existing["session_ground_reference_status"] = reference_payload.get(
+        "status", "INVALID"
+    )
+    runtime = existing.get("runtime")
+    if not isinstance(runtime, dict):
+        runtime = {}
+        existing["runtime"] = runtime
+    runtime["ground_extrinsic_source"] = ground_extrinsic_source
+    runtime["ground_reference_source"] = reference_payload.get("source")
+    existing["saved_at_utc"] = datetime.now(timezone.utc).isoformat()
+    return save_session_ground_payload(target, existing)
+
+
 def _rotation_matrix(value: np.ndarray, name: str) -> np.ndarray:
     array = np.asarray(value, dtype=np.float64)
     if array.shape != (3, 3) or not np.isfinite(array).all():
@@ -437,5 +495,6 @@ __all__ = [
     "checkerboard_physical_polygon",
     "compare_ground_extrinsics",
     "merge_session_ground_sanity",
+    "merge_session_ground_reference",
     "save_session_ground_payload",
 ]

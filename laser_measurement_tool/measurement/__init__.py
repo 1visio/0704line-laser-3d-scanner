@@ -9,6 +9,12 @@ from .height_measure import (
     measure_height_line,
     measure_height_lines,
 )
+from .ground_reference import (
+    SessionGroundReference,
+    fit_ground_profile,
+    fit_line_xy,
+    fit_session_ground_reference,
+)
 from .roi_manager import RoiKind, RoiManager, RoiRegion
 
 __all__ = [
@@ -20,6 +26,10 @@ __all__ = [
     "RoiKind",
     "RoiManager",
     "RoiRegion",
+    "SessionGroundReference",
+    "fit_ground_profile",
+    "fit_line_xy",
+    "fit_session_ground_reference",
     "measure_height_line",
     "measure_height_lines",
 ]
