@@ -47,6 +47,9 @@ class GroundSanityResult:
     thresholds: dict[str, float | int] = field(default_factory=dict)
     evaluated_at_utc: str = ""
     mask: dict[str, Any] = field(default_factory=dict)
+    frame_host_monotonic_ns: int | None = None
+    session_calibration_host_monotonic_ns: int | None = None
+    session_generation: int | None = None
 
     def as_dict(self) -> dict[str, Any]:
         """Return a stable record suitable for ``session_ground_calibration.json``."""
@@ -60,6 +63,9 @@ class GroundSanityResult:
             "frame": {
                 "camera_frame_number": self.frame_number,
                 "session_calibration_frame_number": self.session_calibration_frame_number,
+                "host_monotonic_ns": self.frame_host_monotonic_ns,
+                "session_calibration_host_monotonic_ns": self.session_calibration_host_monotonic_ns,
+                "session_generation": self.session_generation,
             },
             "formal_chain": [
                 "Steger",
@@ -92,6 +98,9 @@ def evaluate_ground_sanity(
     ground_extrinsic_source: str,
     frame_number: int | None,
     session_calibration_frame_number: int | None,
+    frame_host_monotonic_ns: int | None = None,
+    session_calibration_host_monotonic_ns: int | None = None,
+    session_generation: int | None = None,
     thresholds: Any | None = None,
     mask: Mapping[str, Any] | None = None,
 ) -> GroundSanityResult:
@@ -119,9 +128,18 @@ def evaluate_ground_sanity(
     source = str(ground_extrinsic_source).strip().lower()
     if source != "session":
         warnings.append("ground_extrinsic_source_not_session")
-    if session_calibration_frame_number is None:
+    if session_calibration_host_monotonic_ns is not None:
+        if (
+            frame_host_monotonic_ns is None
+            or frame_host_monotonic_ns <= session_calibration_host_monotonic_ns
+        ):
+            warnings.append("laser_on_frame_not_after_session_calibration")
+    elif session_calibration_frame_number is None:
         warnings.append("session_calibration_frame_number_missing")
     elif frame_number is None or frame_number <= session_calibration_frame_number:
+        # Compatibility path for old callers/records.  The online GUI always
+        # supplies host monotonic timestamps, which are immune to SDK counter
+        # resets after stop/start.
         warnings.append("laser_on_frame_not_after_session_calibration")
     if mask_metadata.get("enabled") and mask_metadata.get("status") != "applied":
         warnings.append("board_mask_unavailable")
@@ -214,6 +232,17 @@ def evaluate_ground_sanity(
         thresholds=threshold_values,
         evaluated_at_utc=datetime.now(timezone.utc).isoformat(),
         mask=mask_metadata,
+        frame_host_monotonic_ns=(
+            None if frame_host_monotonic_ns is None else int(frame_host_monotonic_ns)
+        ),
+        session_calibration_host_monotonic_ns=(
+            None
+            if session_calibration_host_monotonic_ns is None
+            else int(session_calibration_host_monotonic_ns)
+        ),
+        session_generation=(
+            None if session_generation is None else int(session_generation)
+        ),
     )
 
 

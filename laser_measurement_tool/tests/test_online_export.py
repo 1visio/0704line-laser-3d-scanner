@@ -54,6 +54,14 @@ class OnlineExportTests(unittest.TestCase):
             )
         window.close()
 
+    def test_ground_extrinsic_source_is_shown_in_results(self) -> None:
+        window = MainWindow(ground_extrinsic_source="session")
+        self.assertEqual(
+            window._result_labels["ground_source"].text(),
+            "session",
+        )
+        window.close()
+
     def test_current_frame_export_and_analysis_window(self) -> None:
         with TemporaryDirectory() as temporary_directory:
             config = replace(

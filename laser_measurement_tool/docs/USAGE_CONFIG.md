@@ -148,6 +148,13 @@ session_ground_calibration:
   square_size_mm: 20.0
   detector: sb_then_classic
   output: null                # 默认写入 output.dir/session_ground_calibration.json
+  quality:
+    target_frames: 5
+    max_capture_attempts: 8
+    max_reprojection_rmse_px: 0.5
+    saturation_ratio_warn: 0.05
+    dynamic_range_p95_p5_warn: 20.0
+    edge_margin_warn_px: 20.0
   sanity:
     mask_enabled: true
     mask_inset_mm: 0.0        # 完整物理边界；0 mm，不做腐蚀/膨胀
@@ -159,7 +166,7 @@ session_ground_calibration:
     max_abs_slope_mm_per_mm: 0.02
 ```
 
-`required` 模式下必须先连接相机、点击“Session 基准标定”并获得 `VALID`，再开始
+`required` 模式下必须先连接相机、进入“Session 基准标定”预览，调好曝光后点击“采集 PnP 棋盘格（5 帧）”并获得 `VALID`，再开始
 在线重建；`disabled` 始终使用 reference。在线结果 JSON 会记录
 `ground_extrinsic_source: reference/session`。
 

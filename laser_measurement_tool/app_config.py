@@ -128,6 +128,39 @@ class SessionGroundSanityConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class SessionGroundQualityConfig:
+    """Configurable quality policy for the five-frame Session workflow."""
+
+    target_frames: int = 5
+    max_capture_attempts: int = 8
+    max_reprojection_rmse_px: float = 0.5
+    saturation_ratio_warn: float = 0.05
+    dynamic_range_p95_p5_warn: float = 20.0
+    edge_margin_warn_px: float = 20.0
+
+    def __post_init__(self) -> None:
+        for name in ("target_frames", "max_capture_attempts"):
+            value = getattr(self, name)
+            if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+                raise ValueError(f"{name} 必须是正整数")
+        if self.max_capture_attempts < self.target_frames:
+            raise ValueError("max_capture_attempts 不能小于 target_frames")
+        for name in (
+            "max_reprojection_rmse_px",
+            "saturation_ratio_warn",
+            "dynamic_range_p95_p5_warn",
+            "edge_margin_warn_px",
+        ):
+            value = getattr(self, name)
+            if not isinstance(value, (int, float)) or not math.isfinite(float(value)):
+                raise ValueError(f"{name} 必须是有限数")
+            if float(value) < 0.0:
+                raise ValueError(f"{name} 必须是非负数")
+        if float(self.saturation_ratio_warn) > 1.0:
+            raise ValueError("saturation_ratio_warn 必须在 0 到 1 之间")
+
+
+@dataclass(frozen=True, slots=True)
 class SessionGroundCalibrationConfig:
     """在线 Session 基准标定策略与棋盘格协议。"""
 
@@ -137,6 +170,9 @@ class SessionGroundCalibrationConfig:
     square_size_mm: float = 20.0
     detector: str = "sb_then_classic"
     output: Path | None = None
+    quality: SessionGroundQualityConfig = field(
+        default_factory=SessionGroundQualityConfig
+    )
     sanity: SessionGroundSanityConfig = field(
         default_factory=SessionGroundSanityConfig
     )
@@ -158,6 +194,8 @@ class SessionGroundCalibrationConfig:
             raise ValueError(f"棋盘格配置非法: {error}") from error
         if not isinstance(self.sanity, SessionGroundSanityConfig):
             raise ValueError("sanity 必须是 SessionGroundSanityConfig")
+        if not isinstance(self.quality, SessionGroundQualityConfig):
+            raise ValueError("quality 必须是 SessionGroundQualityConfig")
 
     def board_config(self) -> SessionGroundBoardConfig:
         """返回 Session-1 使用的共享棋盘格配置。"""
@@ -426,6 +464,7 @@ def _parse_session_ground_calibration(
         "square_size_mm",
         "detector",
         "output",
+        "quality",
         "sanity",
     }
     unknown = set(section) - valid_fields
@@ -443,6 +482,16 @@ def _parse_session_ground_calibration(
     )
     values = dict(section)
     values["output"] = output
+    quality_section = section.get("quality")
+    if quality_section is None:
+        quality = SessionGroundQualityConfig()
+    else:
+        quality = _build_dataclass(
+            quality_section,
+            SessionGroundQualityConfig,
+            "session_ground_calibration.quality",
+        )
+    values["quality"] = quality
     sanity_section = section.get("sanity")
     if sanity_section is None:
         sanity = SessionGroundSanityConfig()

@@ -363,7 +363,8 @@ class MainWindow(QMainWindow):
         )
         self.statusBar().showMessage(
             f"已加载实时帧 | {width} × {height} | 中心点 {len(local_centers)} | "
-            f"Offset ({offset[0]}, {offset[1]})"
+            f"Offset ({offset[0]}, {offset[1]}) | "
+            f"ground 外参: {self._ground_extrinsic_source}"
         )
 
     def load_frame(
@@ -476,10 +477,14 @@ class MainWindow(QMainWindow):
         self._result_labels: dict[str, QLabel] = {}
         for key, title in (
             ("ground", "地面基准 Zg"),
+            ("ground_source", "ground 外参"),
             ("ground_sigma", "地面噪声 σ"),
             ("baseline_points", "内点/总点"),
         ):
-            label = QLabel("—", reference_group)
+            label = QLabel(
+                self._ground_extrinsic_source if key == "ground_source" else "—",
+                reference_group,
+            )
             label.setTextInteractionFlags(
                 Qt.TextInteractionFlag.TextSelectableByMouse
             )
@@ -662,8 +667,10 @@ class MainWindow(QMainWindow):
         if self.image_view.has_image:
             self.image_view.clear_measurement_overlay()
         if hasattr(self, "_result_labels"):
-            for label in self._result_labels.values():
-                label.setText("—")
+            for key, label in self._result_labels.items():
+                label.setText(
+                    self._ground_extrinsic_source if key == "ground_source" else "—"
+                )
         if hasattr(self, "_obstacle_result_groups"):
             self._clear_obstacle_result_groups()
 
