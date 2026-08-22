@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
+    QLayout,
     QLabel,
     QMainWindow,
     QMessageBox,
@@ -53,8 +54,12 @@ from calibration.session_ground import (
     estimate_session_ground_extrinsic,
 )
 from correction.stage_a_height_scale import (
-    StageAHeightResult,
-    resolve_stage_a_height_scale,
+    HB2_CORRECTION_MODE,
+    H1_CORRECTION_MODE,
+    NO_CORRECTION_MODE,
+    HeightCorrectionResult,
+    normalize_correction_mode,
+    resolve_height_correction,
 )
 from laser.backends import AVAILABLE_METHODS
 from measurement.ground_reference import (
@@ -103,6 +108,31 @@ from utils.result_io import (
 
 pg.setConfigOptions(imageAxisOrder="row-major")
 DISPLAY_FPS_WINDOW_S = 1.0
+
+
+def _configure_wrapping_label(
+    label: QLabel, *, selectable: bool = True, flexible: bool = True
+) -> QLabel:
+    """Configure a compact sidebar label that wraps only when needed."""
+    label.setWordWrap(True)
+    label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+    label.setMinimumWidth(0)
+    label.setSizePolicy(
+        QSizePolicy.Policy.Ignored if flexible else QSizePolicy.Policy.Preferred,
+        QSizePolicy.Policy.Minimum,
+    )
+    if not flexible:
+        # Let ordinary titles keep their natural width, but prevent a long
+        # diagnostic title from consuming the entire value column.
+        label.setMinimumWidth(
+            min(label.fontMetrics().horizontalAdvance(label.text()), 170)
+        )
+        label.setMaximumWidth(170)
+    if selectable:
+        label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+    return label
 
 
 class PointCloudGLViewWidget(gl.GLViewWidget):
@@ -273,6 +303,9 @@ class OnlineCameraWindow(QMainWindow):
     ) -> None:
         super().__init__()
         self._config = config
+        self._height_correction_mode = normalize_correction_mode(
+            config.correction.mode
+        )
         self._simulate = simulate
         self._camera_backend: CameraBackend = get_camera_backend(camera_backend)
         startup_camera = config.camera
@@ -300,6 +333,12 @@ class OnlineCameraWindow(QMainWindow):
         )
         self._controller = OnlineController(self)
         self._recorder = FrameRecorder()
+        # ``_poll_recording`` runs from a timer while QMessageBox.critical
+        # enters a nested Qt event loop.  Remember that the recorder failure
+        # has already been reported so the same error cannot open an endless
+        # stack of modal dialogs.
+        self._recording_error_reported = False
+        self._error_message_box: QMessageBox | None = None
         self._session: CameraSession | SyntheticCameraSession | None = None
         self._last_result: FrameResult | None = None
         self._session_ground_mode = config.session_ground_calibration.mode
@@ -368,6 +407,25 @@ class OnlineCameraWindow(QMainWindow):
         self.setWindowTitle(f"在线线激光三维截面 · {self._camera_backend.display_name}")
         self.resize(1500, 900)
         self.refresh_devices()
+
+    def resizeEvent(self, event) -> None:  # noqa: N802
+        super().resizeEvent(event)
+        if hasattr(self, "control_scroll_area"):
+            self._refresh_adaptive_control_layout()
+
+    def _refresh_adaptive_control_layout(self) -> None:
+        """Re-activate wrapped sidebar rows after resize or status updates."""
+        panel = self.control_scroll_area.widget()
+        if panel is None:
+            return
+        for label in panel.findChildren(QLabel):
+            label.updateGeometry()
+        panel_layout = panel.layout()
+        if panel_layout is not None:
+            panel_layout.invalidate()
+            panel_layout.activate()
+        panel.updateGeometry()
+        self.control_scroll_area.updateGeometry()
 
     def _build_ui(self) -> None:
         central = QWidget(self)
@@ -896,7 +954,7 @@ class OnlineCameraWindow(QMainWindow):
         layout.addWidget(self.tabs, 1)
         control_panel = self._control_panel()
         control_panel.setSizePolicy(
-            QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
         )
         control_scroll = QScrollArea(central)
         control_scroll.setObjectName("controlScrollArea")
@@ -905,7 +963,12 @@ class OnlineCameraWindow(QMainWindow):
         control_scroll.setHorizontalScrollBarPolicy(
             Qt.ScrollBarPolicy.ScrollBarAlwaysOff
         )
-        control_scroll.setMinimumWidth(350)
+        control_scroll.setMinimumWidth(300)
+        control_scroll.setMaximumWidth(350)
+        control_scroll.setSizePolicy(
+            QSizePolicy.Policy.Preferred,
+            QSizePolicy.Policy.Expanding,
+        )
         control_scroll.setWidget(control_panel)
         self.control_scroll_area = control_scroll
         layout.addWidget(control_scroll)
@@ -1302,10 +1365,19 @@ class OnlineCameraWindow(QMainWindow):
 
     def _control_panel(self) -> QWidget:
         panel = QWidget(self)
-        panel.setFixedWidth(330)
+        panel.setMinimumWidth(0)
+        panel.setSizePolicy(
+            QSizePolicy.Policy.Ignored,
+            QSizePolicy.Policy.Preferred,
+        )
         layout = QVBoxLayout(panel)
+        layout.setContentsMargins(6, 6, 6, 6)
+        layout.setSpacing(6)
+        layout.setSizeConstraint(QLayout.SizeConstraint.SetDefaultConstraint)
         device_group = QGroupBox("相机", panel)
         device_layout = QVBoxLayout(device_group)
+        device_layout.setContentsMargins(6, 6, 6, 6)
+        device_layout.setSpacing(5)
         self.device_combo = QComboBox(device_group)
         row = QHBoxLayout()
         self.refresh_button = QPushButton("刷新", device_group)
@@ -1314,12 +1386,14 @@ class OnlineCameraWindow(QMainWindow):
         row.addWidget(self.refresh_button)
         row.addWidget(self.connect_button)
         row.addWidget(self.disconnect_button)
+        row.setSpacing(5)
         device_layout.addWidget(self.device_combo)
         device_layout.addLayout(row)
         layout.addWidget(device_group)
 
         self.camera_settings_group = QGroupBox("采集参数（停流后应用）", panel)
         form = QFormLayout(self.camera_settings_group)
+        self._configure_result_form(form)
         self.pixel_format = QComboBox(self.camera_settings_group)
         self.pixel_format.addItems(["Mono8", "Mono12"])
         self.pixel_format.setCurrentText(self._initial_camera_config.pixel_format)
@@ -1356,6 +1430,7 @@ class OnlineCameraWindow(QMainWindow):
 
         self.processing_group = QGroupBox("处理参数（停流后应用）", panel)
         processing_form = QFormLayout(self.processing_group)
+        self._configure_result_form(processing_form)
         self.extraction_method_combo = QComboBox(self.processing_group)
         self.extraction_method_combo.addItems(list(AVAILABLE_METHODS))
         method_index = self.extraction_method_combo.findText(
@@ -1364,15 +1439,31 @@ class OnlineCameraWindow(QMainWindow):
         if method_index >= 0:
             self.extraction_method_combo.setCurrentIndex(method_index)
         processing_form.addRow("提取算法", self.extraction_method_combo)
+        self.height_correction_combo = QComboBox(self.processing_group)
+        for mode, label in (
+            (NO_CORRECTION_MODE, "none"),
+            (H1_CORRECTION_MODE, "h1 (保留对照)"),
+            (HB2_CORRECTION_MODE, "hb2 (Frozen H-B2)"),
+        ):
+            self.height_correction_combo.addItem(label, mode)
+        correction_index = self.height_correction_combo.findData(
+            self._height_correction_mode
+        )
+        if correction_index >= 0:
+            self.height_correction_combo.setCurrentIndex(correction_index)
+        processing_form.addRow("高度修正模式", self.height_correction_combo)
         layout.addWidget(self.processing_group)
 
         stream_group = QGroupBox("在线运行", panel)
         stream_layout = QVBoxLayout(stream_group)
+        stream_layout.setContentsMargins(6, 6, 6, 6)
+        stream_layout.setSpacing(5)
         row = QHBoxLayout()
         self.start_button = QPushButton("开始", stream_group)
         self.stop_button = QPushButton("停止", stream_group)
         row.addWidget(self.start_button)
         row.addWidget(self.stop_button)
+        row.setSpacing(5)
         stream_layout.addLayout(row)
         self.snapshot_button = QPushButton("保存当前帧", stream_group)
         stream_layout.addWidget(self.snapshot_button)
@@ -1417,7 +1508,7 @@ class OnlineCameraWindow(QMainWindow):
         )
         stream_layout.addWidget(self.ground_reference_button)
         self.frozen_session_ground_button = QPushButton(
-            "加载 Frozen Session Ground", stream_group
+            "加载 Frozen Ground", stream_group
         )
         self.frozen_session_ground_button.setToolTip(
             "仅在有效 Session PnP 外参下加载已验证的 Ground-5C physical_S JSON；"
@@ -1447,16 +1538,13 @@ class OnlineCameraWindow(QMainWindow):
         self.record_button = QPushButton("定长录制", stream_group)
         record_row.addWidget(self.record_count)
         record_row.addWidget(self.record_button)
+        record_row.setSpacing(5)
         stream_layout.addLayout(record_row)
         layout.addWidget(stream_group)
 
         stats = QGroupBox("实时状态", panel)
         stats_layout = QFormLayout(stats)
-        # Long provenance values (Frozen source, SHA256, and runtime status)
-        # must be allowed to occupy a second line.  Keeping every row on one
-        # line makes QLabel paint over the following rows when the side panel
-        # is narrower than the value's size hint.
-        stats_layout.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+        self._configure_result_form(stats_layout)
         self.state_label = QLabel("未连接", stats)
         self.capture_fps_label = QLabel("—", stats)
         self.process_fps_label = QLabel("—", stats)
@@ -1465,12 +1553,11 @@ class OnlineCameraWindow(QMainWindow):
         self.drop_label = QLabel("—", stats)
         self.record_label = QLabel("未录制", stats)
         self.ground_source_label = QLabel("reference", stats)
-        self.ground_reference_status_label = QLabel("未启用", stats)
-        self.ground_reference_status_label.setWordWrap(True)
-        self.ground_reference_status_label.setSizePolicy(
-            QSizePolicy.Policy.Ignored,
-            QSizePolicy.Policy.Preferred,
+        self.height_correction_mode_label = QLabel(
+            self._height_correction_mode, stats
         )
+        self.height_shadow_label = QLabel("未测量", stats)
+        self.ground_reference_status_label = QLabel("未启用", stats)
         self.ground_reference_slope_label = QLabel("—", stats)
         self.ground_reference_intercept_label = QLabel("—", stats)
         self.ground_reference_rmse_label = QLabel("—", stats)
@@ -1479,22 +1566,6 @@ class OnlineCameraWindow(QMainWindow):
         self.ground_reference_coordinate_label = QLabel("—", stats)
         self.ground_reference_json_sha_label = QLabel("—", stats)
         self.ground_reference_runtime_label = QLabel("—", stats)
-        self.ground_reference_coordinate_label.setTextInteractionFlags(
-            Qt.TextInteractionFlag.TextSelectableByMouse
-        )
-        self.ground_reference_json_sha_label.setTextInteractionFlags(
-            Qt.TextInteractionFlag.TextSelectableByMouse
-        )
-        for label in (
-            self.ground_reference_coordinate_label,
-            self.ground_reference_json_sha_label,
-            self.ground_reference_runtime_label,
-        ):
-            label.setWordWrap(True)
-            label.setSizePolicy(
-                QSizePolicy.Policy.Ignored,
-                QSizePolicy.Policy.Preferred,
-            )
         self.session_ground_valid_label = QLabel("INVALID · 未标定", stats)
         self.session_ground_corner_label = QLabel("—", stats)
         self.session_ground_rmse_label = QLabel("—", stats)
@@ -1504,14 +1575,6 @@ class OnlineCameraWindow(QMainWindow):
         self.session_ground_repeat_translation_label = QLabel("—", stats)
         self.session_ground_repeat_rotation_label = QLabel("—", stats)
         self.session_ground_quality_label = QLabel("棋盘质量：—", stats)
-        self.session_ground_quality_label.setWordWrap(True)
-        self.session_ground_quality_label.setSizePolicy(
-            QSizePolicy.Policy.Ignored,
-            QSizePolicy.Policy.Preferred,
-        )
-        self.session_ground_quality_label.setTextInteractionFlags(
-            Qt.TextInteractionFlag.TextSelectableByMouse
-        )
         self.session_ground_quality_label.setToolTip(
             "仅显示配置阈值产生的 warning；不会自动修改图像或标定参数"
         )
@@ -1519,7 +1582,6 @@ class OnlineCameraWindow(QMainWindow):
             "SESSION_CALIBRATION = 未检查", stats
         )
         self.session_sanity_status_label.setStyleSheet("font-weight: 600;")
-        self.session_sanity_status_label.setWordWrap(False)
         self.session_sanity_bias_label = QLabel("—", stats)
         self.session_sanity_rmse_label = QLabel("—", stats)
         self.session_sanity_p95_label = QLabel("—", stats)
@@ -1536,6 +1598,8 @@ class OnlineCameraWindow(QMainWindow):
             ("丢帧/覆盖", self.drop_label),
             ("录制", self.record_label),
             ("ground 外参", self.ground_source_label),
+            ("height correction", self.height_correction_mode_label),
+            ("H1/H-B2 shadow", self.height_shadow_label),
             ("ground reference", self.ground_reference_status_label),
             ("reference slope", self.ground_reference_slope_label),
             ("reference intercept", self.ground_reference_intercept_label),
@@ -1561,19 +1625,67 @@ class OnlineCameraWindow(QMainWindow):
             ("Board mask points", self.session_sanity_mask_count_label),
             ("Valid points", self.session_sanity_valid_count_label),
         ):
-            stats_layout.addRow(title, label)
-        # Quality warnings can be long.  Give them the full panel width so
-        # they wrap instead of being clipped or painted over the value column.
+            _configure_wrapping_label(label)
+            stats_layout.addRow(
+                _configure_wrapping_label(
+                    QLabel(title, stats),
+                    selectable=False,
+                    flexible=False,
+                ),
+                label,
+            )
+        _configure_wrapping_label(self.session_ground_quality_label)
         stats_layout.addRow(self.session_ground_quality_label)
-        # Keep the long machine-readable result on one full-width row instead
-        # of letting QFormLayout wrap and overlap the two columns.
+        _configure_wrapping_label(self.session_sanity_status_label)
         stats_layout.addRow(self.session_sanity_status_label)
         layout.addWidget(stats)
         note = QLabel("历史点仅表示最近 1 秒时间轨迹，不是连续扫描表面。", panel)
         note.setWordWrap(True)
         layout.addWidget(note)
         layout.addStretch(1)
+
+        # The panel is allowed to follow the scroll viewport.  Controls use
+        # an ignored horizontal size hint so they shrink with it instead of
+        # forcing a wide sidebar; labels and values handle the reflow.
+        for widget in panel.findChildren(QPushButton):
+            widget.setMinimumWidth(0)
+            widget.setSizePolicy(
+                QSizePolicy.Policy.Ignored,
+                widget.sizePolicy().verticalPolicy(),
+            )
+        for widget in panel.findChildren(QComboBox):
+            widget.setMinimumWidth(0)
+            widget.setSizePolicy(
+                QSizePolicy.Policy.Ignored,
+                widget.sizePolicy().verticalPolicy(),
+            )
+        for widget in (
+            *panel.findChildren(QDoubleSpinBox),
+            *panel.findChildren(QSpinBox),
+        ):
+            widget.setMinimumWidth(0)
+            widget.setSizePolicy(
+                QSizePolicy.Policy.Ignored,
+                widget.sizePolicy().verticalPolicy(),
+            )
         return panel
+
+    @staticmethod
+    def _configure_result_form(form: QFormLayout) -> None:
+        """Keep compact title/value rows and wrap only content when needed."""
+        form.setContentsMargins(6, 6, 6, 6)
+        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
+        form.setFieldGrowthPolicy(
+            QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow
+        )
+        form.setLabelAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        )
+        form.setFormAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop
+        )
+        form.setHorizontalSpacing(6)
+        form.setVerticalSpacing(2)
 
     def _connect_signals(self) -> None:
         self.refresh_button.clicked.connect(self.refresh_devices)
@@ -1597,6 +1709,11 @@ class OnlineCameraWindow(QMainWindow):
         self.ground_sanity_button.clicked.connect(self.run_ground_sanity_check)
         self.export_button.clicked.connect(self._export_current_frame)
         self.analysis_button.clicked.connect(self.open_frame_analysis)
+        self.height_correction_combo.currentIndexChanged.connect(
+            lambda _index: self._set_height_correction_mode(
+                self.height_correction_combo.currentData()
+            )
+        )
         self.record_button.clicked.connect(self.start_recording)
         self.exposure.editingFinished.connect(self._schedule_camera_control_update)
         self.gain.editingFinished.connect(self._schedule_camera_control_update)
@@ -1615,6 +1732,25 @@ class OnlineCameraWindow(QMainWindow):
         self._camera_config_ready.connect(
             self._on_camera_config_worker_result, queued
         )
+
+    def _set_height_correction_mode(self, mode: object) -> None:
+        """Set the scalar display mode; reconstruction remains unchanged."""
+        try:
+            normalized = normalize_correction_mode(str(mode))
+        except ValueError as error:
+            self.statusBar().showMessage(str(error))
+            return
+        self._height_correction_mode = normalized
+        self._pipeline.set_height_correction_mode(normalized)
+        self.height_correction_mode_label.setText(normalized)
+        if normalized == HB2_CORRECTION_MODE:
+            if self._config.correction.hb2_height_correction is None:
+                message = "hb2 已选择但未配置 Frozen H-B2；输出将显式标记 not_configured"
+            else:
+                message = "高度修正模式 = hb2；H1 仅 shadow logging，不叠加"
+        else:
+            message = f"高度修正模式 = {normalized}；H1/H-B2 互斥"
+        self.statusBar().showMessage(message)
 
     def _set_online_state(
         self, state: OnlineState, message: str | None = None
@@ -2252,6 +2388,7 @@ class OnlineCameraWindow(QMainWindow):
         if not self._controller.running or self._session is None:
             QMessageBox.information(self, "未取流", "请先连接相机并开始取流")
             return
+        self._recording_error_reported = False
         root = (
             self._config.output.directory / "online_recordings"
             if self._config.output is not None
@@ -3759,6 +3896,7 @@ class OnlineCameraWindow(QMainWindow):
     def _replace_pipeline(self, pipeline: FramePipeline) -> None:
         """Install a pipeline and drop session state when its package changes."""
         previous_identity = self._pipeline.calibration_package_identity
+        pipeline.set_height_correction_mode(self._height_correction_mode)
         self._pipeline = pipeline
         if previous_identity == pipeline.calibration_package_identity:
             return
@@ -3888,6 +4026,17 @@ class OnlineCameraWindow(QMainWindow):
             cv2.cvtColor(result.overlay_rgb, cv2.COLOR_RGB2BGR),
         )
         height_result = self._current_height_result()
+        frame_shadow = {
+            **height_result.as_dict(),
+            "v_min": result.v_min,
+            "v_median": result.v_median,
+            "v_max": result.v_max,
+            "point_count": int(reconstruction.point_count),
+            "c1_clamp_status": result.c1_clamp_status,
+            "ground_reference_status": ground_reference_metadata[
+                "ground_reference_status"
+            ],
+        }
         payload = {
             "source": "online",
             "frame": {
@@ -3925,8 +4074,10 @@ class OnlineCameraWindow(QMainWindow):
                 ),
             },
             **height_result.as_dict(),
+            "height_shadow": frame_shadow,
             "correction": {
                 "mode": self._config.correction.mode,
+                "active_mode": self._height_correction_mode,
                 "stage_a_height_scale_enabled": (
                     self._config.correction.stage_a_height_scale_enabled
                 ),
@@ -3935,6 +4086,12 @@ class OnlineCameraWindow(QMainWindow):
                     if self._config.correction.stage_a_height_scale_config
                     else None
                 ),
+                "hb2_height_correction_config": (
+                    str(self._config.correction.hb2_height_correction_config)
+                    if self._config.correction.hb2_height_correction_config
+                    else None
+                ),
+                "hb2_q2_policy": self._config.correction.hb2_q2_policy,
             },
             "point_counts": {
                 "laser_centers_2d": int(len(result.centers_uv_full)),
@@ -3951,7 +4108,7 @@ class OnlineCameraWindow(QMainWindow):
         save_measurement_json(target_dir / "result.json", payload)
         return target_dir
 
-    def _current_height_result(self) -> StageAHeightResult:
+    def _current_height_result(self) -> HeightCorrectionResult:
         """Use an already completed ROI analysis when one exists.
 
         A live frame has no height ROI by itself, so its exported height fields
@@ -3964,10 +4121,25 @@ class OnlineCameraWindow(QMainWindow):
             if measurements
             else None
         )
-        return resolve_stage_a_height_scale(
+        analysis = self._analysis_window
+        obstacle_recons = getattr(analysis, "_last_obstacle_reconstructions", ())
+        if measurements and obstacle_recons and hasattr(
+            analysis, "_height_correction_result"
+        ):
+            return analysis._height_correction_result(
+                height_raw,
+                obstacle_recons[0],
+                mode_override=self._height_correction_mode,
+            )
+        result = self._last_result
+        return resolve_height_correction(
             height_raw,
+            q1=None if result is None else result.q1,
+            q2=None if result is None else result.q2,
+            q2_in_domain=None if result is None else result.q2_in_domain,
             system=self._pipeline.system,
             correction=self._config.correction,
+            mode_override=self._height_correction_mode,
         )
 
     def _export_current_frame(self) -> None:
@@ -3998,6 +4170,7 @@ class OnlineCameraWindow(QMainWindow):
                 runtime_calibration=self._pipeline.calibration_for_reconstruction(),
                 ground_extrinsic_source=self._pipeline.ground_extrinsic_source,
                 runtime_ground_reference=self._pipeline.session_ground_reference,
+                height_correction_mode=self._height_correction_mode,
             )
             analysis.load_external_frame(
                 result.frame.image,
@@ -4130,6 +4303,29 @@ class OnlineCameraWindow(QMainWindow):
         self._update_ground_reference_runtime_display(result)
         first_result = self._last_result is None
         self._last_result = result
+        self._recorder.log_shadow(
+            {
+                "camera_frame_number": result.frame.camera_frame_number,
+                "host_timestamp_ns": result.frame.host_timestamp_ns,
+                "height_raw": result.height_raw,
+                "height_h1": result.height_h1,
+                "height_hb2": result.height_hb2,
+                "active_height_correction": result.active_height_correction,
+                "active_height": result.active_height,
+                "active_height_valid": result.active_height_valid,
+                "active_height_status": result.active_height_status,
+                "q1": result.q1,
+                "q2": result.q2,
+                "q2_in_domain": result.q2_in_domain,
+                "hb2_q2_status": result.hb2_q2_status,
+                "v_min": result.v_min,
+                "v_median": result.v_median,
+                "v_max": result.v_max,
+                "point_count": result.point_count,
+                "c1_clamp_status": result.c1_clamp_status,
+                "ground_reference_status": result.ground_reference_status,
+            }
+        )
         if first_result:
             self._update_control_states()
         if self._session_calibration_active:
@@ -4142,6 +4338,28 @@ class OnlineCameraWindow(QMainWindow):
             self._trail.popleft()
         current = result.points_ground
         self._update_point_summary(current)
+        self.height_correction_mode_label.setText(
+            result.active_height_correction
+        )
+        self.height_shadow_label.setText(
+            "raw={} | h1={} | hb2={} | q1={} | q2={} | q2_in_domain={} | "
+            "v={:.1f}/{:.1f}/{:.1f} | points={} | C1={} | ground={} | {}".format(
+                _format_optional(result.height_raw),
+                _format_optional(result.height_h1),
+                _format_optional(result.height_hb2),
+                _format_optional(result.q1),
+                _format_optional(result.q2),
+                result.q2_in_domain,
+                result.v_min if result.v_min is not None else float("nan"),
+                result.v_median if result.v_median is not None else float("nan"),
+                result.v_max if result.v_max is not None else float("nan"),
+                result.point_count,
+                result.c1_clamp_status,
+                result.ground_reference_status,
+                result.hb2_q2_status,
+            )
+        )
+        self._refresh_adaptive_control_layout()
         if len(current):
             self._trail.append((now, current[::4].copy()))
         current_tab = self.tabs.currentIndex()
@@ -4223,14 +4441,21 @@ class OnlineCameraWindow(QMainWindow):
         self.drop_label.setText(
             f"{int(stats['camera_gaps'])} / {int(stats['queue_overwrites'])}"
         )
+        self._refresh_adaptive_control_layout()
 
     def _poll_recording(self) -> None:
         if self._recorder.active:
             return
         self._update_control_states()
-        if self._recorder.error is not None:
+        recorder_error = self._recorder.error
+        if recorder_error is not None:
             self.record_label.setText("失败")
-            self._show_error(str(self._recorder.error))
+            if not self._recording_error_reported:
+                # Set the guard before opening the modal dialog.  The dialog
+                # runs a nested event loop, so this timer may fire again while
+                # the first dialog is still visible.
+                self._recording_error_reported = True
+                self._show_error(str(recorder_error))
             return
         result = self._recorder.result
         if self._recorder.cancelled and result is None:
@@ -4244,6 +4469,11 @@ class OnlineCameraWindow(QMainWindow):
             if self._controller.running:
                 self._set_online_state(OnlineState.STREAMING)
 
+    def _clear_error_message_box(self, dialog: QMessageBox) -> None:
+        if self._error_message_box is dialog:
+            self._error_message_box = None
+        dialog.deleteLater()
+
     def _show_error(self, message: str) -> None:
         self._stop_due_to_error = True
         if self._controller.running:
@@ -4252,9 +4482,36 @@ class OnlineCameraWindow(QMainWindow):
             self._set_online_state(OnlineState.STOPPING, "错误，正在停止")
         else:
             self._set_online_state(OnlineState.ERROR)
-        QMessageBox.critical(self, "在线相机错误", message)
+        existing = self._error_message_box
+        if existing is not None and existing.isVisible():
+            return
+        if existing is not None:
+            existing.deleteLater()
+            self._error_message_box = None
+
+        # Keep the error notification non-modal.  A modal QMessageBox runs a
+        # nested event loop; together with the recording poll timer that used
+        # to create a new dialog every 250 ms and block disconnect/close.
+        dialog = QMessageBox(self)
+        dialog.setIcon(QMessageBox.Icon.Critical)
+        dialog.setWindowTitle("在线相机错误")
+        dialog.setTextFormat(Qt.TextFormat.PlainText)
+        dialog.setText(message)
+        dialog.setStandardButtons(QMessageBox.StandardButton.Ok)
+        dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
+        dialog.setWindowModality(Qt.WindowModality.NonModal)
+        dialog.setModal(False)
+        dialog.finished.connect(
+            lambda _result, current=dialog: self._clear_error_message_box(current)
+        )
+        self._error_message_box = dialog
+        dialog.show()
+        dialog.raise_()
+        dialog.activateWindow()
 
     def closeEvent(self, event) -> None:  # noqa: N802 - Qt API
+        if self._error_message_box is not None:
+            self._error_message_box.close()
         if self._analysis_window is not None:
             self._analysis_window.close()
             self._analysis_window = None
@@ -4304,6 +4561,10 @@ def _double_spin(
 
 def _format_mm(value: float | None) -> str:
     return "—" if value is None else f"{value:.4f} mm"
+
+
+def _format_optional(value: float | None) -> str:
+    return "—" if value is None else f"{value:.6f}"
 
 
 def _compact_sha256(value: str | None) -> str:

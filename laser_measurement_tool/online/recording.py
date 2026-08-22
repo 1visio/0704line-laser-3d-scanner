@@ -8,6 +8,7 @@ import shutil
 import tempfile
 import threading
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -30,6 +31,29 @@ FRAME_FIELDS = (
     "offset_y",
     "width",
     "height",
+)
+
+
+SHADOW_FIELDS = (
+    "camera_frame_number",
+    "host_timestamp_ns",
+    "height_raw",
+    "height_h1",
+    "height_hb2",
+    "active_height_correction",
+    "active_height",
+    "active_height_valid",
+    "active_height_status",
+    "q1",
+    "q2",
+    "q2_in_domain",
+    "hb2_q2_status",
+    "v_min",
+    "v_median",
+    "v_max",
+    "point_count",
+    "c1_clamp_status",
+    "ground_reference_status",
 )
 
 
@@ -57,6 +81,8 @@ class FrameRecorder:
         self._error: BaseException | None = None
         self._queue_drops = 0
         self._cancelled = False
+        self._shadow_lock = threading.Lock()
+        self._shadow_rows: list[dict[str, object]] = []
 
     @property
     def active(self) -> bool:
@@ -100,6 +126,8 @@ class FrameRecorder:
             self._error = None
             self._queue_drops = 0
             self._cancelled = False
+            with self._shadow_lock:
+                self._shadow_rows = []
             self._active = True
             self._thread = threading.Thread(
                 target=self._writer_loop, name="frame-recorder", daemon=True
@@ -116,6 +144,22 @@ class FrameRecorder:
         except queue.Full:
             self._queue_drops += 1
             return False
+
+    def log_shadow(self, shadow: Mapping[str, object]) -> bool:
+        """Keep processed height shadow metadata for the active recording.
+
+        Acquisition and reconstruction run on different threads and may not
+        produce one result for every captured frame.  Shadow rows therefore
+        retain the processed camera frame number and are written as a separate
+        best-effort stream instead of being forced into ``frames.csv``.
+        """
+        with self._lock:
+            if not self._active:
+                return False
+            row = {field: shadow.get(field, "") for field in SHADOW_FIELDS}
+            with self._shadow_lock:
+                self._shadow_rows.append(row)
+        return True
 
     def cancel(self) -> None:
         with self._lock:
@@ -186,6 +230,14 @@ class FrameRecorder:
                 writer = csv.DictWriter(stream, fieldnames=FRAME_FIELDS)
                 writer.writeheader()
                 writer.writerows(rows)
+            with self._shadow_lock:
+                shadow_rows = list(self._shadow_rows)
+            with (self._temp_dir / "height_shadow.csv").open(
+                "x", encoding="utf-8-sig", newline=""
+            ) as stream:
+                writer = csv.DictWriter(stream, fieldnames=SHADOW_FIELDS)
+                writer.writeheader()
+                writer.writerows(shadow_rows)
             self._temp_dir.rename(self._final_dir)
             self._result = RecordingResult(
                 output_dir=self._final_dir,
@@ -194,8 +246,20 @@ class FrameRecorder:
                 queue_drops=self._queue_drops,
             )
         except BaseException as error:
-            self._error = error
-            shutil.rmtree(self._temp_dir, ignore_errors=True)
+            # Keep a failed recording's temporary directory.  In particular,
+            # Windows may reject the final directory rename while an antivirus
+            # or indexer still holds one of the newly written files.  Removing
+            # the temporary directory here would lose otherwise complete
+            # frames and metadata.
+            if self._temp_dir is not None and not self.cancelled:
+                self._error = RuntimeError(
+                    "录制未能提交到正式目录；临时数据已保留。"
+                    f"\n临时目录: {self._temp_dir}"
+                    f"\n目标目录: {self._final_dir}"
+                    f"\n原始错误: {error}"
+                )
+            else:
+                self._error = error
         finally:
             if self.cancelled and self._temp_dir is not None:
                 shutil.rmtree(self._temp_dir, ignore_errors=True)

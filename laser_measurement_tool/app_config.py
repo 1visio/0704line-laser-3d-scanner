@@ -16,7 +16,9 @@ import yaml
 
 from correction.stage_a_height_scale import (
     CorrectionConfig,
+    HB2ConfigError,
     StageAConfigError,
+    load_hb2_height_correction,
     load_stage_a_height_scale,
 )
 from calibration.session_ground import SessionGroundBoardConfig
@@ -561,6 +563,8 @@ def _parse_correction(
         "mode",
         "stage_a_height_scale_enabled",
         "stage_a_height_scale_config",
+        "hb2_height_correction_config",
+        "hb2_q2_policy",
     }
     unknown = set(section) - valid_fields
     if unknown:
@@ -569,7 +573,11 @@ def _parse_correction(
     mode = section.get("mode", "none")
     if not isinstance(mode, str) or not mode.strip():
         raise AppConfigError("correction.mode 必须是非空字符串")
-    enabled = section.get("stage_a_height_scale_enabled", False)
+    normalized_mode = mode.strip().lower()
+    enabled = section.get(
+        "stage_a_height_scale_enabled",
+        normalized_mode in {"h1", "stage_a_height_scale"},
+    )
     if not isinstance(enabled, bool):
         raise AppConfigError("correction.stage_a_height_scale_enabled 必须是布尔值")
 
@@ -587,12 +595,34 @@ def _parse_correction(
             stage_a_config = load_stage_a_height_scale(config_path)
         except StageAConfigError as error:
             raise AppConfigError(str(error)) from error
+    hb2_config_value = section.get("hb2_height_correction_config")
+    hb2_config_path = (
+        None
+        if hb2_config_value in (None, "")
+        else _resolve_path(
+            hb2_config_value,
+            base_dir,
+            "correction.hb2_height_correction_config",
+        )
+    )
+    hb2_config = None
+    if hb2_config_path is not None:
+        try:
+            hb2_config = load_hb2_height_correction(hb2_config_path)
+        except HB2ConfigError as error:
+            raise AppConfigError(str(error)) from error
+    hb2_q2_policy = section.get("hb2_q2_policy", "reject")
+    if not isinstance(hb2_q2_policy, str) or not hb2_q2_policy.strip():
+        raise AppConfigError("correction.hb2_q2_policy 必须是非空字符串")
     try:
         return CorrectionConfig(
             mode=mode,
             stage_a_height_scale_enabled=enabled,
             stage_a_height_scale_config=config_path,
             stage_a_height_scale=stage_a_config,
+            hb2_height_correction_config=hb2_config_path,
+            hb2_height_correction=hb2_config,
+            hb2_q2_policy=hb2_q2_policy,
         )
     except ValueError as error:
         raise AppConfigError(f"correction 段参数非法: {error}") from error

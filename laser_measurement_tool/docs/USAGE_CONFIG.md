@@ -137,6 +137,31 @@ output:
   save_full_pointcloud_ply: true  # 整幅激光线的 Xg/Yg/Zg，ASCII PLY，mm
 ```
 
+### 2.4 高度修正模式（A-12）
+
+高度修正是最终 `height_raw` 标量之后的互斥模式，取值只有
+`none`、`h1`、`hb2`。旧配置中的 `stage_a_height_scale` 会兼容映射到
+`h1`，但新配置和 GUI 使用 `h1`。H1 与 Frozen H-B2 只会有一个作为
+`active_height_correction` 生效；另一个仅写入 shadow logging。
+
+```yaml
+correction:
+  mode: h1
+  stage_a_height_scale_enabled: true
+  stage_a_height_scale_config: calibration_daheng_0811/stage_a_height_scale.json
+  hb2_height_correction_config: calibration_daheng_0811/hb2_height_correction.json
+  hb2_q2_policy: reject             # 仅显式 clamp_diagnostic 才允许诊断 clamp
+```
+
+Frozen H-B2 的 `q2` 来自 Frozen-C0 的
+`P_c0=lambda_c0*[xn,yn,1]`，不使用 C1 后点、Ground 点或 corrected height。
+`reject` 策略在硬域外输出 `HB2_Q2_OOD`，不做静默无界 extrapolation。
+在线和单帧结果会记录 `height_raw`、`height_h1`、`height_hb2`、active mode、
+q1/q2、q2 domain、v 范围、point count、C1 clamp 和 Ground Reference status。
+在线原始帧录制目录还会尽力写入独立的 `height_shadow.csv`；它按已处理结果
+保留相机帧号，不假设每个采集帧都有一条重建结果，因此与 `frames.csv`
+分开保存。
+
 在线工具还支持可选的 Session 基准标定。开发阶段默认 `optional`，成功后只替换
 当前进程的 ground `R/t`，不覆盖 reference 外参 YAML：
 

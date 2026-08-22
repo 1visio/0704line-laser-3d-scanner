@@ -6,6 +6,7 @@ from .reconstructor import (
     ReconstructionResult,
     apply_ground_u_compensation,
     build_ground_transform,
+    frozen_c0_q_coordinates,
     project_ground_points_to_pixels,
     reconstruct_uv_to_ground,
 )
@@ -16,6 +17,7 @@ __all__ = [
     "ReconstructionResult",
     "apply_ground_u_compensation",
     "build_ground_transform",
+    "frozen_c0_q_coordinates",
     "project_ground_points_to_pixels",
     "reconstruct_uv_to_ground",
 ]

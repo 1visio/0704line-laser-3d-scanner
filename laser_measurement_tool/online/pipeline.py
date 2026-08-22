@@ -11,7 +11,10 @@ import numpy as np
 
 from app_config import AppConfig
 from calibration.manifest import CalibrationPackage, load_calibration_package
-from correction.stage_a_height_scale import resolve_stage_a_height_scale
+from correction.stage_a_height_scale import (
+    normalize_correction_mode,
+    resolve_height_correction,
+)
 from gui.image_view import _to_uint8_display
 from laser.backends import create_extraction_params
 from laser.laser_extractor import extract_laser_center
@@ -22,6 +25,46 @@ from measurement.ground_reference import (
 from reconstruction.reconstructor import reconstruct_uv_to_ground
 
 from .models import CapturedFrame, FrameResult
+
+
+def _finite_values(values: np.ndarray | None) -> np.ndarray:
+    if values is None:
+        return np.empty(0, dtype=np.float64)
+    array = np.asarray(values, dtype=np.float64).reshape(-1)
+    return array[np.isfinite(array)]
+
+
+def _finite_mean(values: np.ndarray | None) -> float | None:
+    finite = _finite_values(values)
+    return None if not len(finite) else float(np.mean(finite))
+
+
+def _finite_median(values: np.ndarray | None) -> float | None:
+    finite = _finite_values(values)
+    return None if not len(finite) else float(np.median(finite))
+
+
+def _finite_min(values: np.ndarray | None) -> float | None:
+    finite = _finite_values(values)
+    return None if not len(finite) else float(np.min(finite))
+
+
+def _finite_max(values: np.ndarray | None) -> float | None:
+    finite = _finite_values(values)
+    return None if not len(finite) else float(np.max(finite))
+
+
+def _c1_clamp_status(clamped: np.ndarray | None) -> str:
+    if clamped is None:
+        return "NOT_APPLICABLE"
+    flags = np.asarray(clamped, dtype=bool).reshape(-1)
+    if not len(flags):
+        return "NOT_APPLICABLE"
+    if bool(np.all(flags)):
+        return "CLAMPED"
+    if bool(np.any(flags)):
+        return "MIXED"
+    return "IN_DOMAIN"
 
 
 class FramePipeline:
@@ -37,11 +80,6 @@ class FramePipeline:
             raise ValueError("在线测量配置必须指定 calibration.manifest")
         self.config = config
         self.system = (system or config.system).strip().lower()
-        self._stage_a_frame_metadata = resolve_stage_a_height_scale(
-            None,
-            system=self.system,
-            correction=self.config.correction,
-        )
         self.extraction_method = extraction_method or config.extraction_method
         self.extraction_options = dict(
             config.extraction_options_by_method.get(self.extraction_method, {})
@@ -59,6 +97,9 @@ class FramePipeline:
         )
         self._ground_extrinsic_generation = 0
         self._session_ground_reference: SessionGroundReference | None = None
+        self._height_correction_mode = normalize_correction_mode(
+            config.correction.mode
+        )
         self.extraction_params = create_extraction_params(
             self.extraction_method, self.extraction_options
         )
@@ -88,6 +129,7 @@ class FramePipeline:
             ground_extrinsic_source = self._ground_extrinsic_source
             ground_extrinsic_generation = self._ground_extrinsic_generation
             ground_reference = self._session_ground_reference
+            height_correction_mode = self._height_correction_mode
         reconstructed = reconstruct_uv_to_ground(
             centers_full,
             calibration,
@@ -101,6 +143,10 @@ class FramePipeline:
             np.ascontiguousarray(points[:, (0, 2)])
             if len(points)
             else np.empty((0, 2), dtype=np.float64)
+        )
+        height_metadata = self._height_shadow_metadata(
+            reconstructed,
+            mode_override=height_correction_mode,
         )
         total_ms = (time.perf_counter_ns() - total_start) / 1e6
         return FrameResult(
@@ -118,13 +164,76 @@ class FramePipeline:
             ground_extrinsic_source=ground_extrinsic_source,
             ground_extrinsic_generation=ground_extrinsic_generation,
             **ground_reference_metadata,
-            **self._stage_a_frame_metadata.as_dict(),
+            **height_metadata,
             points_ground_raw=np.ascontiguousarray(
                 reconstructed.points_ground
             ),
             filtered=reconstructed.filtered,
             pixels_uv=reconstructed.pixels_uv,
         )
+
+    def _height_shadow_metadata(
+        self,
+        reconstruction,
+        *,
+        mode_override: str | None = None,
+    ) -> dict[str, object]:
+        """Build read-only H1/H-B2 geometry shadow fields for one frame."""
+        q1_values = reconstruction.q1_c0
+        q2_values = reconstruction.q2_c0
+        q1 = _finite_mean(q1_values)
+        q2 = _finite_mean(q2_values)
+        q2_in_domain: bool | None = None
+        hb2_config = self.config.correction.hb2_height_correction
+        if q2_values is not None and len(q2_values):
+            q2_values = np.asarray(q2_values, dtype=np.float64)
+            if hb2_config is None:
+                q2_in_domain = None
+            else:
+                lower, upper = hb2_config.q2_domain
+                q2_in_domain = bool(
+                    np.isfinite(q2_values).all()
+                    and np.all((q2_values >= lower) & (q2_values <= upper))
+                )
+        height_result = resolve_height_correction(
+            None,
+            q1=q1,
+            q2=q2,
+            q2_in_domain=q2_in_domain,
+            system=self.system,
+            correction=self.config.correction,
+            mode_override=mode_override,
+        )
+        v_values = (
+            reconstruction.pixels_uv[:, 1]
+            if len(reconstruction.pixels_uv)
+            else np.empty(0, dtype=np.float64)
+        )
+        c1_status = _c1_clamp_status(reconstruction.c1_clamped)
+        metadata = height_result.as_dict()
+        metadata.update(
+            {
+                "v_min": _finite_min(v_values),
+                "v_median": _finite_median(v_values),
+                "v_max": _finite_max(v_values),
+                "point_count": int(reconstruction.point_count),
+                "c1_clamp_status": c1_status,
+            }
+        )
+        return metadata
+
+    @property
+    def height_correction_mode(self) -> str:
+        """Return the active mutually exclusive online height mode."""
+        with self._calibration_lock:
+            return self._height_correction_mode
+
+    def set_height_correction_mode(self, mode: str) -> str:
+        """Set the online scalar mode without changing reconstruction data."""
+        normalized = normalize_correction_mode(mode)
+        with self._calibration_lock:
+            self._height_correction_mode = normalized
+        return normalized
 
     @property
     def ground_extrinsic_source(self) -> str:
