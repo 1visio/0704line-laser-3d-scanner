@@ -26,14 +26,17 @@ from .ground_reference import (
     load_frozen_session_ground_reference,
 )
 from .board_mask import (
+    BoardGroundPointSelection,
     full_board_physical_polygon,
     select_board_ground_points,
+    select_board_ground_points_with_mask,
     select_manual_ground_roi_points,
 )
 from .roi_manager import RoiKind, RoiManager, RoiRegion
 
 __all__ = [
     "HeightLineMeasurement",
+    "BoardGroundPointSelection",
     "GroundProfileFit",
     "LineFitXY",
     "MeasurementError",
@@ -59,5 +62,6 @@ __all__ = [
     "measure_height_line",
     "measure_height_lines",
     "select_board_ground_points",
+    "select_board_ground_points_with_mask",
     "select_manual_ground_roi_points",
 ]

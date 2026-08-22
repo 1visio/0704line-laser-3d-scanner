@@ -10,10 +10,21 @@ from __future__ import annotations
 
 import math
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Any
 
 import cv2
 import numpy as np
+
+
+@dataclass(frozen=True, slots=True)
+class BoardGroundPointSelection:
+    """Board-mask result with the exact source-row identity preserved."""
+
+    selected_points: np.ndarray
+    selected_indices: np.ndarray
+    selected_mask: np.ndarray
+    metadata: dict[str, Any]
 
 
 def full_board_physical_polygon(
@@ -109,6 +120,45 @@ def select_board_ground_points(
     inset_mm: float = 0.0,
     detected_corners: np.ndarray | None = None,
 ) -> tuple[np.ndarray, dict[str, Any]]:
+    """Select points inside the physical board mask.
+
+    This compatibility wrapper intentionally keeps the historical two-value
+    return contract.  Callers that need point-level audit linkage should use
+    :func:`select_board_ground_points_with_mask` so the exact source indices
+    are retained without reconstructing or guessing them later.
+    """
+    selection = select_board_ground_points_with_mask(
+        pixels_uv_full,
+        points_ground,
+        rvec=rvec,
+        tvec=tvec,
+        camera_matrix=camera_matrix,
+        dist_coeffs=dist_coeffs,
+        pattern_cols=pattern_cols,
+        pattern_rows=pattern_rows,
+        square_size_mm=square_size_mm,
+        image_offset=image_offset,
+        inset_mm=inset_mm,
+        detected_corners=detected_corners,
+    )
+    return selection.selected_points, selection.metadata
+
+
+def select_board_ground_points_with_mask(
+    pixels_uv_full: np.ndarray,
+    points_ground: np.ndarray,
+    *,
+    rvec: np.ndarray,
+    tvec: np.ndarray,
+    camera_matrix: np.ndarray,
+    dist_coeffs: np.ndarray,
+    pattern_cols: int,
+    pattern_rows: int,
+    square_size_mm: float,
+    image_offset: tuple[int, int] = (0, 0),
+    inset_mm: float = 0.0,
+    detected_corners: np.ndarray | None = None,
+) -> BoardGroundPointSelection:
     """Select reconstructed points inside the complete physical board mask.
 
     ``pixels_uv_full`` uses full-sensor calibration coordinates, while
@@ -136,6 +186,7 @@ def select_board_ground_points(
     )
     selected_mask = _points_inside_convex_polygon(pixels, polygon)
     selected_points = np.ascontiguousarray(points[selected_mask], dtype=np.float64)
+    selected_indices = np.flatnonzero(selected_mask).astype(np.int64, copy=False)
     selected_count = int(np.count_nonzero(selected_mask))
     metadata: dict[str, Any] = {
         "enabled": True,
@@ -156,7 +207,12 @@ def select_board_ground_points(
         "rejected_point_count": int(len(points) - selected_count),
         "polygon_full_uv": polygon.tolist(),
     }
-    return selected_points, metadata
+    return BoardGroundPointSelection(
+        selected_points=selected_points,
+        selected_indices=np.ascontiguousarray(selected_indices),
+        selected_mask=np.ascontiguousarray(selected_mask, dtype=bool),
+        metadata=metadata,
+    )
 
 
 def select_manual_ground_roi_points(
@@ -229,7 +285,9 @@ def _points_inside_convex_polygon(
 
 
 __all__ = [
+    "BoardGroundPointSelection",
     "full_board_physical_polygon",
     "select_board_ground_points",
+    "select_board_ground_points_with_mask",
     "select_manual_ground_roi_points",
 ]
