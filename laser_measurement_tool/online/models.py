@@ -94,6 +94,16 @@ class FrameResult:
     stage_a_valid: bool = False
     stage_a_status: str = "not_measured"
     filtered: dict[str, int] = field(default_factory=dict)
+    ground_reference_coordinate: str | None = None
+    ground_reference_coordinate_units: str | None = None
+    ground_reference_coordinate_formula: str | None = None
+    ground_reference_origin_xy: tuple[float, float] | None = None
+    ground_reference_direction_xy: tuple[float, float] | None = None
+    ground_reference_slope_z_per_mm: float | None = None
+    ground_reference_intercept_z_mm: float | None = None
+    ground_reference_frozen_json_path: str | None = None
+    ground_reference_frozen_json_sha256: str | None = None
+    ground_reference_fit_pose_ids: tuple[str, ...] = ()
     # pixels_uv is aligned one-to-one with points_camera/points_ground after
     # reconstruction filtering. It is optional for fake FrameResult objects.
     pixels_uv: np.ndarray | None = field(

@@ -76,10 +76,16 @@ def measure_height_line(
     baseline_ground: np.ndarray | None,
     height_ground: np.ndarray,
     params: MeasurementParams | None = None,
+    *,
+    ground_correction_mode: str = "auto",
 ) -> HeightLineMeasurement:
     """Measure a laser-line obstacle height."""
     if params is None:
         params = MeasurementParams()
+    if ground_correction_mode not in {"auto", "session_reference", "zg_zero"}:
+        raise ValueError(
+            "ground_correction_mode 必须是 auto、session_reference 或 zg_zero"
+        )
 
     height = _validate_points(height_ground, "height line", params.min_height_points)
     if baseline_ground is None:
@@ -92,7 +98,18 @@ def measure_height_line(
     height_fit = _fit_line_xy(height[:, :2], params, "height line")
     height_inliers = height[height_fit.inlier_mask]
 
-    if len(baseline) == 0:
+    if ground_correction_mode == "session_reference":
+        # The incoming points have already been leveled by the frozen
+        # SessionGroundReference.  Keep the baseline ROI available for point
+        # counts/diagnostics, but never fit or subtract a second local profile.
+        reference_zg = 0.0
+        ground_sigma = None
+        baseline_z_mask = np.zeros(len(baseline), dtype=bool)
+        baseline_fit = None
+        ground_profile_fit = None
+        ground_reference_mode = "session_reference"
+        local_ground_z = np.zeros(len(height_inliers), dtype=np.float64)
+    elif len(baseline) == 0 or ground_correction_mode == "zg_zero":
         reference_zg = 0.0
         ground_sigma = None
         baseline_z_mask = np.empty(0, dtype=bool)
@@ -165,6 +182,8 @@ def measure_height_lines(
     baseline_ground: np.ndarray | None,
     height_groups_ground: Sequence[np.ndarray],
     params: MeasurementParams | None = None,
+    *,
+    ground_correction_mode: str = "auto",
 ) -> list[HeightLineMeasurement]:
     """Measure each obstacle group with the same baseline point set."""
     if not height_groups_ground:
@@ -174,7 +193,10 @@ def measure_height_lines(
     for index, height_ground in enumerate(height_groups_ground, start=1):
         try:
             measurement = measure_height_line(
-                baseline_ground, height_ground, params
+                baseline_ground,
+                height_ground,
+                params,
+                ground_correction_mode=ground_correction_mode,
             )
         except MeasurementError as error:
             raise MeasurementError(f"obstacle {index}: {error}") from error

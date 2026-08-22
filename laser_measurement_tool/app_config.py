@@ -20,7 +20,7 @@ from correction.stage_a_height_scale import (
     load_stage_a_height_scale,
 )
 from calibration.session_ground import SessionGroundBoardConfig
-from measurement.ground_reference import SUPPORTED_GROUND_SUPPORT_SOURCES
+from measurement.ground_reference import SUPPORTED_GROUND_FIT_SUPPORT_SOURCES
 from measurement.height_measure import MeasurementParams
 from reconstruction.reconstructor import ReconstructionParams
 
@@ -137,8 +137,8 @@ class SessionGroundReferenceConfig:
 
     def __post_init__(self) -> None:
         source = self.support_source.strip().lower()
-        if source not in SUPPORTED_GROUND_SUPPORT_SOURCES:
-            allowed = ", ".join(sorted(SUPPORTED_GROUND_SUPPORT_SOURCES))
+        if source not in SUPPORTED_GROUND_FIT_SUPPORT_SOURCES:
+            allowed = ", ".join(sorted(SUPPORTED_GROUND_FIT_SUPPORT_SOURCES))
             raise ValueError(f"support_source 必须是: {allowed}")
         if source != self.support_source:
             object.__setattr__(self, "support_source", source)

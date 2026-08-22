@@ -260,6 +260,16 @@ class FramePipeline:
                 "ground_reference_valid_s_range_mm": None,
                 "ground_reference_applied_count": 0,
                 "ground_reference_out_of_range_count": 0,
+                "ground_reference_coordinate": None,
+                "ground_reference_coordinate_units": None,
+                "ground_reference_coordinate_formula": None,
+                "ground_reference_origin_xy": None,
+                "ground_reference_direction_xy": None,
+                "ground_reference_slope_z_per_mm": None,
+                "ground_reference_intercept_z_mm": None,
+                "ground_reference_frozen_json_path": None,
+                "ground_reference_frozen_json_sha256": None,
+                "ground_reference_fit_pose_ids": (),
             }
         corrected, valid = reference.apply_to_points(points)
         applied_count = int(valid.sum())
@@ -276,6 +286,20 @@ class FramePipeline:
             "ground_reference_valid_s_range_mm": reference.valid_s_range_mm,
             "ground_reference_applied_count": applied_count,
             "ground_reference_out_of_range_count": out_of_range_count,
+            "ground_reference_coordinate": reference.coordinate,
+            "ground_reference_coordinate_units": reference.coordinate_units,
+            "ground_reference_coordinate_formula": reference.coordinate_formula,
+            "ground_reference_origin_xy": tuple(
+                float(value) for value in np.asarray(reference.origin_xy)
+            ),
+            "ground_reference_direction_xy": tuple(
+                float(value) for value in np.asarray(reference.direction_xy)
+            ),
+            "ground_reference_slope_z_per_mm": float(reference.slope_z_per_mm),
+            "ground_reference_intercept_z_mm": float(reference.intercept_z_mm),
+            "ground_reference_frozen_json_path": reference.frozen_json_path,
+            "ground_reference_frozen_json_sha256": reference.frozen_json_sha256,
+            "ground_reference_fit_pose_ids": tuple(reference.fit_pose_ids),
         }
 
     def _validate_frame_bounds(self, frame: CapturedFrame) -> None:

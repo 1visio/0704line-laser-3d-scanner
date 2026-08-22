@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 from dataclasses import replace
 from pathlib import Path
@@ -209,6 +210,112 @@ class SessionGroundWindowTests(unittest.TestCase):
             finally:
                 window.close()
                 self.application.processEvents()
+
+    def test_ground5c_frozen_load_is_session_bound_and_reuses_raw_frame(self) -> None:
+        frozen_path = (
+            Path(__file__).resolve().parents[2]
+            / "outputs"
+            / "ground5c_frozen_session_linear_0821"
+            / "frozen_session_linear.json"
+        )
+        if not frozen_path.exists():
+            self.skipTest("Ground-5C A-2 output is not present in this checkout")
+
+        window = OnlineCameraWindow(self.base_config, simulate=True)
+        try:
+            window.connect_camera()
+            self.assertFalse(window._has_valid_session_pnp())
+            reference_R, reference_t = window._pipeline.reference_ground_extrinsic
+            window._pipeline.apply_session_ground_extrinsic(
+                reference_R, reference_t, generation=1
+            )
+            window._active_session_ground_result = SessionGroundExtrinsic(
+                status="success",
+                message="ok",
+                R=reference_R,
+                t=reference_t,
+            )
+            window._update_control_states()
+            self.assertTrue(window._has_valid_session_pnp())
+            self.assertTrue(window.frozen_session_ground_button.isEnabled())
+
+            window._session.start()
+            try:
+                frame = window._session.get_frame(window._session.config.timeout_ms)
+            finally:
+                window._session.stop()
+            raw_result = window._pipeline.run_frame(frame)
+            raw_points = raw_result.points_ground.copy()
+            window._last_result = raw_result
+
+            with patch.object(
+                window._pipeline,
+                "run_frame",
+                side_effect=AssertionError("loading must not rerun extraction"),
+            ):
+                self.assertTrue(window.load_frozen_session_ground(frozen_path))
+
+            self.assertIsNotNone(window._last_result)
+            assert window._last_result is not None
+            np.testing.assert_array_equal(window._last_result.points_ground_raw, raw_points)
+            self.assertEqual(window._last_result.ground_reference_source, "ground5c_frozen_session_linear")
+            self.assertEqual(
+                window._last_result.ground_reference_frozen_json_sha256,
+                hashlib.sha256(frozen_path.read_bytes()).hexdigest(),
+            )
+            self.assertRegex(
+                window.ground_reference_runtime_label.text(),
+                r"\d+\s*/\s*\d+",
+            )
+            self.assertLess(len(window.ground_reference_json_sha_label.text()), 40)
+            self.assertIn(
+                hashlib.sha256(frozen_path.read_bytes()).hexdigest(),
+                window.ground_reference_json_sha_label.toolTip(),
+            )
+
+            window.open_frame_analysis()
+            self.application.processEvents()
+            self.assertIsNotNone(window._analysis_window)
+            self.assertIs(
+                window._analysis_window._ground_reference,
+                window._pipeline.session_ground_reference,
+            )
+            window._analysis_window.close()
+            window._analysis_window = None
+
+            with tempfile.TemporaryDirectory() as directory:
+                assert self.base_config.output is not None
+                window._config = replace(
+                    window._config,
+                    output=replace(
+                        window._config.output,
+                        directory=Path(directory),
+                    ),
+                )
+                target = window.export_current_frame()
+                exported = json.loads(
+                    (target / "result.json").read_text(encoding="utf-8")
+                )
+                self.assertEqual(
+                    exported["ground_reference"]["frozen_json_sha256"],
+                    hashlib.sha256(frozen_path.read_bytes()).hexdigest(),
+                )
+                self.assertEqual(
+                    exported["ground_reference_runtime"]["ground_reference_source"],
+                    "ground5c_frozen_session_linear",
+                )
+
+            # The existing PnP invalidation path clears both the runtime
+            # pipeline reference and the GUI's retained reference handle.
+            window._pipeline.apply_session_ground_extrinsic(
+                reference_R, reference_t, generation=2
+            )
+            window._invalidate_ground_reference_for_extrinsic_change("PnP changed")
+            self.assertIsNone(window._pipeline.session_ground_reference)
+            self.assertIsNone(window._last_ground_reference)
+        finally:
+            window.close()
+            self.application.processEvents()
 
 
 if __name__ == "__main__":

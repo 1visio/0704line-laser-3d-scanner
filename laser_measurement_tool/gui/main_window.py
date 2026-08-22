@@ -552,6 +552,10 @@ class MainWindow(QMainWindow):
             ("stage_a_enabled", "Stage-A 补偿"),
             ("stage_a_domain", "Stage-A 有效域"),
             ("session_ground_reference", "Session 地面基准"),
+            ("ground_reference_coordinate", "Session 坐标"),
+            ("ground_reference_params", "Session a / b"),
+            ("ground_reference_domain", "Session S 有效域"),
+            ("ground_reference_sha", "Frozen JSON SHA256"),
             ("ground_reference_mode", "地面参考模式"),
             ("ground_source", "ground 外参来源"),
         ):
@@ -889,6 +893,9 @@ class MainWindow(QMainWindow):
                 ),
                 [recon.points_ground for recon in obstacle_recons],
                 config.measurement,
+                ground_correction_mode=(
+                    "session_reference" if self._ground_reference is not None else "auto"
+                ),
             )
         except (ReconstructionInputError, MeasurementError) as error:
             QMessageBox.warning(self, "测量失败", str(error))
@@ -911,7 +918,9 @@ class MainWindow(QMainWindow):
         self.image_view.set_measurement_overlay(self._last_overlay_segments)
         self._update_results_panel(measurements)
         first_measurement = measurements[0]
-        if first_measurement.baseline_fit is not None:
+        if first_measurement.ground_reference_mode == "session_reference":
+            reference_status = "Session physical_S 已校平（baseline ROI 仅诊断）"
+        elif first_measurement.baseline_fit is not None:
             reference_status = (
                 f"基准 {first_measurement.baseline_inlier_count}/"
                 f"{first_measurement.baseline_point_count}"
@@ -1069,6 +1078,10 @@ class MainWindow(QMainWindow):
                 f"{reference.baseline_inlier_count}/"
                 f"{reference.baseline_point_count}"
             )
+        elif reference.ground_reference_mode == "session_reference":
+            baseline_counts = (
+                f"Session 已用；ROI 诊断 {reference.baseline_point_count} 点"
+            )
         else:
             baseline_counts = "固定 Zg=0"
         self._result_labels["baseline_points"].setText(baseline_counts)
@@ -1081,7 +1094,39 @@ class MainWindow(QMainWindow):
             self._stage_a_domain_text()
         )
         self._result_labels["session_ground_reference"].setText(
-            "VALID · 已应用" if self._ground_reference is not None else "未启用"
+            (
+                f"VALID · {self._ground_reference.coordinate} · 已应用"
+                if self._ground_reference is not None
+                and self._ground_reference.coordinate
+                else "VALID · 已应用"
+                if self._ground_reference is not None
+                else "未启用"
+            )
+        )
+        reference_object = self._ground_reference
+        self._result_labels["ground_reference_coordinate"].setText(
+            "—" if reference_object is None else (reference_object.coordinate or "—")
+        )
+        self._result_labels["ground_reference_params"].setText(
+            "—"
+            if reference_object is None
+            else (
+                f"a={reference_object.slope_z_per_mm:.9f}, "
+                f"b={reference_object.intercept_z_mm:.6f} mm"
+            )
+        )
+        self._result_labels["ground_reference_domain"].setText(
+            "—"
+            if reference_object is None
+            else (
+                f"{reference_object.valid_s_range_mm[0]:.2f} ~ "
+                f"{reference_object.valid_s_range_mm[1]:.2f} mm"
+            )
+        )
+        self._result_labels["ground_reference_sha"].setText(
+            "—"
+            if reference_object is None
+            else (reference_object.frozen_json_sha256 or "非 Frozen JSON")
         )
         reference_modes = {measurement.ground_reference_mode for measurement in measurements}
         self._result_labels["ground_reference_mode"].setText(
@@ -1164,6 +1209,7 @@ class MainWindow(QMainWindow):
     def _display_ground_reference_mode(mode: str) -> str:
         return {
             "baseline_roi_profile": "基准 ROI 地面拟合",
+            "session_reference": "Frozen Session physical_S（Zg=0）",
             "zg_zero": "固定 Zg=0",
             "mixed": "多个模式（请检查）",
         }.get(mode, mode)
@@ -1467,6 +1513,31 @@ class MainWindow(QMainWindow):
             "ground_noise_sigma": measurement.ground_noise_sigma_mm,
             "ground_reference_mode": measurement.ground_reference_mode,
             "ground_extrinsic_source": self._ground_extrinsic_source,
+            "ground_reference_coordinate": (
+                self._ground_reference.coordinate
+                if self._ground_reference is not None
+                else None
+            ),
+            "ground_reference_slope_z_per_mm": (
+                self._ground_reference.slope_z_per_mm
+                if self._ground_reference is not None
+                else None
+            ),
+            "ground_reference_intercept_z_mm": (
+                self._ground_reference.intercept_z_mm
+                if self._ground_reference is not None
+                else None
+            ),
+            "ground_reference_valid_s_range_mm": (
+                list(self._ground_reference.valid_s_range_mm)
+                if self._ground_reference is not None
+                else None
+            ),
+            "ground_reference_frozen_json_sha256": (
+                self._ground_reference.frozen_json_sha256
+                if self._ground_reference is not None
+                else None
+            ),
             "ground_profile": ground_profile,
             "height_line_fit_rmse": measurement.height_fit.rmse_mm,
             "endpoints_ground": measurement.endpoints_ground.tolist(),

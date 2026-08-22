@@ -6,6 +6,7 @@ import json
 import threading
 import time
 from collections import deque
+from dataclasses import replace
 from enum import Enum, auto
 from pathlib import Path
 
@@ -62,6 +63,7 @@ from measurement.ground_reference import (
     MeasurementError,
     SessionGroundReference,
     fit_session_ground_reference_from_support,
+    load_frozen_session_ground_reference,
 )
 from measurement.board_mask import (
     select_board_ground_points,
@@ -1414,6 +1416,14 @@ class OnlineCameraWindow(QMainWindow):
             "不覆盖 reference 标定文件。"
         )
         stream_layout.addWidget(self.ground_reference_button)
+        self.frozen_session_ground_button = QPushButton(
+            "加载 Frozen Session Ground", stream_group
+        )
+        self.frozen_session_ground_button.setToolTip(
+            "仅在有效 Session PnP 外参下加载已验证的 Ground-5C physical_S JSON；"
+            "不重新拟合、不修改 C0/C1/H1，PnP 更新后自动失效。"
+        )
+        stream_layout.addWidget(self.frozen_session_ground_button)
         self.ground_sanity_button = QPushButton(
             "激光地面一致性检查", stream_group
         )
@@ -1442,7 +1452,11 @@ class OnlineCameraWindow(QMainWindow):
 
         stats = QGroupBox("实时状态", panel)
         stats_layout = QFormLayout(stats)
-        stats_layout.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
+        # Long provenance values (Frozen source, SHA256, and runtime status)
+        # must be allowed to occupy a second line.  Keeping every row on one
+        # line makes QLabel paint over the following rows when the side panel
+        # is narrower than the value's size hint.
+        stats_layout.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
         self.state_label = QLabel("未连接", stats)
         self.capture_fps_label = QLabel("—", stats)
         self.process_fps_label = QLabel("—", stats)
@@ -1453,11 +1467,34 @@ class OnlineCameraWindow(QMainWindow):
         self.ground_source_label = QLabel("reference", stats)
         self.ground_reference_status_label = QLabel("未启用", stats)
         self.ground_reference_status_label.setWordWrap(True)
+        self.ground_reference_status_label.setSizePolicy(
+            QSizePolicy.Policy.Ignored,
+            QSizePolicy.Policy.Preferred,
+        )
         self.ground_reference_slope_label = QLabel("—", stats)
         self.ground_reference_intercept_label = QLabel("—", stats)
         self.ground_reference_rmse_label = QLabel("—", stats)
         self.ground_reference_range_label = QLabel("—", stats)
         self.ground_reference_points_label = QLabel("—", stats)
+        self.ground_reference_coordinate_label = QLabel("—", stats)
+        self.ground_reference_json_sha_label = QLabel("—", stats)
+        self.ground_reference_runtime_label = QLabel("—", stats)
+        self.ground_reference_coordinate_label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+        self.ground_reference_json_sha_label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+        for label in (
+            self.ground_reference_coordinate_label,
+            self.ground_reference_json_sha_label,
+            self.ground_reference_runtime_label,
+        ):
+            label.setWordWrap(True)
+            label.setSizePolicy(
+                QSizePolicy.Policy.Ignored,
+                QSizePolicy.Policy.Preferred,
+            )
         self.session_ground_valid_label = QLabel("INVALID · 未标定", stats)
         self.session_ground_corner_label = QLabel("—", stats)
         self.session_ground_rmse_label = QLabel("—", stats)
@@ -1468,6 +1505,10 @@ class OnlineCameraWindow(QMainWindow):
         self.session_ground_repeat_rotation_label = QLabel("—", stats)
         self.session_ground_quality_label = QLabel("棋盘质量：—", stats)
         self.session_ground_quality_label.setWordWrap(True)
+        self.session_ground_quality_label.setSizePolicy(
+            QSizePolicy.Policy.Ignored,
+            QSizePolicy.Policy.Preferred,
+        )
         self.session_ground_quality_label.setTextInteractionFlags(
             Qt.TextInteractionFlag.TextSelectableByMouse
         )
@@ -1501,6 +1542,9 @@ class OnlineCameraWindow(QMainWindow):
             ("reference RMSE", self.ground_reference_rmse_label),
             ("reference S range", self.ground_reference_range_label),
             ("reference points", self.ground_reference_points_label),
+            ("reference coordinate", self.ground_reference_coordinate_label),
+            ("Frozen JSON SHA256", self.ground_reference_json_sha_label),
+            ("本帧 applied/out-of-range", self.ground_reference_runtime_label),
             ("Session 状态", self.session_ground_valid_label),
             ("角点数", self.session_ground_corner_label),
             ("重投影 RMSE", self.session_ground_rmse_label),
@@ -1546,6 +1590,9 @@ class OnlineCameraWindow(QMainWindow):
         )
         self.ground_reference_button.clicked.connect(
             self.calibrate_session_ground_reference
+        )
+        self.frozen_session_ground_button.clicked.connect(
+            lambda _checked=False: self.load_frozen_session_ground()
         )
         self.ground_sanity_button.clicked.connect(self.run_ground_sanity_check)
         self.export_button.clicked.connect(self._export_current_frame)
@@ -1666,6 +1713,9 @@ class OnlineCameraWindow(QMainWindow):
         )
         self.ground_reference_button.setEnabled(ground_reference_available)
         self.ground_reference_source_combo.setEnabled(ground_reference_available)
+        self.frozen_session_ground_button.setEnabled(
+            ground_reference_available and self._has_valid_session_pnp()
+        )
         capture_available = (
             self._session_ground_mode != "disabled"
             and self._session_calibration_active
@@ -1711,6 +1761,18 @@ class OnlineCameraWindow(QMainWindow):
         )
         self.record_count.setEnabled(streaming and not self._recorder.active)
         self.record_button.setEnabled(streaming and not self._recorder.active)
+
+    def _has_valid_session_pnp(self) -> bool:
+        """Return whether a usable Session PnP pose is currently active."""
+        result = self._active_session_ground_result
+        return bool(
+            self._pipeline.ground_extrinsic_source == "session"
+            and result is not None
+            and result.status == "success"
+            and result.R is not None
+            and result.t is not None
+            and self._pipeline.ground_extrinsic_generation > 0
+        )
 
     def _on_stream_stopped(self) -> None:
         self.capture_fps_label.setText("0.0")
@@ -3364,6 +3426,104 @@ class OnlineCameraWindow(QMainWindow):
             "已冻结到当前 Session（不修改 reference 标定）"
         )
 
+    def load_frozen_session_ground(self, path: str | Path | None = None) -> bool:
+        """Load the validated Ground-5C A-2 model for the active Session PnP.
+
+        This is deliberately a load-only path.  It never calls a fitter and
+        never writes the selected JSON.  If a frame is already displayed, its
+        retained raw ground points are re-leveled in memory so the UI changes
+        without re-running laser extraction.
+        """
+        if not self._has_valid_session_pnp():
+            message = "请先完成有效的 Session PnP，再加载 Frozen Session Ground"
+            self.statusBar().showMessage(message)
+            QMessageBox.information(self, "Frozen Session Ground", message)
+            return False
+
+        if path is None:
+            default_path = (
+                Path(__file__).resolve().parents[2]
+                / "outputs"
+                / "ground5c_frozen_session_linear_0821"
+                / "frozen_session_linear.json"
+            )
+            selected, _ = QFileDialog.getOpenFileName(
+                self,
+                "加载 Frozen Session Ground",
+                str(default_path if default_path.exists() else default_path.parent),
+                "JSON 文件 (*.json)",
+            )
+            if not selected:
+                return False
+            path = selected
+
+        previous_result = self._last_result
+        try:
+            reference = load_frozen_session_ground_reference(
+                path,
+                active_ground_extrinsic_source=self._pipeline.ground_extrinsic_source,
+                ground_extrinsic_generation=(
+                    self._pipeline.ground_extrinsic_generation
+                ),
+            )
+            self._pipeline.apply_session_ground_reference(reference)
+        except (OSError, TypeError, ValueError) as error:
+            QMessageBox.warning(
+                self,
+                "Frozen Session Ground 加载失败",
+                str(error),
+            )
+            return False
+
+        self._last_ground_reference = reference
+        self._ground_reference_invalid_reason = None
+        self._invalidate_live_reconstruction_after_ground_update()
+        self._update_ground_reference_display()
+
+        if previous_result is not None:
+            raw_points = previous_result.points_ground_raw
+            if raw_points is None:
+                raw_points = previous_result.points_ground
+            raw_points = np.ascontiguousarray(
+                np.asarray(raw_points, dtype=np.float64).copy()
+            )
+            try:
+                corrected, metadata = self._pipeline.apply_ground_reference_to_points(
+                    raw_points
+                )
+                refreshed = replace(
+                    previous_result,
+                    points_ground=corrected,
+                    points_ground_raw=raw_points,
+                    section_xz=(
+                        np.ascontiguousarray(corrected[:, (0, 2)])
+                        if len(corrected)
+                        else np.empty((0, 2), dtype=np.float64)
+                    ),
+                    ground_extrinsic_source=self._pipeline.ground_extrinsic_source,
+                    ground_extrinsic_generation=(
+                        self._pipeline.ground_extrinsic_generation
+                    ),
+                    **metadata,
+                )
+            except (TypeError, ValueError) as error:
+                self.statusBar().showMessage(
+                    f"Frozen Session Ground 已加载，等待下一帧刷新：{error}"
+                )
+            else:
+                self._show_result(refreshed)
+
+        self._update_control_states()
+        lower, upper = reference.valid_s_range_mm
+        self.statusBar().showMessage(
+            "GROUND5C_FROZEN_SESSION = VALID | "
+            f"physical_S a={reference.slope_z_per_mm:.9f} "
+            f"b={reference.intercept_z_mm:.6f} mm | "
+            f"S {lower:.2f}~{upper:.2f} mm | "
+            f"JSON SHA256 {reference.frozen_json_sha256}"
+        )
+        return True
+
     def _session_calibration_frame(self) -> CapturedFrame | None:
         if self._last_result is not None:
             return self._last_result.frame
@@ -3525,15 +3685,27 @@ class OnlineCameraWindow(QMainWindow):
             self.ground_reference_rmse_label.setText("—")
             self.ground_reference_range_label.setText("—")
             self.ground_reference_points_label.setText("—")
+            self.ground_reference_coordinate_label.setText("—")
+            self.ground_reference_json_sha_label.setText("—")
+            self.ground_reference_runtime_label.setText("—")
+            self.ground_reference_status_label.setToolTip("")
+            self.ground_reference_json_sha_label.setToolTip("")
+            self.ground_reference_runtime_label.setToolTip("")
             return
         self._ground_reference_invalid_reason = None
+        coordinate = reference.coordinate or "legacy"
+        frozen = bool(reference.frozen_json_sha256)
         self.ground_reference_status_label.setText(
-            f"{reference.status} · 已冻结 · {reference.provenance_source}"
+            f"{reference.status} · {'Frozen' if frozen else reference.provenance_source}"
         )
         self.ground_reference_status_label.setToolTip(
             f"source={reference.provenance_source}; "
             f"extrinsic={reference.active_ground_extrinsic_source}; "
-            f"generation={reference.ground_extrinsic_generation}"
+            f"generation={reference.ground_extrinsic_generation}; "
+            f"coordinate={coordinate}; "
+            f"a={reference.slope_z_per_mm:.9f}; "
+            f"b={reference.intercept_z_mm:.6f}; "
+            f"json_sha256={reference.frozen_json_sha256 or 'none'}"
         )
         self.ground_reference_slope_label.setText(
             f"{reference.slope_z_per_mm:.7f} mm/mm"
@@ -3549,7 +3721,39 @@ class OnlineCameraWindow(QMainWindow):
             f"{lower:.2f} ~ {upper:.2f} mm"
         )
         self.ground_reference_points_label.setText(
-            f"{reference.inlier_count}/{reference.point_count}"
+            (
+                f"{reference.inlier_count} formal bins"
+                if reference.frozen_json_sha256
+                else f"{reference.inlier_count}/{reference.point_count}"
+            )
+        )
+        self.ground_reference_coordinate_label.setText(
+            reference.coordinate or "—"
+        )
+        self.ground_reference_json_sha_label.setText(
+            _compact_sha256(reference.frozen_json_sha256) or "非 Frozen JSON"
+        )
+        self.ground_reference_json_sha_label.setToolTip(
+            reference.frozen_json_sha256 or "非 Frozen JSON"
+        )
+        self.ground_reference_runtime_label.setText("等待新帧")
+        self.ground_reference_runtime_label.setToolTip("等待新帧")
+
+    def _update_ground_reference_runtime_display(
+        self, result: FrameResult | None
+    ) -> None:
+        if result is None or result.ground_reference_source == "none":
+            self.ground_reference_runtime_label.setText("未应用")
+            self.ground_reference_runtime_label.setToolTip("未应用")
+            return
+        self.ground_reference_runtime_label.setText(
+            f"{result.ground_reference_applied_count}/"
+            f"{result.ground_reference_out_of_range_count} 点"
+        )
+        self.ground_reference_runtime_label.setToolTip(
+            f"applied={result.ground_reference_applied_count}; "
+            f"out_of_range={result.ground_reference_out_of_range_count}; "
+            f"status={result.ground_reference_status}"
         )
 
     def _replace_pipeline(self, pipeline: FramePipeline) -> None:
@@ -3923,6 +4127,7 @@ class OnlineCameraWindow(QMainWindow):
             and result.ground_reference_source != "none"
         ):
             return
+        self._update_ground_reference_runtime_display(result)
         first_result = self._last_result is None
         self._last_result = result
         if first_result:
@@ -4099,6 +4304,15 @@ def _double_spin(
 
 def _format_mm(value: float | None) -> str:
     return "—" if value is None else f"{value:.4f} mm"
+
+
+def _compact_sha256(value: str | None) -> str:
+    """Keep the sidebar readable while retaining the full SHA in the tooltip."""
+    if not value:
+        return ""
+    if len(value) <= 24:
+        return value
+    return f"{value[:12]}…{value[-8:]}"
 
 
 def _section_connection_mask(

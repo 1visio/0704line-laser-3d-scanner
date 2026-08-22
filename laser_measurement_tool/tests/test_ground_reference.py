@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import tempfile
 import unittest
 from pathlib import Path
@@ -11,6 +12,7 @@ from app_config import DEFAULT_CONFIG_PATH, load_app_config
 from measurement.ground_reference import (
     fit_session_ground_reference,
     fit_session_ground_reference_from_support,
+    load_frozen_session_ground_reference,
 )
 from online.fake_camera import SyntheticCameraSession
 from online.models import CameraConfig
@@ -45,6 +47,73 @@ def _bound_reference(points: np.ndarray, config, pipeline: FramePipeline):
 
 
 class SessionGroundReferenceTests(unittest.TestCase):
+    def test_ground5c_frozen_json_loads_without_refitting(self) -> None:
+        path = (
+            Path(__file__).resolve().parents[2]
+            / "outputs"
+            / "ground5c_frozen_session_linear_0821"
+            / "frozen_session_linear.json"
+        )
+        if not path.exists():
+            self.skipTest("Ground-5C A-2 output is not present in this checkout")
+
+        reference = load_frozen_session_ground_reference(
+            path,
+            active_ground_extrinsic_source="session",
+            ground_extrinsic_generation=7,
+        )
+        self.assertEqual(reference.coordinate, "physical_S")
+        self.assertEqual(reference.coordinate_formula, "S=(XY-origin_xy) dot direction_xy")
+        self.assertEqual(reference.fit_pose_ids, ("001", "002", "003", "004", "005"))
+        self.assertEqual(reference.ground_extrinsic_generation, 7)
+        self.assertEqual(
+            reference.frozen_json_sha256,
+            hashlib.sha256(path.read_bytes()).hexdigest(),
+        )
+        self.assertAlmostEqual(reference.slope, -0.000382799377854498)
+        self.assertAlmostEqual(reference.intercept, -0.1969349667207237)
+        self.assertEqual(
+            reference.valid_s_range,
+            (-139.76604886428078, 144.30211420107466),
+        )
+        self.assertEqual(
+            reference.support_metadata["formal_bin_count"],
+            39,
+        )
+
+    def test_ground5c_frozen_json_preserves_domain_boundary_behavior(self) -> None:
+        path = (
+            Path(__file__).resolve().parents[2]
+            / "outputs"
+            / "ground5c_frozen_session_linear_0821"
+            / "frozen_session_linear.json"
+        )
+        if not path.exists():
+            self.skipTest("Ground-5C A-2 output is not present in this checkout")
+        reference = load_frozen_session_ground_reference(
+            path,
+            active_ground_extrinsic_source="session",
+            ground_extrinsic_generation=1,
+        )
+        origin = reference.origin_xy
+        direction = reference.direction_xy
+        s = np.asarray(
+            [reference.valid_s_range_mm[0], 0.0, reference.valid_s_range_mm[1] + 1.0],
+            dtype=np.float64,
+        )
+        xy = origin + s[:, None] * direction
+        points = np.column_stack(
+            [xy, reference.slope_z_per_mm * s + reference.intercept_z_mm + 3.0]
+        )
+        corrected, valid = reference.apply_to_points(points)
+        np.testing.assert_array_equal(valid, np.asarray([True, True, False]))
+        np.testing.assert_allclose(
+            corrected[:2, 2],
+            np.full(2, 3.0),
+            atol=1.0e-12,
+        )
+        self.assertEqual(corrected[2, 2], points[2, 2])
+
     def test_session_fit_reuses_linear_baseline_kernel(self) -> None:
         config = load_app_config(DEFAULT_CONFIG_PATH)
         reference = fit_session_ground_reference(
