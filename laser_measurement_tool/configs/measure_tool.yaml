@@ -28,10 +28,12 @@ calibration:
   ground_u_compensation: null
 
 correction:
-  # Stage-A 仅用于 Daheng 的 1–30 mm 实验工作域，默认关闭。
+  # 互斥模式：none / h1 / hb2；默认配置不启用高度修正。
   mode: none
   stage_a_height_scale_enabled: false
   stage_a_height_scale_config: null
+  hb2_height_correction_config: null
+  hb2_q2_policy: reject
 
 session_ground_calibration:
   # disabled=不提供入口；optional=使用 reference，可按需切换到 session；

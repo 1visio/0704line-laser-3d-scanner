@@ -17,7 +17,7 @@ import numpy as np
 from .laser_ray_correction import (
     FrozenLaserRayCorrection,
     LaserRayCorrectionError,
-    apply_frozen_laser_ray_correction,
+    evaluate_frozen_laser_ray_correction,
 )
 
 
@@ -97,6 +97,12 @@ class ReconstructionResult:
     points_camera: np.ndarray
     points_ground: np.ndarray
     filtered: dict[str, int]
+    # Frozen-C0 camera points are retained only as aligned diagnostics.  They
+    # are not used to replace the C0+C1 output coordinates.
+    points_camera_c0: np.ndarray | None = None
+    q1_c0: np.ndarray | None = None
+    q2_c0: np.ndarray | None = None
+    c1_clamped: np.ndarray | None = None
 
     @property
     def point_count(self) -> int:
@@ -534,6 +540,54 @@ def _points_inside_polygon(
     return inside | np.any(on_segment, axis=1)
 
 
+def frozen_c0_q_coordinates(
+    points_camera_c0: np.ndarray,
+    calibration: Mapping[str, Any],
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return Frozen-C0 ``(q1, q2)`` from ``P_c0`` camera coordinates.
+
+    This deliberately uses the C0 intersection points and the quadratic
+    model's independent-axis normalization.  It never reads C1-corrected,
+    ground-transformed, or height-corrected coordinates.
+    """
+    points = np.asarray(points_camera_c0, dtype=np.float64)
+    if points.ndim != 2 or points.shape[1] != 3:
+        raise ReconstructionInputError(
+            "points_camera_c0 必须是形状为 (N, 3) 的数组"
+        )
+    model = calibration.get("laser_model")
+    if not isinstance(model, Mapping) or model.get("model_type") != "quadratic_graph":
+        raise ReconstructionInputError(
+            "Frozen-C0 q1/q2 只适用于 quadratic_graph 激光模型"
+        )
+    try:
+        independent_axes = tuple(
+            _axis_index(str(axis)) for axis in model["independent_axes"]
+        )
+        normalization = model["normalization"]
+        center = np.asarray(
+            normalization["independent_center_mm"], dtype=np.float64
+        ).reshape(2)
+        scale = np.asarray(
+            normalization["independent_scale_mm"], dtype=np.float64
+        ).reshape(2)
+    except (KeyError, TypeError, ValueError) as error:
+        raise ReconstructionInputError(
+            "quadratic_graph 模型缺少 Frozen-C0 q1/q2 normalization"
+        ) from error
+    if len(independent_axes) != 2 or not np.isfinite(center).all() or not np.isfinite(scale).all():
+        raise ReconstructionInputError("Frozen-C0 q1/q2 normalization 非法")
+    if np.any(scale <= 0.0):
+        raise ReconstructionInputError("Frozen-C0 independent_scale_mm 必须为正数")
+    normalized = (
+        points[:, independent_axes] - center[None, :]
+    ) / scale[None, :]
+    return (
+        np.ascontiguousarray(normalized[:, 0]),
+        np.ascontiguousarray(normalized[:, 1]),
+    )
+
+
 def reconstruct_uv_to_ground(
     pixels_uv: np.ndarray,
     calibration: Mapping[str, Any],
@@ -596,7 +650,9 @@ def reconstruct_uv_to_ground(
     lambda_c0, stable, model_type = _intersect_laser_surface(
         rays, calibration, params
     )
+    points_camera_c0_all = rays * lambda_c0[:, None]
     lambda_final = lambda_c0
+    c1_clamped: np.ndarray | None = None
     if params.enable_laser_ray_correction:
         if model_type != "quadratic_graph":
             raise ReconstructionInputError(
@@ -608,13 +664,15 @@ def reconstruct_uv_to_ground(
                 "已开启 laser_ray_correction，但 calibration 缺少有效 frozen C1 参数"
             )
         try:
-            lambda_final = apply_frozen_laser_ray_correction(
-                lambda_c0, rays, correction
-            )
+            evaluation = evaluate_frozen_laser_ray_correction(rays, correction)
         except LaserRayCorrectionError as error:
             raise ReconstructionInputError(
                 f"laser_ray_correction 参数或运行时输入非法: {error}"
             ) from error
+        lambda_final = np.ascontiguousarray(
+            lambda_c0 + evaluation.correction_mm
+        )
+        c1_clamped = evaluation.clamped
     points_camera = rays * lambda_final[:, None]
 
     finite = np.isfinite(points_camera).all(axis=1) & np.isfinite(lambda_final)
@@ -639,6 +697,9 @@ def reconstruct_uv_to_ground(
     }
 
     points_camera = points_camera[valid]
+    points_camera_c0 = points_camera_c0_all[valid]
+    if c1_clamped is not None:
+        c1_clamped = c1_clamped[valid]
     valid_pixels = points[valid]
     homogeneous = np.column_stack(
         [points_camera, np.ones(len(points_camera), dtype=np.float64)]
@@ -653,11 +714,27 @@ def reconstruct_uv_to_ground(
 
     final_finite = np.isfinite(points_ground).all(axis=1)
     filtered["non_finite"] += int(np.count_nonzero(~final_finite))
+    points_camera_c0 = points_camera_c0[final_finite]
+    if c1_clamped is not None:
+        c1_clamped = c1_clamped[final_finite]
+    q1_c0: np.ndarray | None = None
+    q2_c0: np.ndarray | None = None
+    if model_type == "quadratic_graph" and len(points_camera_c0):
+        q1_c0, q2_c0 = frozen_c0_q_coordinates(
+            points_camera_c0,
+            calibration,
+        )
     return ReconstructionResult(
         pixels_uv=np.ascontiguousarray(valid_pixels[final_finite]),
         points_camera=np.ascontiguousarray(points_camera[final_finite]),
         points_ground=np.ascontiguousarray(points_ground[final_finite]),
         filtered=filtered,
+        points_camera_c0=np.ascontiguousarray(points_camera_c0),
+        q1_c0=(None if q1_c0 is None else np.ascontiguousarray(q1_c0)),
+        q2_c0=(None if q2_c0 is None else np.ascontiguousarray(q2_c0)),
+        c1_clamped=(
+            None if c1_clamped is None else np.ascontiguousarray(c1_clamped)
+        ),
     )
 
 

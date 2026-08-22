@@ -60,6 +60,23 @@ class MeasureHeightLineTest(unittest.TestCase):
         self.assertEqual(result.baseline_inlier_count, 0)
         self.assertAlmostEqual(result.height_mean_mm, 12.5, delta=0.05)
 
+    def test_session_reference_mode_does_not_fit_baseline_again(self) -> None:
+        baseline = _make_baseline()
+        height = _make_height_line(height=12.5, length=30.0)
+        result = measure_height_line(
+            baseline,
+            height,
+            ground_correction_mode="session_reference",
+        )
+
+        self.assertEqual(result.ground_reference_mode, "session_reference")
+        self.assertEqual(result.ground_baseline_zg_mm, 0.0)
+        self.assertIsNone(result.ground_profile_fit)
+        self.assertIsNone(result.baseline_fit)
+        self.assertEqual(result.baseline_point_count, len(baseline))
+        self.assertEqual(result.baseline_inlier_count, 0)
+        self.assertAlmostEqual(result.height_mean_mm, 12.5, delta=0.05)
+
     def test_empty_baseline_array_is_not_treated_as_zg_zero(self) -> None:
         with self.assertRaisesRegex(
             MeasurementError, "baseline line has too few points"

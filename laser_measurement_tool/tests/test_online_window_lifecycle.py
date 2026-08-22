@@ -109,6 +109,24 @@ class OnlineWindowLifecycleTests(unittest.TestCase):
         self.assertTrue(window._close_camera_session())
         window.close()
 
+    def test_error_dialog_is_single_non_modal_and_does_not_block_window(self) -> None:
+        window = OnlineCameraWindow(self.config, simulate=True)
+        try:
+            window._show_error("录制收尾失败")
+            first = window._error_message_box
+            self.assertIsNotNone(first)
+            assert first is not None
+            self.assertFalse(first.isModal())
+
+            window._show_error("同一个错误不应再次创建弹窗")
+            self.assertIs(window._error_message_box, first)
+
+            first.close()
+            self.application.processEvents()
+            self.assertIsNone(window._error_message_box)
+        finally:
+            window.close()
+
     def test_image_preview_stays_reachable_and_cannot_zoom_beyond_home(self) -> None:
         view_box = ConstrainedImageViewBox()
         view = pg.PlotWidget(viewBox=view_box)

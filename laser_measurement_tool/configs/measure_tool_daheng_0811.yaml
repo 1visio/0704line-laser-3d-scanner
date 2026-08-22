@@ -24,10 +24,14 @@ calibration:
   laser_ray_correction: calibration_daheng_0811/frozen_c1_4k.json
 
 correction:
-  # Stage-A 是实验性后处理；不修改 C0/C1、lambda 或点云坐标。
-  mode: stage_a_height_scale
+  # 互斥模式：none / h1 / hb2。当前仍保持 H1 为配置默认值。
+  # H1/H-B2 都只作用于最终 raw height，不修改 C0/C1、lambda 或点云坐标。
+  mode: h1
   stage_a_height_scale_enabled: true
   stage_a_height_scale_config: calibration_daheng_0811/stage_a_height_scale.json
+  hb2_height_correction_config: calibration_daheng_0811/hb2_height_correction.json
+  # reject 是默认运行策略；clamp_diagnostic 只能显式用于诊断。
+  hb2_q2_policy: reject
 
 session_ground_calibration:
   # 开发阶段允许继续使用 reference；点击在线工具中的 Session 基准标定后切换。

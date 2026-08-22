@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
     QInputDialog,
+    QLayout,
     QLabel,
     QMainWindow,
     QMessageBox,
@@ -33,8 +34,14 @@ from calibration.config_loader import (
 )
 from calibration.manifest import load_calibration_package
 from correction.stage_a_height_scale import (
+    HB2_CORRECTION_MODE,
+    H1_CORRECTION_MODE,
+    NO_CORRECTION_MODE,
+    HeightCorrectionResult,
     StageAHeightResult,
     apply_stage_a_height_scale,
+    normalize_correction_mode,
+    resolve_height_correction,
 )
 from gui.image_view import ImageView, _to_uint8_display
 from gui.point_cloud_view import PointCloudView
@@ -81,6 +88,51 @@ from utils.result_io import (
 _DEFAULT_HARD_ROI_OFFSET = (0, 880)
 
 
+def _format_optional(value: float | None) -> str:
+    return "—" if value is None else f"{value:.6f}"
+
+
+def _configure_wrapping_label(
+    label: QLabel, *, selectable: bool = True, flexible: bool = True
+) -> QLabel:
+    """Configure a compact label whose value wraps only when it must."""
+    label.setWordWrap(True)
+    label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+    label.setMinimumWidth(0)
+    label.setSizePolicy(
+        QSizePolicy.Policy.Ignored if flexible else QSizePolicy.Policy.Preferred,
+        QSizePolicy.Policy.Minimum,
+    )
+    if not flexible:
+        # This is an upper bound, not a fixed narrow column: normal titles use
+        # their natural width, while a very long title cannot starve the value.
+        label.setMinimumWidth(
+            min(label.fontMetrics().horizontalAdvance(label.text()), 170)
+        )
+        label.setMaximumWidth(170)
+    if selectable:
+        label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+    return label
+
+
+def _add_compact_result_row(
+    layout: QVBoxLayout, parent: QWidget, title: str, value: str
+) -> None:
+    """Add a two-column result row with an adaptive value column."""
+    row = QHBoxLayout()
+    row.setContentsMargins(0, 0, 0, 0)
+    row.setSpacing(6)
+    row.addWidget(
+        _configure_wrapping_label(
+            QLabel(title, parent), selectable=False, flexible=False
+        )
+    )
+    row.addWidget(_configure_wrapping_label(QLabel(value, parent)), 1)
+    layout.addLayout(row)
+
+
 class MainWindow(QMainWindow):
     """单帧线激光测量工具的主窗口。"""
 
@@ -99,6 +151,7 @@ class MainWindow(QMainWindow):
         runtime_calibration: dict[str, Any] | None = None,
         ground_extrinsic_source: str = "reference",
         runtime_ground_reference: SessionGroundReference | None = None,
+        height_correction_mode: str | None = None,
     ) -> None:
         super().__init__()
         self._app_config = config
@@ -108,6 +161,12 @@ class MainWindow(QMainWindow):
         self._calibration: dict[str, Any] | None = runtime_calibration
         self._ground_extrinsic_source = ground_extrinsic_source
         self._ground_reference = runtime_ground_reference
+        configured_mode = (
+            config.correction.mode if config is not None else NO_CORRECTION_MODE
+        )
+        self._height_correction_mode = normalize_correction_mode(
+            height_correction_mode or configured_mode
+        )
         self._image: np.ndarray | None = None
         self._image_path: Path | None = None
         # 实时相机通常输出传感器 ROI。图像/ROI 仍使用 ROI 局部坐标，
@@ -150,6 +209,11 @@ class MainWindow(QMainWindow):
         self._connect_signals()
         self._set_image_actions_enabled(False)
         self.statusBar().showMessage("请加载灰度图像")
+
+    def resizeEvent(self, event) -> None:  # noqa: N802
+        super().resizeEvent(event)
+        if hasattr(self, "_result_labels"):
+            self._refresh_adaptive_results_layout()
 
     @property
     def current_image(self) -> np.ndarray | None:
@@ -453,22 +517,26 @@ class MainWindow(QMainWindow):
             points_camera=reconstruction.points_camera,
             points_ground=points_ground,
             filtered=reconstruction.filtered,
+            points_camera_c0=reconstruction.points_camera_c0,
+            q1_c0=reconstruction.q1_c0,
+            q2_c0=reconstruction.q2_c0,
+            c1_clamped=reconstruction.c1_clamped,
         )
 
     def _build_central_widget(self) -> QWidget:
         central_widget = QWidget(self)
         layout = QHBoxLayout(central_widget)
-        layout.setContentsMargins(8, 8, 8, 8)
-        layout.setSpacing(8)
+        layout.setContentsMargins(6, 6, 6, 6)
+        layout.setSpacing(6)
         layout.addWidget(self.view_stack, 1)
         self._control_panel_scroll_area = QScrollArea(central_widget)
         self._control_panel_scroll_area.setObjectName(
             "controlPanelScrollArea"
         )
-        # Reserve enough logical width for the result labels and the vertical
-        # scrollbar.  The panel itself follows the viewport width, so opening
-        # the scrollbar cannot clip the right side of a label.
+        # Keep the sidebar compact while retaining enough room for its value
+        # column. The scrollbar remains inside this bounded side panel.
         self._control_panel_scroll_area.setMinimumWidth(320)
+        self._control_panel_scroll_area.setMaximumWidth(360)
         self._control_panel_scroll_area.setWidgetResizable(True)
         self._control_panel_scroll_area.setHorizontalScrollBarPolicy(
             Qt.ScrollBarPolicy.ScrollBarAlwaysOff
@@ -476,18 +544,25 @@ class MainWindow(QMainWindow):
         self._control_panel_scroll_area.setVerticalScrollBarPolicy(
             Qt.ScrollBarPolicy.ScrollBarAsNeeded
         )
+        self._control_panel_scroll_area.setSizePolicy(
+            QSizePolicy.Policy.Preferred,
+            QSizePolicy.Policy.Expanding,
+        )
         self._control_panel_scroll_area.setWidget(self._build_control_panel())
         layout.addWidget(self._control_panel_scroll_area)
         return central_widget
 
     def _build_control_panel(self) -> QWidget:
         panel = QWidget(self)
-        panel.setMinimumWidth(300)
+        panel.setMinimumWidth(0)
         panel.setSizePolicy(
             QSizePolicy.Policy.Expanding,
             QSizePolicy.Policy.Preferred,
         )
         layout = QVBoxLayout(panel)
+        layout.setContentsMargins(6, 6, 6, 6)
+        layout.setSpacing(6)
+        layout.setSizeConstraint(QLayout.SizeConstraint.SetMinAndMaxSize)
 
         self.load_button = QPushButton("加载图像", panel)
         self.online_button = QPushButton("在线相机", panel)
@@ -500,6 +575,18 @@ class MainWindow(QMainWindow):
             )
             if index >= 0:
                 self.method_combo.setCurrentIndex(index)
+        self.height_correction_combo = QComboBox(panel)
+        for mode, label in (
+            (NO_CORRECTION_MODE, "none"),
+            (H1_CORRECTION_MODE, "h1 (保留对照)"),
+            (HB2_CORRECTION_MODE, "hb2 (Frozen H-B2)"),
+        ):
+            self.height_correction_combo.addItem(label, mode)
+        correction_index = self.height_correction_combo.findData(
+            self._height_correction_mode
+        )
+        if correction_index >= 0:
+            self.height_correction_combo.setCurrentIndex(correction_index)
         self.extract_laser_button = QPushButton("提取激光线", panel)
         self.point_cloud_button = QPushButton("三维点云", panel)
         self.point_cloud_button.setEnabled(False)
@@ -514,12 +601,14 @@ class MainWindow(QMainWindow):
 
         layout.addWidget(self.load_button)
         layout.addWidget(self.online_button)
-        layout.addSpacing(12)
+        layout.addSpacing(4)
         layout.addWidget(QLabel("提取算法:", panel))
         layout.addWidget(self.method_combo)
+        layout.addWidget(QLabel("高度修正模式:", panel))
+        layout.addWidget(self.height_correction_combo)
         for button in self._image_action_buttons:
             layout.addWidget(button)
-        layout.addSpacing(12)
+        layout.addSpacing(4)
         layout.addWidget(self._build_results_group(panel))
         layout.addStretch(1)
         return panel
@@ -527,50 +616,98 @@ class MainWindow(QMainWindow):
     def _build_results_group(self, parent: QWidget) -> QGroupBox:
         group = QGroupBox("计算结果 (mm)", parent)
         layout = QVBoxLayout(group)
+        layout.setContentsMargins(6, 8, 6, 6)
+        layout.setSpacing(6)
+        layout.setSizeConstraint(QLayout.SizeConstraint.SetMinAndMaxSize)
         reference_group = QGroupBox("公共地面基准", group)
+        reference_group.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Minimum,
+        )
         reference_form = QFormLayout(reference_group)
+        self._configure_result_form(reference_form)
         self._result_labels: dict[str, QLabel] = {}
         for key, title in (
             ("ground", "地面基准 Zg"),
             ("ground_sigma", "地面噪声 σ"),
             ("baseline_points", "内点/总点"),
         ):
-            label = QLabel(
+            label = _configure_wrapping_label(QLabel(
                 self._ground_extrinsic_source if key == "ground_source" else "—",
                 reference_group,
-            )
-            label.setTextInteractionFlags(
-                Qt.TextInteractionFlag.TextSelectableByMouse
-            )
+            ))
             self._result_labels[key] = label
-            reference_form.addRow(f"{title}:", label)
+            reference_form.addRow(
+                _configure_wrapping_label(
+                    QLabel(f"{title}:", reference_group),
+                    selectable=False,
+                    flexible=False,
+                ),
+                label,
+            )
         layout.addWidget(reference_group)
 
         session_group = QGroupBox("本次测量状态", group)
+        session_group.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Minimum,
+        )
         session_form = QFormLayout(session_group)
+        self._configure_result_form(session_form)
         for key, title in (
+            ("height_correction_mode", "高度修正模式"),
             ("stage_a_enabled", "Stage-A 补偿"),
             ("stage_a_domain", "Stage-A 有效域"),
+            ("hb2_domain", "H-B2 q2 有效域"),
+            ("hb2_policy", "H-B2 OOD 策略"),
             ("session_ground_reference", "Session 地面基准"),
+            ("ground_reference_coordinate", "Session 坐标"),
+            ("ground_reference_params", "Session a / b"),
+            ("ground_reference_domain", "Session S 有效域"),
+            ("ground_reference_sha", "Frozen JSON SHA256"),
             ("ground_reference_mode", "地面参考模式"),
             ("ground_source", "ground 外参来源"),
         ):
-            label = QLabel(
+            label = _configure_wrapping_label(QLabel(
                 self._ground_extrinsic_source
                 if key == "ground_source"
                 else "—",
                 session_group,
-            )
-            label.setTextInteractionFlags(
-                Qt.TextInteractionFlag.TextSelectableByMouse
-            )
+            ))
             self._result_labels[key] = label
-            session_form.addRow(f"{title}:", label)
+            session_form.addRow(
+                _configure_wrapping_label(
+                    QLabel(f"{title}:", session_group),
+                    selectable=False,
+                    flexible=False,
+                ),
+                label,
+            )
         layout.addWidget(session_group)
         self._obstacle_results_layout = QVBoxLayout()
+        self._obstacle_results_layout.setSizeConstraint(
+            QLayout.SizeConstraint.SetMinAndMaxSize
+        )
         self._obstacle_result_groups: list[QGroupBox] = []
         layout.addLayout(self._obstacle_results_layout)
         return group
+
+    @staticmethod
+    def _configure_result_form(form: QFormLayout) -> None:
+        """Keep short titles on one row and wrap only the value when needed."""
+        form.setContentsMargins(6, 6, 6, 6)
+        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
+        form.setFieldGrowthPolicy(
+            QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow
+        )
+        form.setLabelAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        )
+        form.setFormAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop
+        )
+        form.setHorizontalSpacing(6)
+        form.setVerticalSpacing(2)
 
     @property
     def _image_action_buttons(self) -> tuple[QPushButton, ...]:
@@ -615,6 +752,11 @@ class MainWindow(QMainWindow):
             lambda _checked=False: self._save_results()
         )
         self.method_combo.currentTextChanged.connect(self._change_method)
+        self.height_correction_combo.currentIndexChanged.connect(
+            lambda _index: self._set_height_correction_mode(
+                self.height_correction_combo.currentData()
+            )
+        )
         self.image_view.image_coordinates_changed.connect(self._show_image_coordinates)
         self.image_view.image_coordinates_cleared.connect(self._clear_image_coordinates)
         self.image_view.roi_selected.connect(self._add_roi_region)
@@ -769,6 +911,31 @@ class MainWindow(QMainWindow):
         )
         self.statusBar().showMessage(f"提取算法切换为 {method}")
 
+    def _set_height_correction_mode(self, mode: object) -> None:
+        """Switch the active scalar correction without touching reconstruction."""
+        try:
+            normalized = normalize_correction_mode(str(mode))
+        except ValueError as error:
+            self.statusBar().showMessage(str(error))
+            return
+        self._height_correction_mode = normalized
+        if normalized == HB2_CORRECTION_MODE:
+            config = self._app_config
+            if config is None or config.correction.hb2_height_correction is None:
+                self.statusBar().showMessage(
+                    "H-B2 未配置；当前选择会显式标记 not_configured，不会静默回退"
+                )
+            else:
+                self.statusBar().showMessage(
+                    "高度修正模式 = hb2；H1 仅 shadow logging，不叠加"
+                )
+        else:
+            self.statusBar().showMessage(
+                f"高度修正模式 = {normalized}；H1/H-B2 互斥"
+            )
+        if self._last_measurements:
+            self._update_results_panel(self._last_measurements)
+
     def _ensure_calibration(self) -> dict[str, Any] | None:
         """惰性加载标定；失败时弹窗并返回 None。"""
         if self._calibration is not None:
@@ -889,6 +1056,9 @@ class MainWindow(QMainWindow):
                 ),
                 [recon.points_ground for recon in obstacle_recons],
                 config.measurement,
+                ground_correction_mode=(
+                    "session_reference" if self._ground_reference is not None else "auto"
+                ),
             )
         except (ReconstructionInputError, MeasurementError) as error:
             QMessageBox.warning(self, "测量失败", str(error))
@@ -911,7 +1081,9 @@ class MainWindow(QMainWindow):
         self.image_view.set_measurement_overlay(self._last_overlay_segments)
         self._update_results_panel(measurements)
         first_measurement = measurements[0]
-        if first_measurement.baseline_fit is not None:
+        if first_measurement.ground_reference_mode == "session_reference":
+            reference_status = "Session physical_S 已校平（baseline ROI 仅诊断）"
+        elif first_measurement.baseline_fit is not None:
             reference_status = (
                 f"基准 {first_measurement.baseline_inlier_count}/"
                 f"{first_measurement.baseline_point_count}"
@@ -1049,6 +1221,30 @@ class MainWindow(QMainWindow):
             group.deleteLater()
         self._obstacle_result_groups.clear()
 
+    def _refresh_adaptive_results_layout(self) -> None:
+        """Re-activate wrapped result rows after text or window-width changes."""
+        for label in self._result_labels.values():
+            label.updateGeometry()
+        for group in self._obstacle_result_groups:
+            group_layout = group.layout()
+            if group_layout is not None:
+                group_layout.invalidate()
+                group_layout.activate()
+            group.updateGeometry()
+        self._obstacle_results_layout.invalidate()
+        self._obstacle_results_layout.activate()
+        scroll_area = getattr(self, "_control_panel_scroll_area", None)
+        if scroll_area is None:
+            return
+        panel = scroll_area.widget()
+        if panel is not None:
+            panel_layout = panel.layout()
+            if panel_layout is not None:
+                panel_layout.invalidate()
+                panel_layout.activate()
+            panel.updateGeometry()
+        scroll_area.updateGeometry()
+
     def _update_results_panel(
         self, measurements: list[HeightLineMeasurement]
     ) -> None:
@@ -1069,19 +1265,73 @@ class MainWindow(QMainWindow):
                 f"{reference.baseline_inlier_count}/"
                 f"{reference.baseline_point_count}"
             )
+        elif reference.ground_reference_mode == "session_reference":
+            baseline_counts = (
+                f"Session 已用；ROI 诊断 {reference.baseline_point_count} 点"
+            )
         else:
             baseline_counts = "固定 Zg=0"
         self._result_labels["baseline_points"].setText(baseline_counts)
 
         session_stage_a = self._stage_a_height_result(None)
+        self._result_labels["height_correction_mode"].setText(
+            self._height_correction_mode
+        )
         self._result_labels["stage_a_enabled"].setText(
             "开启" if session_stage_a.stage_a_enabled else "关闭"
         )
         self._result_labels["stage_a_domain"].setText(
             self._stage_a_domain_text()
         )
+        hb2_config = (
+            self._app_config.correction.hb2_height_correction
+            if self._app_config is not None
+            else None
+        )
+        self._result_labels["hb2_domain"].setText(
+            "—"
+            if hb2_config is None
+            else f"{hb2_config.q2_domain[0]:.6f} ~ {hb2_config.q2_domain[1]:.6f}"
+        )
+        self._result_labels["hb2_policy"].setText(
+            self._app_config.correction.hb2_q2_policy
+            if self._app_config is not None
+            else "reject"
+        )
         self._result_labels["session_ground_reference"].setText(
-            "VALID · 已应用" if self._ground_reference is not None else "未启用"
+            (
+                f"VALID · {self._ground_reference.coordinate} · 已应用"
+                if self._ground_reference is not None
+                and self._ground_reference.coordinate
+                else "VALID · 已应用"
+                if self._ground_reference is not None
+                else "未启用"
+            )
+        )
+        reference_object = self._ground_reference
+        self._result_labels["ground_reference_coordinate"].setText(
+            "—" if reference_object is None else (reference_object.coordinate or "—")
+        )
+        self._result_labels["ground_reference_params"].setText(
+            "—"
+            if reference_object is None
+            else (
+                f"a={reference_object.slope_z_per_mm:.9f}, "
+                f"b={reference_object.intercept_z_mm:.6f} mm"
+            )
+        )
+        self._result_labels["ground_reference_domain"].setText(
+            "—"
+            if reference_object is None
+            else (
+                f"{reference_object.valid_s_range_mm[0]:.2f} ~ "
+                f"{reference_object.valid_s_range_mm[1]:.2f} mm"
+            )
+        )
+        self._result_labels["ground_reference_sha"].setText(
+            "—"
+            if reference_object is None
+            else (reference_object.frozen_json_sha256 or "非 Frozen JSON")
         )
         reference_modes = {measurement.ground_reference_mode for measurement in measurements}
         self._result_labels["ground_reference_mode"].setText(
@@ -1095,8 +1345,25 @@ class MainWindow(QMainWindow):
         for index, measurement in enumerate(measurements, start=1):
             group = QGroupBox(f"障碍物 {index}")
             form = QVBoxLayout(group)
+            form.setContentsMargins(6, 6, 6, 6)
+            form.setSizeConstraint(QLayout.SizeConstraint.SetMinAndMaxSize)
+            form.setSpacing(2)
+            group.setSizePolicy(
+                QSizePolicy.Policy.Expanding,
+                QSizePolicy.Policy.Minimum,
+            )
             angle = measurement.angle_with_baseline_deg
             stage_a = self._stage_a_height_result(measurement.height_mean_mm)
+            reconstruction = (
+                self._last_obstacle_reconstructions[index - 1]
+                if index - 1 < len(self._last_obstacle_reconstructions)
+                else None
+            )
+            height_result = self._height_correction_result(
+                measurement.height_mean_mm,
+                reconstruction,
+            )
+            geometry = self._height_shadow_geometry(reconstruction)
             raw_height = (
                 "—"
                 if stage_a.height_raw is None
@@ -1107,45 +1374,85 @@ class MainWindow(QMainWindow):
                 if stage_a.height_stage_a is None
                 else f"{stage_a.height_stage_a:.3f} mm"
             )
-            rows = (
+            hb2_height = (
+                "—"
+                if height_result.height_hb2 is None
+                else f"{height_result.height_hb2:.3f} mm"
+            )
+            active_height = (
+                "—"
+                if height_result.active_height is None
+                else f"{height_result.active_height:.3f} mm"
+            )
+            legacy_rows = (
                 ("原始高度 height_raw (均值)", raw_height),
                 ("补偿高度 height_stage_a", stage_a_height),
                 ("Stage-A 状态", self._display_stage_a_status(stage_a.stage_a_status)),
-                ("高度 σ (raw)", f"{measurement.height_std_mm:.3f} mm"),
-                ("高度 中位数 (raw)", f"{measurement.height_median_mm:.3f} mm"),
+            )
+            for title, value in legacy_rows:
+                label = _configure_wrapping_label(
+                    QLabel(f"{title}: {value}", group)
+                )
+                form.addWidget(label)
+            rows = (
+                ("H-B2 shadow", f"height_hb2: {hb2_height}"),
+                ("当前高度", f"{active_height} / {height_result.active_height_correction}"),
+                ("修正状态", self._display_height_status(height_result.active_height_status)),
+                ("q1 / q2", f"Frozen-C0 均值: {_format_optional(height_result.q1)} / {_format_optional(height_result.q2)}"),
+                ("q2 域", f"{height_result.q2_in_domain} / {self._display_height_status(height_result.hb2_q2_status)}"),
+                ("v 范围", f"{_format_optional(geometry['v_min'])} / {_format_optional(geometry['v_median'])} / {_format_optional(geometry['v_max'])} px"),
+                ("点数 / C1", f"{geometry['point_count']} / {geometry['c1_clamp_status']}"),
+                ("高度 σ", f"raw: {measurement.height_std_mm:.3f} mm"),
+                ("高度中位数", f"raw: {measurement.height_median_mm:.3f} mm"),
                 ("长度", f"{measurement.length_mm:.3f}"),
                 ("与基准线夹角", "—" if angle is None else f"{angle:.2f}°"),
                 ("拟合 RMSE", f"{measurement.height_fit.rmse_mm:.3f}"),
                 (
-                    "内点/总点",
+                    "内点 / 总点",
                     f"{measurement.height_inlier_count}/"
                     f"{measurement.height_point_count}",
                 ),
             )
             for title, value in rows:
-                label = QLabel(f"{title}: {value}", group)
-                label.setWordWrap(True)
-                label.setTextInteractionFlags(
-                    Qt.TextInteractionFlag.TextSelectableByMouse
-                )
-                form.addWidget(label)
+                _add_compact_result_row(form, group, title, value)
             self._obstacle_results_layout.addWidget(group)
             self._obstacle_result_groups.append(group)
+        self._refresh_adaptive_results_layout()
 
     def _format_height_status(
         self, index: int, measurement: HeightLineMeasurement
     ) -> str:
-        """Format both raw and Stage-A values without changing measurement data."""
+        """Format active and shadow height values without changing raw data."""
         stage_a = self._stage_a_height_result(measurement.height_mean_mm)
+        reconstruction = (
+            self._last_obstacle_reconstructions[index - 1]
+            if index - 1 < len(self._last_obstacle_reconstructions)
+            else None
+        )
+        height_result = self._height_correction_result(
+            measurement.height_mean_mm,
+            reconstruction,
+        )
         raw = "—" if stage_a.height_raw is None else f"{stage_a.height_raw:.3f}"
-        corrected = (
+        h1 = (
             "—"
             if stage_a.height_stage_a is None
             else f"{stage_a.height_stage_a:.3f}"
         )
+        hb2 = (
+            "—"
+            if height_result.height_hb2 is None
+            else f"{height_result.height_hb2:.3f}"
+        )
+        active = (
+            "—"
+            if height_result.active_height is None
+            else f"{height_result.active_height:.3f}"
+        )
         return (
-            f"障碍物{index} raw {raw} mm / stage_a {corrected} mm "
-            f"({self._display_stage_a_status(stage_a.stage_a_status)})"
+            f"障碍物{index} raw {raw} mm / h1 {h1} mm / hb2 {hb2} mm "
+            f"/ active {active} mm [{height_result.active_height_correction}] "
+            f"({self._display_height_status(height_result.active_height_status)})"
         )
 
     def _stage_a_domain_text(self) -> str:
@@ -1164,6 +1471,7 @@ class MainWindow(QMainWindow):
     def _display_ground_reference_mode(mode: str) -> str:
         return {
             "baseline_roi_profile": "基准 ROI 地面拟合",
+            "session_reference": "Frozen Session physical_S（Zg=0）",
             "zg_zero": "固定 Zg=0",
             "mixed": "多个模式（请检查）",
         }.get(mode, mode)
@@ -1179,6 +1487,21 @@ class MainWindow(QMainWindow):
             "mode_not_stage_a": "当前模式非 Stage-A",
             "not_measured": "未测量",
             "invalid_height": "高度无效",
+        }.get(status, status)
+
+    @staticmethod
+    def _display_height_status(status: str) -> str:
+        return {
+            "applied": "已应用",
+            "HB2_Q2_OOD": "HB2_Q2_OOD（拒绝无界外推）",
+            "HB2_Q2_MISSING": "HB2_Q2_MISSING",
+            "HB2_Q2_INVALID": "HB2_Q2_INVALID",
+            "HB2_Q2_CLAMPED_DIAGNOSTIC": "诊断 clamp（已标记）",
+            "not_measured": "未测量",
+            "not_configured": "未配置",
+            "unsupported_system": "非 Daheng，不适用",
+            "invalid_height": "高度无效",
+            "none": "none",
         }.get(status, status)
 
     def _save_results(self) -> None:
@@ -1276,10 +1599,17 @@ class MainWindow(QMainWindow):
     ) -> dict[str, Any]:
         common = self._common_result_payload(bool(measurements))
         if not measurements:
-            stage_a = self._stage_a_height_result(None)
+            height_result = self._height_correction_result(
+                None,
+                self._last_full_reconstruction,
+            )
             return {
                 **common,
-                **stage_a.as_dict(),
+                **height_result.as_dict(),
+                "height_shadow": {
+                    **height_result.as_dict(),
+                    **self._height_shadow_geometry(self._last_full_reconstruction),
+                },
                 "point_counts": {
                     "laser_centers_2d": len(self._laser_centers),
                     "full_laser_reconstructed": (
@@ -1296,11 +1626,14 @@ class MainWindow(QMainWindow):
             }
 
         primary = measurements[0]
-        stage_a_results = [
-            self._stage_a_height_result(measurement.height_mean_mm)
-            for measurement in measurements
+        height_results = [
+            self._height_correction_result(
+                measurement.height_mean_mm,
+                self._last_obstacle_reconstructions[index],
+            )
+            for index, measurement in enumerate(measurements)
         ]
-        primary_stage_a = stage_a_results[0]
+        primary_height = height_results[0]
         obstacles = [
             {
                 "index": index,
@@ -1309,18 +1642,22 @@ class MainWindow(QMainWindow):
                     if len(measurements) == 1
                     else f"obstacle_{index}_points.csv"
                 ),
-                "results_mm": self._measurement_values(measurement, stage_a),
+                "results_mm": self._measurement_values(measurement, height_result),
+                "height_shadow": {
+                    **height_result.as_dict(),
+                    **self._height_shadow_geometry(reconstruction),
+                },
                 "point_counts": {
                     "total": measurement.height_point_count,
                     "inliers": measurement.height_inlier_count,
                 },
                 "reconstruction_filtered": reconstruction.filtered,
             }
-            for index, (measurement, reconstruction, stage_a) in enumerate(
+            for index, (measurement, reconstruction, height_result) in enumerate(
                 zip(
                     measurements,
                     self._last_obstacle_reconstructions,
-                    stage_a_results,
+                    height_results,
                     strict=True,
                 ),
                 start=1,
@@ -1328,10 +1665,16 @@ class MainWindow(QMainWindow):
         ]
         return {
             **common,
-            **primary_stage_a.as_dict(),
+            **primary_height.as_dict(),
+            "height_shadow": {
+                **primary_height.as_dict(),
+                **self._height_shadow_geometry(
+                    self._last_obstacle_reconstructions[0]
+                ),
+            },
             "ground_reference_mode": primary.ground_reference_mode,
             # 兼容旧版单障碍物读取：顶层结果仍对应障碍物 1。
-            "results_mm": self._measurement_values(primary, primary_stage_a),
+            "results_mm": self._measurement_values(primary, primary_height),
             "obstacles": obstacles,
             "point_counts": {
                 "laser_centers_2d": len(self._laser_centers),
@@ -1356,6 +1699,115 @@ class MainWindow(QMainWindow):
             ),
         }
 
+    @staticmethod
+    def _finite_mean(values: np.ndarray | None) -> float | None:
+        if values is None:
+            return None
+        array = np.asarray(values, dtype=np.float64).reshape(-1)
+        finite = array[np.isfinite(array)]
+        return None if not len(finite) else float(np.mean(finite))
+
+    def _height_correction_result(
+        self,
+        height_raw: float | None,
+        reconstruction: ReconstructionResult | None = None,
+        *,
+        mode_override: str | None = None,
+    ) -> HeightCorrectionResult:
+        """Resolve active/shadow scalar corrections from Frozen-C0 geometry."""
+        config = self._app_config
+        q1_values = (
+            None if reconstruction is None else getattr(reconstruction, "q1_c0", None)
+        )
+        q2_values = (
+            None if reconstruction is None else getattr(reconstruction, "q2_c0", None)
+        )
+        q1 = self._finite_mean(q1_values)
+        q2 = self._finite_mean(q2_values)
+        q2_in_domain: bool | None = None
+        hb2_config = config.correction.hb2_height_correction if config else None
+        if q2_values is not None and len(q2_values):
+            values = np.asarray(q2_values, dtype=np.float64)
+            if hb2_config is not None:
+                lower, upper = hb2_config.q2_domain
+                q2_in_domain = bool(
+                    np.isfinite(values).all()
+                    and np.all((values >= lower) & (values <= upper))
+                )
+        return resolve_height_correction(
+            height_raw,
+            q1=q1,
+            q2=q2,
+            q2_in_domain=q2_in_domain,
+            system=self._system,
+            correction=config.correction if config is not None else None,
+            mode_override=mode_override or self._height_correction_mode,
+        )
+
+    @staticmethod
+    def _c1_clamp_status(reconstruction: ReconstructionResult | None) -> str:
+        clamped = (
+            None
+            if reconstruction is None
+            else getattr(reconstruction, "c1_clamped", None)
+        )
+        if clamped is None:
+            return "NOT_APPLICABLE"
+        flags = np.asarray(clamped, dtype=bool).reshape(-1)
+        if not len(flags):
+            return "NOT_APPLICABLE"
+        if bool(np.all(flags)):
+            return "CLAMPED"
+        if bool(np.any(flags)):
+            return "MIXED"
+        return "IN_DOMAIN"
+
+    def _height_shadow_geometry(
+        self,
+        reconstruction: ReconstructionResult | None,
+    ) -> dict[str, Any]:
+        if reconstruction is None:
+            return {
+                "v_min": None,
+                "v_median": None,
+                "v_max": None,
+                "point_count": 0,
+                "c1_clamp_status": "NOT_APPLICABLE",
+                "ground_reference_status": (
+                    self._ground_reference.status
+                    if self._ground_reference is not None
+                    else "inactive"
+                ),
+            }
+        pixels_uv = getattr(reconstruction, "pixels_uv", None)
+        if pixels_uv is None:
+            return {
+                "v_min": None,
+                "v_median": None,
+                "v_max": None,
+                "point_count": int(getattr(reconstruction, "point_count", 0)),
+                "c1_clamp_status": self._c1_clamp_status(reconstruction),
+                "ground_reference_status": (
+                    self._ground_reference.status
+                    if self._ground_reference is not None
+                    else "inactive"
+                ),
+            }
+        v_values = np.asarray(pixels_uv[:, 1], dtype=np.float64)
+        finite = v_values[np.isfinite(v_values)]
+        return {
+            "v_min": None if not len(finite) else float(np.min(finite)),
+            "v_median": None if not len(finite) else float(np.median(finite)),
+            "v_max": None if not len(finite) else float(np.max(finite)),
+            "point_count": int(getattr(reconstruction, "point_count", len(pixels_uv))),
+            "c1_clamp_status": self._c1_clamp_status(reconstruction),
+            "ground_reference_status": (
+                self._ground_reference.status
+                if self._ground_reference is not None
+                else "inactive"
+            ),
+        }
+
     def _stage_a_height_result(self, height_raw: float | None) -> StageAHeightResult:
         config = self._app_config
         if config is None:
@@ -1369,8 +1821,8 @@ class MainWindow(QMainWindow):
         return apply_stage_a_height_scale(
             height_raw,
             system=self._system,
-            enabled=config.correction.stage_a_height_scale_enabled,
-            correction_mode=config.correction.mode,
+            enabled=config.correction.stage_a_height_scale is not None,
+            correction_mode=H1_CORRECTION_MODE,
             config=config.correction.stage_a_height_scale,
         )
 
@@ -1411,6 +1863,7 @@ class MainWindow(QMainWindow):
             "correction": (
                 {
                     "mode": config.correction.mode,
+                    "active_mode": self._height_correction_mode,
                     "stage_a_height_scale_enabled": (
                         config.correction.stage_a_height_scale_enabled
                     ),
@@ -1419,12 +1872,21 @@ class MainWindow(QMainWindow):
                         if config.correction.stage_a_height_scale_config
                         else None
                     ),
+                    "hb2_height_correction_config": (
+                        str(config.correction.hb2_height_correction_config)
+                        if config.correction.hb2_height_correction_config
+                        else None
+                    ),
+                    "hb2_q2_policy": config.correction.hb2_q2_policy,
                 }
                 if config
                 else {
                     "mode": "none",
+                    "active_mode": NO_CORRECTION_MODE,
                     "stage_a_height_scale_enabled": False,
                     "stage_a_height_scale_config": None,
+                    "hb2_height_correction_config": None,
+                    "hb2_q2_policy": "reject",
                 }
             ),
         }
@@ -1438,7 +1900,7 @@ class MainWindow(QMainWindow):
     def _measurement_values(
         self,
         measurement: HeightLineMeasurement,
-        stage_a: StageAHeightResult,
+        height_result: HeightCorrectionResult,
     ) -> dict[str, Any]:
         ground_profile = None
         if measurement.ground_profile_fit is not None:
@@ -1456,17 +1918,52 @@ class MainWindow(QMainWindow):
             "height_mean": measurement.height_mean_mm,
             "height_median": measurement.height_median_mm,
             "height_std": measurement.height_std_mm,
-            "height_raw": stage_a.height_raw,
-            "height_stage_a": stage_a.height_stage_a,
-            "stage_a_enabled": stage_a.stage_a_enabled,
-            "stage_a_valid": stage_a.stage_a_valid,
-            "stage_a_status": stage_a.stage_a_status,
+            "height_raw": height_result.height_raw,
+            "height_stage_a": height_result.height_stage_a,
+            "height_h1": height_result.height_h1,
+            "height_hb2": height_result.height_hb2,
+            "active_height_correction": height_result.active_height_correction,
+            "active_height": height_result.active_height,
+            "active_height_valid": height_result.active_height_valid,
+            "active_height_status": height_result.active_height_status,
+            "q1": height_result.q1,
+            "q2": height_result.q2,
+            "q2_in_domain": height_result.q2_in_domain,
+            "hb2_q2_status": height_result.hb2_q2_status,
+            "stage_a_enabled": height_result.stage_a_enabled,
+            "stage_a_valid": height_result.stage_a_valid,
+            "stage_a_status": height_result.stage_a_status,
             "length": measurement.length_mm,
             "angle_with_baseline_deg": measurement.angle_with_baseline_deg,
             "ground_baseline_zg": measurement.ground_baseline_zg_mm,
             "ground_noise_sigma": measurement.ground_noise_sigma_mm,
             "ground_reference_mode": measurement.ground_reference_mode,
             "ground_extrinsic_source": self._ground_extrinsic_source,
+            "ground_reference_coordinate": (
+                self._ground_reference.coordinate
+                if self._ground_reference is not None
+                else None
+            ),
+            "ground_reference_slope_z_per_mm": (
+                self._ground_reference.slope_z_per_mm
+                if self._ground_reference is not None
+                else None
+            ),
+            "ground_reference_intercept_z_mm": (
+                self._ground_reference.intercept_z_mm
+                if self._ground_reference is not None
+                else None
+            ),
+            "ground_reference_valid_s_range_mm": (
+                list(self._ground_reference.valid_s_range_mm)
+                if self._ground_reference is not None
+                else None
+            ),
+            "ground_reference_frozen_json_sha256": (
+                self._ground_reference.frozen_json_sha256
+                if self._ground_reference is not None
+                else None
+            ),
             "ground_profile": ground_profile,
             "height_line_fit_rmse": measurement.height_fit.rmse_mm,
             "endpoints_ground": measurement.endpoints_ground.tolist(),

@@ -6,6 +6,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 from PySide6.QtCore import QCoreApplication
@@ -265,6 +266,27 @@ class OnlineCoreTests(unittest.TestCase):
             self.assertIsNone(recorder.error)
             self.assertFalse(recorder.active)
             self.assertEqual(list(Path(temporary).iterdir()), [])
+
+    def test_recorder_preserves_temp_data_when_final_rename_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            recorder = FrameRecorder(queue_capacity=4)
+            config = CameraConfig(width=12, height=8)
+            with patch.object(
+                Path,
+                "rename",
+                side_effect=PermissionError(5, "Access is denied"),
+            ):
+                recorder.start(temporary, 1, config)
+                self.assertTrue(recorder.enqueue(_frame(1)))
+                with self.assertRaisesRegex(RuntimeError, "临时数据已保留"):
+                    recorder.wait(5.0)
+
+            self.assertIsNotNone(recorder.error)
+            assert recorder.error is not None
+            self.assertIn("临时数据已保留", str(recorder.error))
+            temporary_dirs = list(Path(temporary).glob(".recording_*"))
+            self.assertEqual(len(temporary_dirs), 1)
+            self.assertTrue((temporary_dirs[0] / "frame_000001.png").is_file())
 
 
 if __name__ == "__main__":
