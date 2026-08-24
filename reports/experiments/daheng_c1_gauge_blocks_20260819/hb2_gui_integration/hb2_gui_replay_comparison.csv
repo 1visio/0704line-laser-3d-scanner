@@ -1,0 +1,8 @@
+case,mode,point_count,max_abs_diff_mm,mean_abs_diff_mm,expected_status,observed_status,q2_in_domain,active_value_available,passed
+H1_BACKWARD_COMPATIBILITY,h1,6802,0.0,0.0,applied|out_of_valid_domain,"applied,out_of_valid_domain",True,True,True
+HB2_RUNTIME_SEMANTICS,hb2,6802,0.0,0.0,applied,applied,True,True,True
+NONE_PRESERVES_RAW,none,6802,0.0,0.0,none,none,True,True,True
+H1_HB2_MUTUALLY_EXCLUSIVE,none/h1/hb2,1,,,"none,h1,hb2","none,h1,hb2",True,True,True
+HB2_Q2_OOD_LOW,hb2,1,,,HB2_Q2_OOD,HB2_Q2_OOD,False,False,True
+HB2_Q2_OOD_HIGH,hb2,1,,,HB2_Q2_OOD,HB2_Q2_OOD,False,False,True
+HB2_Q2_CLAMP_DIAGNOSTIC,hb2,1,,,HB2_Q2_CLAMPED_DIAGNOSTIC,HB2_Q2_CLAMPED_DIAGNOSTIC,False,True,True

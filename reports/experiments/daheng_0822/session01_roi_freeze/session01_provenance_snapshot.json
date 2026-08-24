@@ -1,0 +1,163 @@
+{
+  "source_path": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\outputs\\0822\\session01\\session_ground_calibration.json",
+  "top_status": "VALID",
+  "top_valid": true,
+  "runtime": {
+    "ground_extrinsic_source": "session",
+    "ground_reference_source": "pnp_board_mask",
+    "ground_extrinsic_generation": 1
+  },
+  "board": {
+    "pattern_cols": 11,
+    "pattern_rows": 8,
+    "square_size_mm": 20.0,
+    "detector": "sb_then_classic"
+  },
+  "detection": {
+    "method": "5_frame_median",
+    "corner_count": 88,
+    "reprojection_rmse_px": 0.2169045006992862
+  },
+  "pnp_reference_R_camera_to_ground": [
+    [
+      0.9989971277915087,
+      0.0003664569910963127,
+      0.0447728084174941
+    ],
+    [
+      5.421010862427523e-20,
+      -0.9999665061143105,
+      0.008184537222028755
+    ],
+    [
+      0.044774308083050864,
+      -0.00817632917710942,
+      -0.9989636674959064
+    ]
+  ],
+  "pnp_reference_t_camera_to_ground_mm": [
+    -31.89361181346621,
+    -5.830200567232144,
+    711.6051137507399
+  ],
+  "session_R_camera_to_ground": [
+    [
+      0.999011111566454,
+      0.00036355970827463415,
+      0.04445972099661178
+    ],
+    [
+      0.0,
+      -0.9999665677003052,
+      0.008177009335376075
+    ],
+    [
+      0.04446120743702361,
+      -0.008168923185423322,
+      -0.9989777123275737
+    ]
+  ],
+  "session_t_camera_to_ground_mm": [
+    -31.67126115868773,
+    -5.824962288392667,
+    711.6302871366686
+  ],
+  "pnp_to_session_delta": {
+    "translation_mm": 0.2238324208079244,
+    "rotation_deg": 0.01796240817613262
+  },
+  "pnp_valid": true,
+  "ground_valid": true,
+  "repeatability": {
+    "required_frames": 5,
+    "accepted_frames": 5,
+    "translation_deltas_mm": [
+      0.019205468218012018,
+      0.09211441403251136,
+      0.0498320553484382,
+      0.03282693990372263,
+      0.017675677368037136
+    ],
+    "rotation_deltas_deg": [
+      0.0015361027491030506,
+      0.007401534270748925,
+      0.00400802944838965,
+      0.002636647931830344,
+      0.0014201189479163946
+    ],
+    "translation_mean_mm": 0.042330910974144265,
+    "translation_std_mm": 0.027450524427167954,
+    "translation_max_mm": 0.09211441403251136,
+    "rotation_mean_deg": 0.0034004866695976728,
+    "rotation_std_deg": 0.0022072029117473748,
+    "rotation_max_deg": 0.007401534270748925
+  },
+  "session_ground_reference_status": "VALID",
+  "session_ground_reference_source": "pnp_board_mask",
+  "session_ground_reference_fit_source": "session_laser_ground",
+  "ground_slope": 0.0002555034429961136,
+  "ground_intercept": -0.13312497186185696,
+  "ground_slope_z_per_mm": 0.0002555034429961136,
+  "ground_intercept_z_mm": -0.13312497186185696,
+  "ground_rmse_mm": 0.05350248072215189,
+  "ground_valid_s_range_mm": [
+    -130.1993360105663,
+    121.3555919775798
+  ],
+  "ground_point_count": 2414,
+  "ground_inlier_count": 2359,
+  "ground_support": {
+    "enabled": true,
+    "status": "applied",
+    "source": "pnp_board_mask",
+    "mask_mode": "full_board_physical",
+    "corner_count": 88,
+    "pattern_cols": 11,
+    "pattern_rows": 8,
+    "square_size_mm": 20.0,
+    "inset_mm": 0.0,
+    "input_point_count": 2785,
+    "selected_point_count": 2414,
+    "rejected_point_count": 371,
+    "polygon_full_uv": [
+      [
+        1837.674098863649,
+        -152.81945058992596
+      ],
+      [
+        3542.2149916669287,
+        1621.3256359851764
+      ],
+      [
+        2225.653879367829,
+        2912.4830897931765
+      ],
+      [
+        493.2028719116488,
+        1132.3115424273756
+      ]
+    ]
+  },
+  "laser_ground_sanity": {
+    "status": "VALID",
+    "valid": true,
+    "formal_chain": [
+      "Steger",
+      "Frozen C0",
+      "Frozen C1",
+      "Session ground extrinsic"
+    ],
+    "metrics": {
+      "input_point_count": 2414,
+      "valid_point_count": 2414,
+      "bias_zg_mm": -0.12569989411334784,
+      "rmse_zg_mm": 0.13889913460865397,
+      "p95_abs_zg_mm": 0.21592270398570007,
+      "max_abs_zg_mm": 0.27631557029189935,
+      "ground_slope_mm_per_mm": 0.00020726057780122396
+    },
+    "correction_applied": false
+  },
+  "session_ground_reference_status_flat": "VALID",
+  "height_shadow_ground_status_interpretation": "height_shadow.csv is a separate shadow logging path; its inactive/not_measured field does not invalidate this session JSON Ground artifact and is not used for A-13A formal geometry."
+}

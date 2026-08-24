@@ -1,0 +1,7 @@
+pose_id,chain,coordinate,evaluation_level,domain_bin_count,supported_bin_count,valid_support_coverage,required_frame_count,frame_count,bias_mm,rmse_mm,p95_abs_mm,max_abs_mm,peak_to_peak_mm,same_evaluation_support,raw_point_pooling,fit_source
+006,A_PnP_only,physical_S,equal_bin,39,33,0.8461538461538461,4,5,-0.21118161279237097,0.2259960464484456,0.36511012669011506,0.37138956597277684,0.25300815733226045,True,False,raw_Z_frame_median_then_pose_median
+006,B_frozen_session_linear,physical_S,equal_bin,39,33,0.8461538461538461,4,5,-0.021743145814899577,0.06433136750954166,0.13775168076854727,0.14849229404463216,0.20046143733736158,True,False,raw_Z_frame_median_then_pose_median
+006,C_oracle,physical_S,equal_bin,39,33,0.8461538461538461,4,5,1.0934014636459875e-16,0.04574723367066784,0.07905373668742492,0.0807870202501354,0.16056026063316714,True,False,raw_Z_frame_median_then_pose_median
+007,A_PnP_only,physical_S,equal_bin,39,33,0.8461538461538461,4,5,-0.21365783693803933,0.2257915295126118,0.3436951055266263,0.3704257735300871,0.26050762185639087,True,False,raw_Z_frame_median_then_pose_median
+007,B_frozen_session_linear,physical_S,equal_bin,39,33,0.8461538461538461,4,5,-0.02421936996056793,0.05869928254698324,0.12051646059462051,0.14752850160194242,0.19637824570093376,True,False,raw_Z_frame_median_then_pose_median
+007,C_oracle,physical_S,equal_bin,39,33,0.8461538461538461,4,5,7.317379025938531e-17,0.04183363846969829,0.08070203430772395,0.08500221622684759,0.16634335324835944,True,False,raw_Z_frame_median_then_pose_median

@@ -1,0 +1,243 @@
+{
+  "schema_version": 1,
+  "classification": {
+    "GS_HEIGHT_VALUE": "NEUTRAL",
+    "OBSTACLE_ONLY_APPROACHES_LOCAL_BASELINE": "NO",
+    "GROUND4A_STATUS": "RETROSPECTIVE_DIAGNOSTIC_ONLY",
+    "formal_scope": "repeat2_5"
+  },
+  "formal_chain_summary": {
+    "fixed_zg_zero": {
+      "scope": "repeat2_5",
+      "chain": "fixed_zg_zero",
+      "expected_count": 120,
+      "count": 116,
+      "failed_count": 4,
+      "bias_mm": -0.05024867448279134,
+      "mae_mm": 0.059255299333496714,
+      "rmse_mm": 0.07109631593357753,
+      "p95_mm": 0.1355473285991451,
+      "max_mm": 0.16095296705101592,
+      "pass_count": 116,
+      "pass_rate": 1.0,
+      "limit_mm": 0.2,
+      "pass_0p1_count": 100,
+      "pass_0p1_rate": 0.8620689655172413
+    },
+    "session_linear": {
+      "scope": "repeat2_5",
+      "chain": "session_linear",
+      "expected_count": 120,
+      "count": 116,
+      "failed_count": 4,
+      "bias_mm": -0.05390446358438846,
+      "mae_mm": 0.05614138205019273,
+      "rmse_mm": 0.06958053570723115,
+      "p95_mm": 0.13100611341804314,
+      "max_mm": 0.17233641961953694,
+      "pass_count": 116,
+      "pass_rate": 1.0,
+      "limit_mm": 0.2,
+      "pass_0p1_count": 100,
+      "pass_0p1_rate": 0.8620689655172413
+    },
+    "session_linear_G": {
+      "scope": "repeat2_5",
+      "chain": "session_linear_G",
+      "expected_count": 120,
+      "count": 116,
+      "failed_count": 4,
+      "bias_mm": -0.05373397017174127,
+      "mae_mm": 0.05602290585520375,
+      "rmse_mm": 0.06948059463869838,
+      "p95_mm": 0.13110313953040365,
+      "max_mm": 0.17242804914661036,
+      "pass_count": 116,
+      "pass_rate": 1.0,
+      "limit_mm": 0.2,
+      "pass_0p1_count": 100,
+      "pass_0p1_rate": 0.8620689655172413
+    },
+    "local_adjacent": {
+      "scope": "repeat2_5",
+      "chain": "local_adjacent",
+      "expected_count": 120,
+      "count": 116,
+      "failed_count": 4,
+      "bias_mm": -0.053768131014291586,
+      "mae_mm": 0.05597128618738935,
+      "rmse_mm": 0.06932912055531557,
+      "p95_mm": 0.13229020704317573,
+      "max_mm": 0.1691746310239992,
+      "pass_count": 116,
+      "pass_rate": 1.0,
+      "limit_mm": 0.2,
+      "pass_0p1_count": 100,
+      "pass_0p1_rate": 0.8620689655172413
+    }
+  },
+  "all150_chain_summary": {
+    "fixed_zg_zero": {
+      "scope": "all150",
+      "chain": "fixed_zg_zero",
+      "expected_count": 150,
+      "count": 145,
+      "failed_count": 5,
+      "bias_mm": -0.05022830698946505,
+      "mae_mm": 0.05921724863861559,
+      "rmse_mm": 0.07110864345195317,
+      "p95_mm": 0.13578226488828204,
+      "max_mm": 0.16095296705101592,
+      "pass_count": 145,
+      "pass_rate": 1.0,
+      "limit_mm": 0.2,
+      "pass_0p1_count": 125,
+      "pass_0p1_rate": 0.8620689655172413
+    },
+    "session_linear": {
+      "scope": "all150",
+      "chain": "session_linear",
+      "expected_count": 150,
+      "count": 145,
+      "failed_count": 5,
+      "bias_mm": -0.05388334487684278,
+      "mae_mm": 0.05612180361229762,
+      "rmse_mm": 0.06947935583588047,
+      "p95_mm": 0.13153037003666765,
+      "max_mm": 0.17233641961953694,
+      "pass_count": 145,
+      "pass_rate": 1.0,
+      "limit_mm": 0.2,
+      "pass_0p1_count": 125,
+      "pass_0p1_rate": 0.8620689655172413
+    },
+    "session_linear_G": {
+      "scope": "all150",
+      "chain": "session_linear_G",
+      "expected_count": 150,
+      "count": 145,
+      "failed_count": 5,
+      "bias_mm": -0.05371288201900444,
+      "mae_mm": 0.056003364296095225,
+      "rmse_mm": 0.06937903388640519,
+      "p95_mm": 0.13162746224526387,
+      "max_mm": 0.17242804914661036,
+      "pass_count": 145,
+      "pass_rate": 1.0,
+      "limit_mm": 0.2,
+      "pass_0p1_count": 125,
+      "pass_0p1_rate": 0.8620689655172413
+    },
+    "local_adjacent": {
+      "scope": "all150",
+      "chain": "local_adjacent",
+      "expected_count": 150,
+      "count": 145,
+      "failed_count": 5,
+      "bias_mm": -0.053776977245327505,
+      "mae_mm": 0.05598841802925483,
+      "rmse_mm": 0.06928214085905356,
+      "p95_mm": 0.13277974126632017,
+      "max_mm": 0.1691746310239992,
+      "pass_count": 145,
+      "pass_rate": 1.0,
+      "limit_mm": 0.2,
+      "pass_0p1_count": 125,
+      "pass_0p1_rate": 0.8620689655172413
+    }
+  },
+  "delta_summary": {
+    "repeat2_5": {
+      "C_minus_B": {
+        "scope": "repeat2_5",
+        "comparison": "C_minus_B",
+        "count": 116,
+        "value_delta_mean_mm": 0.00017049341264719278,
+        "value_delta_median_mm": 3.839104328773324e-06,
+        "value_delta_rmse_mm": 0.00033804544314258803,
+        "abs_error_delta_mean_mm": -0.000118476194988968,
+        "abs_error_delta_median_mm": 1.599100625959693e-05,
+        "abs_error_delta_rmse_mm": 0.00033804544314258803,
+        "positive_abs_error_improvement_rate": 0.4482758620689655
+      },
+      "C_minus_D": {
+        "scope": "repeat2_5",
+        "comparison": "C_minus_D",
+        "count": 116,
+        "value_delta_mean_mm": 3.416084255031069e-05,
+        "value_delta_median_mm": 0.00046188045685235934,
+        "value_delta_rmse_mm": 0.0017480494913543585,
+        "abs_error_delta_mean_mm": 5.161966781440231e-05,
+        "abs_error_delta_median_mm": -0.00025844355691084786,
+        "abs_error_delta_rmse_mm": 0.0017480494913543585,
+        "positive_abs_error_improvement_rate": 0.5603448275862069
+      }
+    },
+    "all150": {
+      "C_minus_B": {
+        "scope": "all150",
+        "comparison": "C_minus_B",
+        "count": 145,
+        "value_delta_mean_mm": 0.00017046285783833557,
+        "value_delta_median_mm": 3.843844617268388e-06,
+        "value_delta_rmse_mm": 0.00033794764922361455,
+        "abs_error_delta_mean_mm": -0.00011843931620239613,
+        "abs_error_delta_median_mm": 1.599359730874994e-05,
+        "abs_error_delta_rmse_mm": 0.00033794764922361455,
+        "positive_abs_error_improvement_rate": 0.4482758620689655
+      },
+      "C_minus_D": {
+        "scope": "all150",
+        "comparison": "C_minus_D",
+        "count": 145,
+        "value_delta_mean_mm": 6.409522632306798e-05,
+        "value_delta_median_mm": 0.00021047495748405254,
+        "value_delta_rmse_mm": 0.0015721017369100022,
+        "abs_error_delta_mean_mm": 1.49462668403919e-05,
+        "abs_error_delta_median_mm": -9.44917959522229e-05,
+        "abs_error_delta_rmse_mm": 0.0015721017369100022,
+        "positive_abs_error_improvement_rate": 0.5448275862068965
+      }
+    }
+  },
+  "obstacle_local_gap": {
+    "B_to_D_mean_abs_height_gap_mm": 0.001208803233858483,
+    "C_to_D_mean_abs_height_gap_mm": 0.0013055936649337741
+  },
+  "provenance": {
+    "gauge_audit_dir": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\outputs\\daheng_c1_gauge_blocks_20260819_manual_frozen",
+    "gauge_audit_dir_sha256_not_applicable": true,
+    "gauge_pointwise_sha256": "3c63dc9d115d714d9b78747db06c5016bfd863592c6b959c31301e1a6cd67487",
+    "gauge_height_measurements_sha256": "e1c839e2ee1721125db3416a20fe999a5b4fd486732784bd776436ad656e0d1d",
+    "gauge_roi_registry_sha256": "b9a283e8a1a1d4003c826ec5cffe3227e68fd59707b901ac66bce91ef45ee2b6",
+    "gauge_provenance_sha256": "8a1cd993aefd74df683438823e69cefea087895f9815e6dd6059249fb4900ff6",
+    "ground3_summary_path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\output_daheng_0811\\ground_spatial_correction_ground3\\ground_gs_summary.json",
+    "ground3_summary_sha256": "4cee542124110fbd157e1c41b173f5c135091028045091cf11d59bb5ecf646b0",
+    "ground3_model_name": "cubic_bspline_3_interior_knots",
+    "ground3_parameter_sha256": "a6aee2d10839ca3cc2c6fb641dd82cef098c479575f39b8060c226dabd497be7",
+    "origin_xy": [
+      4.345466690716022,
+      2.878594498981755
+    ],
+    "direction_xy": [
+      0.012883418031591754,
+      0.9999170053258537
+    ],
+    "s_domain_mm": [
+      -147.0472008100069,
+      144.12573742616544
+    ],
+    "reuse": [
+      "150-image input audit and one-Steger-per-frame result",
+      "manual-frozen geometry-only ROI registry (30/30)",
+      "C1 pointwise reconstructed XYZ and existing C1 fixed_zg_zero/local_adjacent measurements",
+      "Ground-3 frozen 3-interior-knot G(S) candidate"
+    ],
+    "newly_computed": [
+      "repeat1-only per-condition robust session linear proxies",
+      "session_linear and session_linear_G replay",
+      "repeat2-5 formal four-chain metrics and plots"
+    ],
+    "no_production_change": true
+  }
+}

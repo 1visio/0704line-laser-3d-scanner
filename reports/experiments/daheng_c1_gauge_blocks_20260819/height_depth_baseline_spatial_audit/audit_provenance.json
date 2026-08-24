@@ -1,0 +1,270 @@
+{
+  "generated_at_utc": "2026-08-21T09:09:11.344942+00:00",
+  "script": {
+    "path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\tools\\audit_height_depth_baseline_spatial.py",
+    "sha256": "fb160dabb6ccdaf6998a756c330188cb85607e95e29b16f31f87c078b11298da"
+  },
+  "scope": {
+    "datasets": [
+      "obs_1mm",
+      "obs_2mm",
+      "obs_6mm",
+      "obs_10mm",
+      "obs_20mm",
+      "obs_30mm"
+    ],
+    "formal_role": "development_formal_repeat2_5",
+    "edge_v_gt_px": 2400.0
+  },
+  "formal_point_rule": "surface1a_points split_role=development_formal_repeat2_5 AND height_measurement_inlier=True AND jacobian_valid=True",
+  "counts": {
+    "height_position_conditions": 30,
+    "raw_formal_rows": 7587,
+    "effective_formal_points": 6802,
+    "effective_conditions": 29,
+    "effective_edge_points": 1561
+  },
+  "frozen_parameters": {
+    "h1_scale": 1.00403395913372,
+    "hb2_a0_mm": -0.10068827127712787,
+    "hb2_a2_mm_per_q2": 0.053274373969597236
+  },
+  "reused_inputs": {
+    "roi_registry": {
+      "path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\outputs\\daheng_c1_gauge_blocks_20260819\\roi_registry_manual.json",
+      "sha256": "4550eb7cf653c44f7dc64738f75db9c99239bc98fae65249b4eebfac791a3c9f"
+    },
+    "manual_provenance": {
+      "path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\outputs\\daheng_c1_gauge_blocks_20260819_manual_frozen\\provenance.json",
+      "sha256": "8a1cd993aefd74df683438823e69cefea087895f9815e6dd6059249fb4900ff6"
+    },
+    "pointwise_diagnostics": {
+      "path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\outputs\\daheng_c1_gauge_blocks_20260819_manual_frozen\\pointwise_diagnostics.csv",
+      "sha256": "3c63dc9d115d714d9b78747db06c5016bfd863592c6b959c31301e1a6cd67487"
+    },
+    "surface1a_points": {
+      "path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\outputs\\daheng_c1_gauge_blocks_20260819_ground4a\\surface1a\\surface1a_points.csv",
+      "sha256": "0a325ea20c8b250ea94553cd6c9c78c198ce49f48a27925697a34eabf9fd4c9a"
+    },
+    "stage_a_scale": {
+      "path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\configs\\calibration_daheng_0811\\stage_a_height_scale.json",
+      "sha256": "3d41b5c3b4035f8568574f7a3599bb20a841267b6ebd34c617385027b6612811"
+    },
+    "hb2_parameters": {
+      "path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\outputs\\daheng_c1_gauge_blocks_20260819_ground4a\\surface2\\surface3_hb2_candidate\\surface3_hb2_parameters.json",
+      "sha256": "f77fc5224d35ab7bb14e63a530e2c413a23e0e90b4ff048e79486d862886c829"
+    },
+    "hb2_candidate": {
+      "path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\outputs\\daheng_c1_gauge_blocks_20260819_ground4a\\surface2\\surface3_hb2_candidate\\surface3_hb2_candidate.json",
+      "sha256": "c5534b4086b82cd3d18a068f02eae762cff5027b608da9976db7eb56515d23ae"
+    },
+    "height_linear_summary": {
+      "path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\outputs\\daheng_c1_gauge_blocks_20260819_ground4a\\height_linear_summary.json",
+      "sha256": "2f075ad220744662ec06b600fcf2330139309a7a7527d1de0c58a643132e107b"
+    },
+    "hb2_report": {
+      "path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\outputs\\daheng_c1_gauge_blocks_20260819_ground4a\\surface2\\surface3_hb2_candidate\\surface3_hb2_candidate_report.md",
+      "sha256": "2bce7917cd3f380799965b019c47ac4985e7b379606231645d8f2b67e22900b3"
+    }
+  },
+  "new_outputs": [
+    "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\outputs\\daheng_c1_gauge_blocks_20260819_height_depth_baseline_spatial_audit\\height_depth_baseline_spatial_audit_report.md",
+    "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\outputs\\daheng_c1_gauge_blocks_20260819_height_depth_baseline_spatial_audit\\historical_position_v_coverage.csv",
+    "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\outputs\\daheng_c1_gauge_blocks_20260819_height_depth_baseline_spatial_audit\\pointwise_base_h1_hb2.csv",
+    "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\outputs\\daheng_c1_gauge_blocks_20260819_height_depth_baseline_spatial_audit\\position_consistency_metrics.csv",
+    "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\outputs\\daheng_c1_gauge_blocks_20260819_height_depth_baseline_spatial_audit\\edge_v_gt_2400_metrics.csv",
+    "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\outputs\\daheng_c1_gauge_blocks_20260819_height_depth_baseline_spatial_audit\\audit_provenance.json",
+    "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\outputs\\daheng_c1_gauge_blocks_20260819_height_depth_baseline_spatial_audit\\historical_position_v_coverage.png",
+    "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\outputs\\daheng_c1_gauge_blocks_20260819_height_depth_baseline_spatial_audit\\residual_vs_v_base_h1_hb2.png",
+    "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\outputs\\daheng_c1_gauge_blocks_20260819_height_depth_baseline_spatial_audit\\position_bias_comparison_by_height.png",
+    "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\outputs\\daheng_c1_gauge_blocks_20260819_height_depth_baseline_spatial_audit\\edge_v_gt_2400_error_comparison.png"
+  ],
+  "decisions": {
+    "HISTORICAL_DATA_COVERS_V_GT_2400": "PARTIAL",
+    "EDGE_V_GT_2400_FAILURE_REPRODUCED": "YES",
+    "H1_REDUCES_SPATIAL_BIAS": "NO",
+    "HB2_REDUCES_SPATIAL_BIAS": "YES",
+    "PREFERRED_DEPTH_BASELINE": "HB2",
+    "SPATIAL_RESIDUAL_SUPPORTED": "YES",
+    "NEW_SPATIAL_CORRECTION_REQUIRED": "YES",
+    "coverage_support": {
+      "raw_formal_edge_conditions": 10,
+      "effective_edge_conditions": 9,
+      "effective_edge_heights": [
+        "obs_10mm",
+        "obs_1mm",
+        "obs_20mm",
+        "obs_2mm",
+        "obs_30mm",
+        "obs_6mm"
+      ],
+      "effective_edge_v_order_ranks": [
+        4,
+        5
+      ]
+    },
+    "position_reduction": {
+      "H1": {
+        "status": "NO",
+        "range_improved_heights": 0,
+        "bias_std_improved_heights": 0,
+        "both_improved_heights": 0,
+        "comparisons": [
+          {
+            "dataset": "obs_1mm",
+            "range_delta_mm": 0.00027518909199182595,
+            "bias_std_delta_mm": 0.00011075356295440347
+          },
+          {
+            "dataset": "obs_2mm",
+            "range_delta_mm": 0.00025296840526892184,
+            "bias_std_delta_mm": 9.092644144299833e-05
+          },
+          {
+            "dataset": "obs_6mm",
+            "range_delta_mm": 0.0002793489189537868,
+            "bias_std_delta_mm": 0.00010022452462484996
+          },
+          {
+            "dataset": "obs_10mm",
+            "range_delta_mm": 0.00022292850686483207,
+            "bias_std_delta_mm": 7.917040315409338e-05
+          },
+          {
+            "dataset": "obs_20mm",
+            "range_delta_mm": 0.00033082729764855046,
+            "bias_std_delta_mm": 0.00011252306242911722
+          },
+          {
+            "dataset": "obs_30mm",
+            "range_delta_mm": 0.0003428308491240789,
+            "bias_std_delta_mm": 0.00012919205689702895
+          }
+        ]
+      },
+      "H-B2": {
+        "status": "YES",
+        "range_improved_heights": 6,
+        "bias_std_improved_heights": 6,
+        "both_improved_heights": 6,
+        "comparisons": [
+          {
+            "dataset": "obs_1mm",
+            "range_delta_mm": -0.0011593853801738496,
+            "bias_std_delta_mm": -0.0008438455784796801
+          },
+          {
+            "dataset": "obs_2mm",
+            "range_delta_mm": -0.0025857093201539783,
+            "bias_std_delta_mm": -0.000676469800556849
+          },
+          {
+            "dataset": "obs_6mm",
+            "range_delta_mm": -0.0005564922862462268,
+            "bias_std_delta_mm": -0.0005478811385626857
+          },
+          {
+            "dataset": "obs_10mm",
+            "range_delta_mm": -0.0014577092233154926,
+            "bias_std_delta_mm": -0.0009949295533982216
+          },
+          {
+            "dataset": "obs_20mm",
+            "range_delta_mm": -0.004372974236976648,
+            "bias_std_delta_mm": -0.0014480367056337075
+          },
+          {
+            "dataset": "obs_30mm",
+            "range_delta_mm": -0.001293208681399538,
+            "bias_std_delta_mm": -0.00044968474989372925
+          }
+        ]
+      }
+    },
+    "edge_reduction": {
+      "H1": {
+        "bias_abs_reduced": true,
+        "p95_reduced": true,
+        "max_reduced": true,
+        "deltas_candidate_minus_base": {
+          "bias_mm": 0.05738295243565127,
+          "p95_abs_mm": -0.10403347312308142,
+          "max_abs_mm": -0.10815682726354936
+        },
+        "p95_improved_heights": 6,
+        "max_improved_heights": 6,
+        "both_improved_heights": 6
+      },
+      "H-B2": {
+        "bias_abs_reduced": true,
+        "p95_reduced": true,
+        "max_reduced": true,
+        "deltas_candidate_minus_base": {
+          "bias_mm": 0.057066066857934465,
+          "p95_abs_mm": -0.08667791172899442,
+          "max_abs_mm": -0.09190044153071497
+        },
+        "p95_improved_heights": 6,
+        "max_improved_heights": 6,
+        "both_improved_heights": 6
+      }
+    },
+    "preference_score": {
+      "H1": 3,
+      "H-B2": 3
+    },
+    "preference_metrics": {
+      "mean_position_bias_range_mm": {
+        "H1": 0.0706901604990555,
+        "H-B2": 0.06850189846603587
+      },
+      "mean_position_bias_std_mm": {
+        "H1": 0.025834932068440564,
+        "H-B2": 0.024904325805436004
+      },
+      "mean_worst_position_abs_bias_mm": {
+        "H1": 0.047587962581056596,
+        "H-B2": 0.04775759808460509
+      },
+      "mean_worst_position_p95_abs_mm": {
+        "H1": 0.07832097422940665,
+        "H-B2": 0.07805908382277892
+      },
+      "edge_p95_abs_mm": {
+        "H1": 0.0770093756713024,
+        "H-B2": 0.0943649370653894
+      },
+      "edge_max_abs_mm": {
+        "H1": 0.09921128739404139,
+        "H-B2": 0.11546767312687578
+      }
+    },
+    "preference_selection_basis": "HB2 meets the primary stability rule: position Bias range/std and edge P95/Max improve in at least 4 heights; H1 does not meet the position-spread rule.",
+    "stable_position_spread_height_count": {
+      "Base": 6,
+      "H1": 6,
+      "H-B2": 6
+    },
+    "edge_failure_heights_base": [
+      "obs_10mm",
+      "obs_20mm",
+      "obs_30mm"
+    ],
+    "edge_failure_poses_base": [
+      "001",
+      "004",
+      "005"
+    ],
+    "edge_base_roi_boundary_within_10px_rate": 0.3581037796284433,
+    "classification_rules": {
+      "spatial_bias_yes": "both position Bias range and Bias std improve in >=4 of 6 heights",
+      "preferred_depth_baseline": "prefer a model when position Bias range/std and edge P95/Max improve in >=4 heights; otherwise use secondary absolute-error score",
+      "edge_failure_yes": "Base edge P95>=0.1 mm or >0.1 rate in >=3 heights and not >=75% within 10 px of ROI boundary",
+      "coverage_partial": "effective edge points exist but do not cover all five historical positions at every height"
+    }
+  },
+  "continuous_v_bands": {
+    "generated": false,
+    "reason": "discrete five-position acquisition with large uncovered v gaps and incomplete effective condition support"
+  }
+}

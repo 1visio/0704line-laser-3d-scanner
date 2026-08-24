@@ -1,0 +1,50 @@
+{
+  "schema_version": 2,
+  "algorithm": "ground_object_top_ground_interval_v2",
+  "geometry_only": true,
+  "forbidden_inputs": [
+    "nominal_or_certified_height",
+    "height_shadow.csv",
+    "C0_C1_XYZ",
+    "SessionGround_XYZ",
+    "Base_H1_HB2_result",
+    "residual_or_error",
+    "q1_q2",
+    "A13B_outcome"
+  ],
+  "profile": {
+    "smoothing_sigma_px": 5.0,
+    "derivative_smoothing_sigma_px": 2.0,
+    "edge_peak_distance_px": 15,
+    "edge_prominence_min_px": 0.25,
+    "edge_prominence_noise_multiplier": 8.0,
+    "edge_local_support_radius_px": 10,
+    "edge_local_support_min_fraction": 0.35,
+    "max_interp_gap_px": 35
+  },
+  "object_interval": {
+    "edge_pair_min_width_px": 50.0,
+    "edge_pair_max_width_px": 180.0,
+    "transition_exclusion_margin_px": 15,
+    "height_interior_min_width_px": 30.0,
+    "height_interior_max_width_px": 160.0,
+    "minimum_step_amplitude_px": 1.0
+  },
+  "stable_segment": {
+    "maximum_abs_slope_px_per_v": 0.08,
+    "maximum_roughness_px": 0.75,
+    "minimum_valid_fraction": 0.7,
+    "maximum_missing_run_px": 35
+  },
+  "baseline": {
+    "safety_gap_px": 20,
+    "requested_width_px": 180,
+    "minimum_available_width_px": 20,
+    "minimum_points_per_repeat": 20,
+    "minimum_support_fraction": 0.25
+  },
+  "height_support": {
+    "minimum_points_per_repeat": 20,
+    "minimum_support_fraction": 0.5
+  }
+}

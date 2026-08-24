@@ -1,0 +1,12 @@
+{
+  "truth_mm": {
+    "obs_1mm": 1.001,
+    "obs_2mm": 2.0,
+    "obs_6mm": 6.0,
+    "obs_10mm": 10.0,
+    "obs_20mm": 20.0,
+    "obs_30mm": 30.0
+  },
+  "source": "task instruction; obs_1mm is the previously used 1.001 mm block",
+  "protocol_date": "2026-08-19"
+}

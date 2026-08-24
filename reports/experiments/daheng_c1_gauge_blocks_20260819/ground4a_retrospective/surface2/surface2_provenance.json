@@ -1,0 +1,18 @@
+{
+  "created_at_utc": "2026-08-20T03:21:54.635412+00:00",
+  "data_root": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data",
+  "config_path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\configs\\measure_tool_daheng_0811.yaml",
+  "config_sha256": "c22e463aff6dc51565679382cc766a3c7078a57f676809e7b31ee1cbe185f15f",
+  "reused_scripts": {
+    "gauge_impl": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\tools\\evaluate_daheng_c1_gauge_blocks.py",
+    "gauge_impl_sha256": "263e47b6400d83807605b99411364cb7d09d503ddc416c1ba9fa8b7915e0d43d",
+    "annotation_impl": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\tools\\annotate_daheng_gauge_rois.py",
+    "annotation_impl_sha256": "14ec6074a5e510d105aafe776368eccb5f15f94cf9ff086ed0ac0c1eba5360e2"
+  },
+  "steger_rerun": true,
+  "steger_calls_per_tiff": 1,
+  "c0_c1_reconstruction": false,
+  "q_domain_analysis": false,
+  "residual_driven_roi": false,
+  "roi_manual_confirmed": false
+}
