@@ -1,0 +1,145 @@
+{
+  "classifications": {
+    "SURFACE_FEATURE_IDENTIFIABILITY": "PARTIAL",
+    "HEIGHT_Q2_REDUNDANCY": "SUPPORTED",
+    "JACOBIAN_ADDS_INDEPENDENT_INFORMATION": "NOT_SUPPORTED",
+    "RECOMMENDED_MINIMAL_FEATURE_SET": "q1+q2",
+    "height_q2_min_abs_correlation": 0.9751381502645196,
+    "q1_q2_plus_J_delta_r2_condition": 0.08735096705900014,
+    "q1_q2_plus_J_grouped_median_rmse_improvements_mm": [
+      -0.0032080631310711753,
+      -0.003967395250212634
+    ],
+    "q1_q2_plus_J_grouped_positive_fractions": [
+      0.3333333333333333,
+      0.0
+    ],
+    "q1_q2_max_vif_condition": 1.0248954473904544,
+    "q1_q2_plus_J_max_vif_condition": 16686962.738378892
+  },
+  "surface2_plan": {
+    "development_only_q2_height_slope": -0.04208573460492717,
+    "development_only_q2_height_intercept": 1.456747869707092,
+    "development_q2_range": [
+      0.162504055142334,
+      1.4605125871893883
+    ],
+    "heldout_50_q2_range_descriptive_only": [
+      -0.6643185935929002,
+      -0.5853996035214203
+    ],
+    "targets": [
+      {
+        "height_mm": 35.0,
+        "development_only_q2_prediction": -0.016252841465359102,
+        "position_prediction_min": -0.04582433371623762,
+        "position_prediction_max": 0.03309342899923884,
+        "position_prediction_median": -0.02691452237250913,
+        "planning_basis": "development 1-30mm condition means only; 50mm excluded from fit"
+      },
+      {
+        "height_mm": 40.0,
+        "development_only_q2_prediction": -0.22668151448999496,
+        "position_prediction_min": -0.25413137083369586,
+        "position_prediction_max": -0.17623134104001514,
+        "position_prediction_median": -0.23846585092921702,
+        "planning_basis": "development 1-30mm condition means only; 50mm excluded from fit"
+      },
+      {
+        "height_mm": 45.0,
+        "development_only_q2_prediction": -0.4371101875146308,
+        "position_prediction_min": -0.4624384079511539,
+        "position_prediction_max": -0.3855561110792691,
+        "position_prediction_median": -0.4500171794859247,
+        "planning_basis": "development 1-30mm condition means only; 50mm excluded from fit"
+      }
+    ],
+    "priority": [
+      {
+        "rank": 1,
+        "height_mm": 40,
+        "reason": "最直接填补 30mm 到 50mm 之间的中段 q2/height gap，并检验高端趋势是否转折"
+      },
+      {
+        "rank": 2,
+        "height_mm": 35,
+        "reason": "紧邻 development 上界，定位 residual/q2 从已覆盖域离开的起点"
+      },
+      {
+        "rank": 3,
+        "height_mm": 45,
+        "reason": "靠近 50mm 端点，确认高端 position interaction 与 domain shift 是否持续"
+      }
+    ],
+    "recommend_all_three": true,
+    "planning_note": "priority is determined from development-only geometry/trend; 50mm is displayed only as held-out domain context"
+  },
+  "provenance": {
+    "points_path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\outputs\\daheng_c1_gauge_blocks_20260819_ground4a\\surface1a\\surface1a_points.csv",
+    "coordinate_definition_path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\outputs\\daheng_c1_gauge_blocks_20260819_ground4a\\surface1a\\surface_coordinate_definition.json",
+    "summary_path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\outputs\\daheng_c1_gauge_blocks_20260819_ground4a\\surface1a\\surface1a_summary.json",
+    "metrics_path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\outputs\\daheng_c1_gauge_blocks_20260819_ground4a\\surface1a\\surface1a_explanatory_metrics.csv",
+    "development_point_count": 6802,
+    "development_condition_count": 29,
+    "heldout_point_count": 1100,
+    "heldout_condition_count": 5,
+    "formal_filter": [
+      "development_formal_repeat2_5",
+      "height_measurement_inlier=true",
+      "jacobian_valid=true"
+    ],
+    "heldout_used_for_model_selection": false,
+    "heldout_used_for_parameter_fitting": false,
+    "c0_c1_refit": false,
+    "ground_gs_refit": false,
+    "h1_refit": false,
+    "production_change": false,
+    "created_at_utc": "2026-08-20T01:29:08.677344+00:00"
+  },
+  "candidate_feature_sets": {
+    "q1": [
+      "q1"
+    ],
+    "q1+q2": [
+      "q1",
+      "q2"
+    ],
+    "q1+J": [
+      "q1",
+      "d_lambda_du",
+      "d_lambda_dv",
+      "d_Zg_du",
+      "d_Zg_dv"
+    ],
+    "q1+q2+J": [
+      "q1",
+      "q2",
+      "d_lambda_du",
+      "d_lambda_dv",
+      "d_Zg_du",
+      "d_Zg_dv"
+    ],
+    "height+q1+q2": [
+      "height",
+      "q1",
+      "q2"
+    ]
+  },
+  "correlation_features": [
+    "height",
+    "q1",
+    "q2",
+    "d_lambda_du",
+    "d_lambda_dv",
+    "d_Zg_du",
+    "d_Zg_dv",
+    "J_lambda_norm",
+    "J_Z_norm",
+    "height_residual"
+  ],
+  "notes": [
+    "50mm correlation rows are descriptive only and excluded from SVD/VIF/comparison/model selection.",
+    "Condition rows are equal-weight height×position means over formal points.",
+    "All OLS fits are explanatory diagnostics, never production correction functions."
+  ]
+}

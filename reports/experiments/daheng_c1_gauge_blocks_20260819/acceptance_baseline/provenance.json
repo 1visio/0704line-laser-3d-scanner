@@ -1,0 +1,495 @@
+{
+  "generated_at_utc": "2026-08-19T01:44:21.937679+00:00",
+  "script": {
+    "path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\tools\\evaluate_daheng_c1_gauge_blocks.py",
+    "exists": true,
+    "sha256": "a02ebefd7a101229a2c8eab89c84f67c8f33a9e82a81045bbe5d41db1ab03423"
+  },
+  "data_root": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data",
+  "config": {
+    "path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\configs\\measure_tool_daheng_0811.yaml",
+    "exists": true,
+    "sha256": "1caa1b11a176f0a29cf50d4383c7e0839d562869bd201f175b8072b2df57f8cb"
+  },
+  "calibration": {
+    "intrinsics": {
+      "path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\configs\\calibration_daheng_0811\\calibration_result.yaml",
+      "exists": true,
+      "sha256": "0d2b17c3e43aea548088e9cd54b70f3a46350a5c53ea9ee27a4705d85e8fc9b4"
+    },
+    "laser_model": {
+      "path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\configs\\calibration_daheng_0811\\quadratic_graph.yaml",
+      "exists": true,
+      "sha256": "113d3c1b8f92d5a734a2bf612b82a4bd59c0436a89664b5e565e7dd1034bab27"
+    },
+    "extrinsics": {
+      "path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\configs\\calibration_daheng_0811\\camera_ground_extrinsics.yaml",
+      "exists": true,
+      "sha256": "55eaa9cddb3e94f767d918f447393464a9cf9c183955e62b5f24384431962569"
+    },
+    "laser_ray_correction_frozen_c1": {
+      "path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\configs\\calibration_daheng_0811\\frozen_c1_4k.json",
+      "exists": true,
+      "sha256": "32717a3688905b237b0acbfb54e3290e112bc816c9be1133825d255196801ae3"
+    }
+  },
+  "reconstruction_params_c0": {
+    "parallel_epsilon": 1e-09,
+    "quadratic_epsilon": 1e-12,
+    "min_camera_depth_mm": 630.0,
+    "max_camera_depth_mm": 715.0,
+    "model_range_margin_mm": 2.0,
+    "image_roi_polygon": null,
+    "enable_laser_ray_correction": false
+  },
+  "reconstruction_params_c1": {
+    "parallel_epsilon": 1e-09,
+    "quadratic_epsilon": 1e-12,
+    "min_camera_depth_mm": 630.0,
+    "max_camera_depth_mm": 715.0,
+    "model_range_margin_mm": 2.0,
+    "image_roi_polygon": null,
+    "enable_laser_ray_correction": true
+  },
+  "reused_artifacts": [
+    "configured Steger backend and profile",
+    "Daheng 0811 calibration files",
+    "quadratic_graph C0 model",
+    "Frozen C1_4k correction JSON"
+  ],
+  "newly_computed": [
+    "input image audit",
+    "one Steger extraction per 150 images",
+    "geometry-only ROI registry and overlays",
+    "C0/C1 reconstruction and lambda diagnostics",
+    "single-frame, condition, per-height, global statistics"
+  ],
+  "not_reused": [
+    "historical single-frame PNG ROI/measurements",
+    "historical gauge repeatability outputs",
+    "any result-driven ROI or re-fit"
+  ],
+  "roi_summary": {
+    "geometry_only": true,
+    "c0_c1_values_used": false,
+    "height_half_width_px": 45,
+    "baseline_gap_px": 20,
+    "baseline_half_width_px": 200,
+    "position_separation_px": 260.0,
+    "datasets": {
+      "obs_1mm": {
+        "position_order_pose_ids": [
+          "001",
+          "002",
+          "003",
+          "004",
+          "005"
+        ],
+        "position_order_v_center_px": [
+          267.0,
+          1087.0,
+          1533.0,
+          2177.0,
+          2843.0
+        ],
+        "assignment": {
+          "001": {
+            "v_center_px": 267.5,
+            "depth_px": 1.6311891146957533,
+            "prominence_px": 1.6375165278170292,
+            "support_width_px": 110.0,
+            "score": 17.17441823399364
+          },
+          "002": {
+            "v_center_px": 1087.5,
+            "depth_px": 1.5382484879224203,
+            "prominence_px": 1.6150325937480108,
+            "support_width_px": 105.0,
+            "score": 16.549159473555896
+          },
+          "003": {
+            "v_center_px": 1532.5,
+            "depth_px": 1.917070188663522,
+            "prominence_px": 2.5437297611382474,
+            "support_width_px": 120.0,
+            "score": 27.865163407452926
+          },
+          "004": {
+            "v_center_px": 2177.5,
+            "depth_px": 1.7829663527272186,
+            "prominence_px": 2.3509706504841645,
+            "support_width_px": 125.0,
+            "score": 26.284650937947454
+          },
+          "005": {
+            "v_center_px": 2842.5,
+            "depth_px": 2.2349549758859197,
+            "prominence_px": 2.832685940466458,
+            "support_width_px": 130.0,
+            "score": 32.29758896343695
+          }
+        },
+        "assignment_diagnostics": {
+          "candidate_count_by_pose": {
+            "001": 2,
+            "002": 2,
+            "003": 2,
+            "004": 2,
+            "005": 2
+          },
+          "feasible_assignment_count": 3,
+          "best_score": 120.42848101638687,
+          "second_score": 100.34658840585853,
+          "relative_score_gap": 0.16675368186198222,
+          "minimum_position_separation_px": 260.0,
+          "manual_review_required": false
+        }
+      },
+      "obs_2mm": {
+        "position_order_pose_ids": [
+          "005",
+          "004",
+          "003",
+          "002",
+          "001"
+        ],
+        "position_order_v_center_px": [
+          273.0,
+          963.5,
+          1765.0,
+          2439.0,
+          2854.0
+        ],
+        "assignment": {
+          "001": {
+            "v_center_px": 2837.5,
+            "depth_px": 4.187598059556817,
+            "prominence_px": 4.811460085583713,
+            "support_width_px": 130.0,
+            "score": 54.85908548427944
+          },
+          "002": {
+            "v_center_px": 2437.5,
+            "depth_px": 4.36633794458974,
+            "prominence_px": 4.994077834425478,
+            "support_width_px": 135.0,
+            "score": 58.02594084718043
+          },
+          "003": {
+            "v_center_px": 1767.5,
+            "depth_px": 4.596329886547089,
+            "prominence_px": 5.204919655097534,
+            "support_width_px": 135.0,
+            "score": 60.4757014276212
+          },
+          "004": {
+            "v_center_px": 962.5,
+            "depth_px": 4.269982187487335,
+            "prominence_px": 4.884148692653508,
+            "support_width_px": 135.0,
+            "score": 56.74867964114328
+          },
+          "005": {
+            "v_center_px": 272.5,
+            "depth_px": 4.137340908674302,
+            "prominence_px": 4.144082377486469,
+            "support_width_px": 130.0,
+            "score": 47.24980886396481
+          }
+        },
+        "assignment_diagnostics": {
+          "candidate_count_by_pose": {
+            "001": 2,
+            "002": 2,
+            "003": 2,
+            "004": 2,
+            "005": 2
+          },
+          "feasible_assignment_count": 2,
+          "best_score": 277.6157162641892,
+          "second_score": 204.26354545428052,
+          "relative_score_gap": 0.26422196767889067,
+          "minimum_position_separation_px": 260.0,
+          "manual_review_required": false
+        }
+      },
+      "obs_6mm": {
+        "position_order_pose_ids": [
+          "001",
+          "002",
+          "003",
+          "004",
+          "005"
+        ],
+        "position_order_v_center_px": [
+          321.5,
+          1141.5,
+          1534.0,
+          2412.0,
+          2844.0
+        ],
+        "assignment": {
+          "001": {
+            "v_center_px": 322.5,
+            "depth_px": 12.643870598705796,
+            "prominence_px": 12.655965310914679,
+            "support_width_px": 135.0,
+            "score": 147.04902863805395
+          },
+          "002": {
+            "v_center_px": 1142.5,
+            "depth_px": 17.23123782854639,
+            "prominence_px": 17.270952408908418,
+            "support_width_px": 125.0,
+            "score": 193.09511811241484
+          },
+          "003": {
+            "v_center_px": 1527.5,
+            "depth_px": 17.926869879857385,
+            "prominence_px": 17.944091876722837,
+            "support_width_px": 120.0,
+            "score": 196.56767789652616
+          },
+          "004": {
+            "v_center_px": 2412.5,
+            "depth_px": 12.458013542076824,
+            "prominence_px": 12.479731010866658,
+            "support_width_px": 135.0,
+            "score": 145.00137111070444
+          },
+          "005": {
+            "v_center_px": 2847.5,
+            "depth_px": 18.6228320352277,
+            "prominence_px": 19.174004068548697,
+            "support_width_px": 110.0,
+            "score": 201.09865121944358
+          }
+        },
+        "assignment_diagnostics": {
+          "candidate_count_by_pose": {
+            "001": 2,
+            "002": 2,
+            "003": 2,
+            "004": 2,
+            "005": 2
+          },
+          "feasible_assignment_count": 2,
+          "best_score": 883.064346977143,
+          "second_score": 569.7708674082551,
+          "relative_score_gap": 0.3547798987031204,
+          "minimum_position_separation_px": 260.0,
+          "manual_review_required": false
+        }
+      },
+      "obs_10mm": {
+        "position_order_pose_ids": [
+          "005",
+          "004",
+          "003",
+          "002",
+          "001"
+        ],
+        "position_order_v_center_px": [
+          319.0,
+          1148.0,
+          1993.0,
+          2416.0,
+          2843.0
+        ],
+        "assignment": {
+          "001": {
+            "v_center_px": 2847.5,
+            "depth_px": 14.95617124491635,
+            "prominence_px": 15.559057435109741,
+            "support_width_px": 140.0,
+            "score": 184.09725027187702
+          },
+          "002": {
+            "v_center_px": 2417.5,
+            "depth_px": 15.558128425543238,
+            "prominence_px": 16.169101810385378,
+            "support_width_px": 135.0,
+            "score": 187.86798610426428
+          },
+          "003": {
+            "v_center_px": 1997.5,
+            "depth_px": 16.330477194184347,
+            "prominence_px": 16.94756695456081,
+            "support_width_px": 135.0,
+            "score": 196.9129337212475
+          },
+          "004": {
+            "v_center_px": 1152.5,
+            "depth_px": 27.90967818347156,
+            "prominence_px": 28.515462074002354,
+            "support_width_px": 135.0,
+            "score": 331.31972916606094
+          },
+          "005": {
+            "v_center_px": 322.5,
+            "depth_px": 19.783493354885586,
+            "prominence_px": 19.80102142977016,
+            "support_width_px": 135.0,
+            "score": 230.067078706188
+          }
+        },
+        "assignment_diagnostics": {
+          "candidate_count_by_pose": {
+            "001": 2,
+            "002": 2,
+            "003": 2,
+            "004": 2,
+            "005": 1
+          },
+          "feasible_assignment_count": 1,
+          "best_score": 1130.5174779696379,
+          "second_score": null,
+          "relative_score_gap": null,
+          "minimum_position_separation_px": 260.0,
+          "manual_review_required": true
+        }
+      },
+      "obs_20mm": {
+        "position_order_pose_ids": [
+          "005",
+          "004",
+          "003",
+          "002",
+          "001"
+        ],
+        "position_order_v_center_px": [
+          272.5,
+          1131.0,
+          1960.5,
+          2376.0,
+          2801.0
+        ],
+        "assignment": {
+          "001": {
+            "v_center_px": 2802.5,
+            "depth_px": 27.979422053001922,
+            "prominence_px": 28.647355929674713,
+            "support_width_px": 140.0,
+            "score": 338.96008650961494
+          },
+          "002": {
+            "v_center_px": 2377.5,
+            "depth_px": 31.51987584745462,
+            "prominence_px": 32.182602974593465,
+            "support_width_px": 140.0,
+            "score": 380.7896936510279
+          },
+          "003": {
+            "v_center_px": 1962.5,
+            "depth_px": 30.558772524199455,
+            "prominence_px": 31.22142259333576,
+            "support_width_px": 140.0,
+            "score": 369.41685400808655
+          },
+          "004": {
+            "v_center_px": 1132.5,
+            "depth_px": 33.75195726063123,
+            "prominence_px": 34.40877007017879,
+            "support_width_px": 140.0,
+            "score": 407.1300579470158
+          },
+          "005": {
+            "v_center_px": 282.5,
+            "depth_px": 48.97940227319728,
+            "prominence_px": 48.98730638089044,
+            "support_width_px": 140.0,
+            "score": 579.6256258169855
+          }
+        },
+        "assignment_diagnostics": {
+          "candidate_count_by_pose": {
+            "001": 2,
+            "002": 2,
+            "003": 2,
+            "004": 2,
+            "005": 2
+          },
+          "feasible_assignment_count": 2,
+          "best_score": 2076.1743179327304,
+          "second_score": 1187.344669749826,
+          "relative_score_gap": 0.42810935503138386,
+          "minimum_position_separation_px": 260.0,
+          "manual_review_required": false
+        }
+      },
+      "obs_30mm": {
+        "position_order_pose_ids": [
+          "001",
+          "002",
+          "003",
+          "004",
+          "005"
+        ],
+        "position_order_v_center_px": [
+          268.0,
+          1119.0,
+          1984.0,
+          2415.0,
+          2860.0
+        ],
+        "assignment": {
+          "001": {
+            "v_center_px": 277.5,
+            "depth_px": 76.14224127398094,
+            "prominence_px": 76.14895654567746,
+            "support_width_px": 140.0,
+            "score": 901.0066046480273
+          },
+          "002": {
+            "v_center_px": 1122.5,
+            "depth_px": 62.55992248849799,
+            "prominence_px": 62.576738999657344,
+            "support_width_px": 140.0,
+            "score": 740.4179609763482
+          },
+          "003": {
+            "v_center_px": 1987.5,
+            "depth_px": 47.308337005062526,
+            "prominence_px": 47.340444208033716,
+            "support_width_px": 140.0,
+            "score": 560.1396898042071
+          },
+          "004": {
+            "v_center_px": 2417.5,
+            "depth_px": 39.065071063676626,
+            "prominence_px": 39.09605120450101,
+            "support_width_px": 145.0,
+            "score": 470.77879823630536
+          },
+          "005": {
+            "v_center_px": 2862.5,
+            "depth_px": 33.95032822888132,
+            "prominence_px": 34.483374337457924,
+            "support_width_px": 145.0,
+            "score": 415.2348134803987
+          }
+        },
+        "assignment_diagnostics": {
+          "candidate_count_by_pose": {
+            "001": 2,
+            "002": 2,
+            "003": 2,
+            "004": 2,
+            "005": 2
+          },
+          "feasible_assignment_count": 2,
+          "best_score": 3087.8363671452867,
+          "second_score": 1799.3804603367446,
+          "relative_score_gap": 0.4172681948168527,
+          "minimum_position_separation_px": 260.0,
+          "manual_review_required": false
+        }
+      }
+    },
+    "manual_review_required": true
+  },
+  "post_run_reused_outputs": [
+    "30 ROI overlays regenerated from saved pointwise_diagnostics.csv centers; no Steger call",
+    "report manifest-quality labels updated from saved input_audit.csv and manifest status"
+  ]
+}

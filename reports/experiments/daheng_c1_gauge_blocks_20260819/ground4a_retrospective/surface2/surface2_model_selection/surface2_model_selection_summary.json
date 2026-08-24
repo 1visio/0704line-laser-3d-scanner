@@ -1,0 +1,165 @@
+{
+  "SELECTED_SURFACE_MODEL": "B2",
+  "Q1_RETAINED": "NO",
+  "Q2_ONLY_CORRECTION_RECOMMENDED": "YES",
+  "MORE_HEIGHT_ACQUISITION_REQUIRED": "YES",
+  "decision": {
+    "SELECTED_SURFACE_MODEL": "B2",
+    "Q1_RETAINED": "NO",
+    "Q2_ONLY_CORRECTION_RECOMMENDED": "YES",
+    "MORE_HEIGHT_ACQUISITION_REQUIRED": "YES",
+    "S0_STABLE_EXTRA_GAIN": false,
+    "B2_STABLE_Q2_GAIN_VS_B0": true,
+    "q1_sign_consistent_across_dev_schemes": true,
+    "q1_relative_range_to_abs_mean": {
+      "LOBO_height_band": 0.29377573275194624,
+      "LOHO_height": 0.384202126345683,
+      "LOPO_position_rank": 1.027066190673536
+    },
+    "scheme_criteria": {
+      "LOHO_height": {
+        "delta_rmse_mm": -0.0023197291877078384,
+        "delta_p95_mm": 0.003088157021448046,
+        "rmse_fold_improvement_rate": 0.8888888888888888,
+        "p95_fold_improvement_rate": 0.6666666666666666,
+        "worst_condition_fold_improvement_rate": 0.6666666666666666,
+        "pooled_rmse_improved": true,
+        "pooled_p95_improved": false,
+        "majority_p95_improved": true,
+        "majority_worst_condition_improved": true
+      },
+      "LOPO_position_rank": {
+        "delta_rmse_mm": -0.00030179991732882244,
+        "delta_p95_mm": 0.009661125282321048,
+        "rmse_fold_improvement_rate": 0.6,
+        "p95_fold_improvement_rate": 0.6,
+        "worst_condition_fold_improvement_rate": 0.6,
+        "pooled_rmse_improved": true,
+        "pooled_p95_improved": false,
+        "majority_p95_improved": true,
+        "majority_worst_condition_improved": true
+      },
+      "LOBO_height_band": {
+        "delta_rmse_mm": -0.004101105408910337,
+        "delta_p95_mm": -0.009779829146714256,
+        "rmse_fold_improvement_rate": 1.0,
+        "p95_fold_improvement_rate": 0.6666666666666666,
+        "worst_condition_fold_improvement_rate": 0.6666666666666666,
+        "pooled_rmse_improved": true,
+        "pooled_p95_improved": true,
+        "majority_p95_improved": true,
+        "majority_worst_condition_improved": true
+      }
+    },
+    "b2_vs_b0": [
+      {
+        "cv_scheme": "LOHO_height",
+        "condition_count": 44,
+        "b0_rmse_mm": 0.049670326470994314,
+        "b2_rmse_mm": 0.029551846206513976,
+        "delta_rmse_B2_minus_B0_mm": -0.020118480264480338,
+        "b0_p95_abs_mm": 0.08627294582218203,
+        "b2_p95_abs_mm": 0.046818193923821735,
+        "delta_p95_B2_minus_B0_mm": -0.0394547518983603
+      },
+      {
+        "cv_scheme": "LOPO_position_rank",
+        "condition_count": 44,
+        "b0_rmse_mm": 0.04811098222207948,
+        "b2_rmse_mm": 0.03139140492660897,
+        "delta_rmse_B2_minus_B0_mm": -0.016719577295470515,
+        "b0_p95_abs_mm": 0.08524224478917297,
+        "b2_p95_abs_mm": 0.04921714992563544,
+        "delta_p95_B2_minus_B0_mm": -0.036025094863537534
+      },
+      {
+        "cv_scheme": "LOBO_height_band",
+        "condition_count": 44,
+        "b0_rmse_mm": 0.06543891621417026,
+        "b2_rmse_mm": 0.05059127601065182,
+        "delta_rmse_B2_minus_B0_mm": -0.014847640203518447,
+        "b0_p95_abs_mm": 0.1079266123438331,
+        "b2_p95_abs_mm": 0.08396375385631653,
+        "delta_p95_B2_minus_B0_mm": -0.023962858487516572
+      },
+      {
+        "cv_scheme": "strict_50mm_validation",
+        "condition_count": 5,
+        "b0_rmse_mm": 0.04181016926304246,
+        "b2_rmse_mm": 0.039136394799891665,
+        "delta_rmse_B2_minus_B0_mm": -0.0026737744631507923,
+        "b0_p95_abs_mm": 0.06019047946092085,
+        "b2_p95_abs_mm": 0.06590981811846665,
+        "delta_p95_B2_minus_B0_mm": 0.0057193386575458
+      }
+    ],
+    "selection_rule": "S0 requires each development scheme to have pooled RMSE/P95 improvement and majority fold improvement for P95 and worst condition; otherwise choose B2 when its q2 gain versus B0 is stable across development schemes."
+  },
+  "historical_surface2b_conclusion": {
+    "Q2_GAP_FILLED": "NO",
+    "Q1Q2_STATE_CONSISTENCY": "PARTIAL",
+    "SURFACE2C_ALLOWED": "NO"
+  },
+  "protocol": {
+    "development_height_labels_mm": [
+      1.0,
+      2.0,
+      6.0,
+      10.0,
+      20.0,
+      30.0,
+      36.0,
+      40.0,
+      46.0
+    ],
+    "height_bands": {
+      "low_1_2_6_10": [
+        1.0,
+        2.0,
+        6.0,
+        10.0
+      ],
+      "mid_20_30": [
+        20.0,
+        30.0
+      ],
+      "high_36_40_46": [
+        36.0,
+        40.0,
+        46.0
+      ]
+    },
+    "condition_equal_weight": true,
+    "random_point_split": false,
+    "heldout_50_excluded_from_fit_and_selection": true,
+    "c0_refit": false,
+    "c1_refit": false,
+    "q_redefined": false,
+    "quadratic_terms": false,
+    "spline_or_ml": false,
+    "production_validation": false
+  },
+  "input_sha256": {
+    "condition_table": "d309642826a935a31c5f85efda229db610b7232e5eacc586ae825f26cfdfdbc3",
+    "cv_metrics": "1032cf827849dfbc2342ba20807818d766d1ce29a07a26dc757a4976f14f6fb7",
+    "coefficients": "a18cbc8189540d49a42fd00affd052c13d7c486b0d89803a7205905e744c98ce",
+    "coefficient_stability": "a6d8fd055cf92d0f484e464b58820d20c2442bcf8d3d0d666ef870474473bc58",
+    "condition_predictions": "1668c23163a6b71b48dc694c9151aaeb00d61ccec56b16d3edc439ac67d6f26e",
+    "incremental_reference": "d47b7d42ce9c3f22934699d0ebfdad586837624beaea1b45d959b74bcce4181c",
+    "summary": "e2cd1d7ca93dbe8def72f4813bb65506473ffd23a6a5ab7dfbb548cc3d0f806a"
+  },
+  "input_paths": {
+    "condition_table": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\outputs\\daheng_c1_gauge_blocks_20260819_ground4a\\surface2\\surface2br2\\surface2br2_condition_table.csv",
+    "cv_metrics": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\outputs\\daheng_c1_gauge_blocks_20260819_ground4a\\surface2\\surface2br2\\surface2br2_cv_metrics.csv",
+    "coefficients": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\outputs\\daheng_c1_gauge_blocks_20260819_ground4a\\surface2\\surface2br2\\surface2br2_coefficients.csv",
+    "coefficient_stability": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\outputs\\daheng_c1_gauge_blocks_20260819_ground4a\\surface2\\surface2br2\\surface2br2_coefficient_stability.csv",
+    "condition_predictions": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\outputs\\daheng_c1_gauge_blocks_20260819_ground4a\\surface2\\surface2br2\\surface2br2_condition_predictions.csv",
+    "incremental_reference": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\outputs\\daheng_c1_gauge_blocks_20260819_ground4a\\surface2\\surface2br2\\surface2br2_incremental_comparison.csv",
+    "summary": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\outputs\\daheng_c1_gauge_blocks_20260819_ground4a\\surface2\\surface2br2\\surface2br2_summary.json"
+  },
+  "development_condition_count": 44,
+  "development_point_count": 11160,
+  "strict_50_condition_count": 5,
+  "strict_50_point_count": 1100,
+  "created_at_utc": "2026-08-20T08:26:09.920367+00:00"
+}

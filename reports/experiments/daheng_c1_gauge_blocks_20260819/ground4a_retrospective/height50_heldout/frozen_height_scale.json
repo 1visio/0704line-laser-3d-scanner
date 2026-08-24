@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "status": "FROZEN_BEFORE_50MM_READ",
+  "frozen_at_utc": "2026-08-19T11:42:57.349637+00:00",
+  "model": "H1",
+  "fit_equation": "h_corr=k*h",
+  "k_full": 1.00403395913372,
+  "condition_count": 29,
+  "equal_weighting": "one successful Ground-4A B condition per row; no repeat expansion",
+  "input": {
+    "path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\outputs\\daheng_c1_gauge_blocks_20260819_ground4a\\ground4a_condition_comparison.csv",
+    "sha256": "f069020d7ff84b7189b0c386cd4c2a93bd55ac6753957e48d77b1966ecd47b68",
+    "source": "Ground-4A ground4a_condition_comparison.csv, chain=session_linear, repeat2_5 only"
+  },
+  "parameter_payload": {
+    "model": "H1",
+    "fit_equation": "h_corr=k*h",
+    "condition_count": 29,
+    "k": 1.00403395913372
+  },
+  "parameter_canonical_json": "{\"condition_count\":29,\"fit_equation\":\"h_corr=k*h\",\"k\":1.00403395913372,\"model\":\"H1\"}",
+  "parameter_sha256": "fb05c3e6ea09775f5dc906c8d44a25f6e8fb0cdd97846f97fca38bc55c381391",
+  "50mm_read_before_freeze": false,
+  "50mm_allowed_after_freeze_only": true
+}

@@ -1,0 +1,288 @@
+{
+  "SYSTEM_HEIGHT_ACCURACY": {
+    "criterion": "absolute height error <= 0.2 mm",
+    "primary_model": "C1",
+    "primary_mode": "local_adjacent",
+    "C0": {
+      "local_adjacent": {
+        "single_frame": {
+          "count": 145,
+          "bias_mm": -0.05317905539595101,
+          "mae_mm": 0.055144047787403457,
+          "rmse_mm": 0.06702921608439642,
+          "p95_mm": 0.1260731093001688,
+          "max_mm": 0.16606365946360313,
+          "pass_count": 145,
+          "pass_rate": 1.0,
+          "limit_mm": 0.2
+        },
+        "global_condition": {
+          "count": 29,
+          "bias_mm": -0.05317905539595109,
+          "mae_mm": 0.05514404778740355,
+          "rmse_mm": 0.06698748740949749,
+          "p95_mm": 0.12425152659359638,
+          "max_mm": 0.1643360666019582,
+          "pass_count": 29,
+          "pass_rate": 1.0,
+          "limit_mm": 0.2
+        },
+        "all_single_frames_pass_0p2mm": false,
+        "all_30_conditions_pass_0p2mm": false
+      },
+      "all_non_height": {
+        "single_frame": {
+          "count": 145,
+          "bias_mm": -0.049009938577632826,
+          "mae_mm": 0.08315523268141588,
+          "rmse_mm": 0.10168078357728641,
+          "p95_mm": 0.2053414959328208,
+          "max_mm": 0.2683925174051751,
+          "pass_count": 136,
+          "pass_rate": 0.9379310344827586,
+          "limit_mm": 0.2
+        },
+        "global_condition": {
+          "count": 29,
+          "bias_mm": -0.04900993857763258,
+          "mae_mm": 0.08315523268141582,
+          "rmse_mm": 0.1014139374492345,
+          "p95_mm": 0.18721964005863317,
+          "max_mm": 0.2502889055795059,
+          "pass_count": 27,
+          "pass_rate": 0.9310344827586207,
+          "limit_mm": 0.2
+        },
+        "all_single_frames_pass_0p2mm": false,
+        "all_30_conditions_pass_0p2mm": false
+      },
+      "fixed_zg_zero": {
+        "single_frame": {
+          "count": 145,
+          "bias_mm": -0.050264610658168944,
+          "mae_mm": 0.062359828835676305,
+          "rmse_mm": 0.08222025187605748,
+          "p95_mm": 0.17618603598453433,
+          "max_mm": 0.18819911467101458,
+          "pass_count": 145,
+          "pass_rate": 1.0,
+          "limit_mm": 0.2
+        },
+        "global_condition": {
+          "count": 29,
+          "bias_mm": -0.05026461065816891,
+          "mae_mm": 0.062305976521474016,
+          "rmse_mm": 0.08218115102744349,
+          "p95_mm": 0.1650443903126141,
+          "max_mm": 0.18091811200967622,
+          "pass_count": 29,
+          "pass_rate": 1.0,
+          "limit_mm": 0.2
+        },
+        "all_single_frames_pass_0p2mm": false,
+        "all_30_conditions_pass_0p2mm": false
+      }
+    },
+    "C1": {
+      "local_adjacent": {
+        "single_frame": {
+          "count": 145,
+          "bias_mm": -0.053776977245327255,
+          "mae_mm": 0.055988418029254645,
+          "rmse_mm": 0.06928214085905389,
+          "p95_mm": 0.13277974126633862,
+          "max_mm": 0.1691746310239708,
+          "pass_count": 145,
+          "pass_rate": 1.0,
+          "limit_mm": 0.2
+        },
+        "global_condition": {
+          "count": 29,
+          "bias_mm": -0.05377697724532719,
+          "mae_mm": 0.0559884180292546,
+          "rmse_mm": 0.06924209743783959,
+          "p95_mm": 0.12967660288880364,
+          "max_mm": 0.16693800950521975,
+          "pass_count": 29,
+          "pass_rate": 1.0,
+          "limit_mm": 0.2
+        },
+        "all_single_frames_pass_0p2mm": false,
+        "all_30_conditions_pass_0p2mm": false
+      },
+      "all_non_height": {
+        "single_frame": {
+          "count": 145,
+          "bias_mm": -0.05453463985525591,
+          "mae_mm": 0.0632029887154591,
+          "rmse_mm": 0.08426882401888702,
+          "p95_mm": 0.15510349850009106,
+          "max_mm": 0.2879829023812448,
+          "pass_count": 140,
+          "pass_rate": 0.9655172413793104,
+          "limit_mm": 0.2
+        },
+        "global_condition": {
+          "count": 29,
+          "bias_mm": -0.05453463985525589,
+          "mae_mm": 0.06317622835635078,
+          "rmse_mm": 0.08419105684833653,
+          "p95_mm": 0.1455165424212921,
+          "max_mm": 0.27868069151905317,
+          "pass_count": 28,
+          "pass_rate": 0.9655172413793104,
+          "limit_mm": 0.2
+        },
+        "all_single_frames_pass_0p2mm": false,
+        "all_30_conditions_pass_0p2mm": false
+      },
+      "fixed_zg_zero": {
+        "single_frame": {
+          "count": 145,
+          "bias_mm": -0.05022830698946488,
+          "mae_mm": 0.059217248638615785,
+          "rmse_mm": 0.07110864345195335,
+          "p95_mm": 0.13578226488828307,
+          "max_mm": 0.16095296705101603,
+          "pass_count": 145,
+          "pass_rate": 1.0,
+          "limit_mm": 0.2
+        },
+        "global_condition": {
+          "count": 29,
+          "bias_mm": -0.05022830698946515,
+          "mae_mm": 0.05911016176076248,
+          "rmse_mm": 0.07106414561953835,
+          "p95_mm": 0.13233310201444806,
+          "max_mm": 0.15374279025043414,
+          "pass_count": 29,
+          "pass_rate": 1.0,
+          "limit_mm": 0.2
+        },
+        "all_single_frames_pass_0p2mm": false,
+        "all_30_conditions_pass_0p2mm": false
+      }
+    },
+    "primary_result": {
+      "single_frame": {
+        "count": 145,
+        "bias_mm": -0.053776977245327255,
+        "mae_mm": 0.055988418029254645,
+        "rmse_mm": 0.06928214085905389,
+        "p95_mm": 0.13277974126633862,
+        "max_mm": 0.1691746310239708,
+        "pass_count": 145,
+        "pass_rate": 1.0,
+        "limit_mm": 0.2
+      },
+      "global_condition": {
+        "count": 29,
+        "bias_mm": -0.05377697724532719,
+        "mae_mm": 0.0559884180292546,
+        "rmse_mm": 0.06924209743783959,
+        "p95_mm": 0.12967660288880364,
+        "max_mm": 0.16693800950521975,
+        "pass_count": 29,
+        "pass_rate": 1.0,
+        "limit_mm": 0.2
+      },
+      "all_single_frames_pass_0p2mm": false,
+      "all_30_conditions_pass_0p2mm": false
+    }
+  },
+  "C1_ENGINEERING_STATUS": "FAIL",
+  "C1_ENGINEERING_STATUS_REASON": "one or more audit or accuracy gates failed",
+  "audit_gate_pass": true,
+  "registry_manual_review_required": false,
+  "all_primary_height_rows_success": false,
+  "condition_count": 29,
+  "height_measurement_row_count": 900,
+  "height_measurement_expected_count": 900,
+  "height_measurement_failed_count": 30,
+  "condition_row_count": 174,
+  "condition_expected_count": 180,
+  "condition_missing_count": 6,
+  "missing_conditions": [
+    {
+      "dataset": "obs_2mm",
+      "position_rank": 5,
+      "model": "C0",
+      "mode": "local_adjacent",
+      "frame_count": 5,
+      "failure_reasons": [
+        "MeasurementError: height line has too few points: 17 < 30",
+        "MeasurementError: height line has too few points: 19 < 30",
+        "MeasurementError: height line has too few points: 20 < 30",
+        "MeasurementError: height line has too few points: 21 < 30"
+      ]
+    },
+    {
+      "dataset": "obs_2mm",
+      "position_rank": 5,
+      "model": "C0",
+      "mode": "all_non_height",
+      "frame_count": 5,
+      "failure_reasons": [
+        "MeasurementError: height line has too few points: 17 < 30",
+        "MeasurementError: height line has too few points: 19 < 30",
+        "MeasurementError: height line has too few points: 20 < 30",
+        "MeasurementError: height line has too few points: 21 < 30"
+      ]
+    },
+    {
+      "dataset": "obs_2mm",
+      "position_rank": 5,
+      "model": "C0",
+      "mode": "fixed_zg_zero",
+      "frame_count": 5,
+      "failure_reasons": [
+        "MeasurementError: height line has too few points: 17 < 30",
+        "MeasurementError: height line has too few points: 19 < 30",
+        "MeasurementError: height line has too few points: 20 < 30",
+        "MeasurementError: height line has too few points: 21 < 30"
+      ]
+    },
+    {
+      "dataset": "obs_2mm",
+      "position_rank": 5,
+      "model": "C1",
+      "mode": "local_adjacent",
+      "frame_count": 5,
+      "failure_reasons": [
+        "MeasurementError: height line has too few points: 17 < 30",
+        "MeasurementError: height line has too few points: 19 < 30",
+        "MeasurementError: height line has too few points: 20 < 30",
+        "MeasurementError: height line has too few points: 21 < 30"
+      ]
+    },
+    {
+      "dataset": "obs_2mm",
+      "position_rank": 5,
+      "model": "C1",
+      "mode": "all_non_height",
+      "frame_count": 5,
+      "failure_reasons": [
+        "MeasurementError: height line has too few points: 17 < 30",
+        "MeasurementError: height line has too few points: 19 < 30",
+        "MeasurementError: height line has too few points: 20 < 30",
+        "MeasurementError: height line has too few points: 21 < 30"
+      ]
+    },
+    {
+      "dataset": "obs_2mm",
+      "position_rank": 5,
+      "model": "C1",
+      "mode": "fixed_zg_zero",
+      "frame_count": 5,
+      "failure_reasons": [
+        "MeasurementError: height line has too few points: 17 < 30",
+        "MeasurementError: height line has too few points: 19 < 30",
+        "MeasurementError: height line has too few points: 20 < 30",
+        "MeasurementError: height line has too few points: 21 < 30"
+      ]
+    }
+  ],
+  "paired_condition_row_count": 87,
+  "paired_condition_expected_count": 90,
+  "paired_condition_missing_count": 3
+}

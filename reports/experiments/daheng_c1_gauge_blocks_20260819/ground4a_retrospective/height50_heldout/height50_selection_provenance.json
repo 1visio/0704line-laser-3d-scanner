@@ -1,0 +1,22 @@
+{
+  "phase": "prepare",
+  "selection_status": "AWAITING_MANUAL_GEOMETRY_ONLY_ROI",
+  "data_root": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\obs_50mm",
+  "image_count": 25,
+  "pose_ids": [
+    "001",
+    "002",
+    "003",
+    "004",
+    "005"
+  ],
+  "repeats_per_pose": 5,
+  "steger_call_count": 25,
+  "steger_calls_per_frame": 1,
+  "truth_or_error_used_for_selection": false,
+  "selection_artifacts": "five-frame median images, Steger centers, and centerline profiles only",
+  "frozen_height_scale_sha256": "4304ffba0227677bc5d93a3bb865a019ccac697c79764452ed55fcdfb9eeaf05",
+  "height1_k_full": 1.00403395913372,
+  "config_path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\configs\\measure_tool_daheng_0811.yaml",
+  "config_sha256": "c22e463aff6dc51565679382cc766a3c7078a57f676809e7b31ee1cbe185f15f"
+}

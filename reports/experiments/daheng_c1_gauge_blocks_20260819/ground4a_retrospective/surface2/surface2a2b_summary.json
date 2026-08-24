@@ -1,0 +1,8 @@
+{
+  "surface2_status": "ROI_REVIEW_PENDING",
+  "q2_gap_filled": "UNDECIDED",
+  "q1q2_state_consistency": "UNDECIDED",
+  "surface2c_allowed": false,
+  "roi_manual_confirmed": false,
+  "error": null
+}

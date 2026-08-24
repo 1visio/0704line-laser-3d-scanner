@@ -1,0 +1,76 @@
+{
+  "rule": [
+    "fit-only common-support coverage is computed first",
+    "maximize mean low-frequency cross-pose correlation",
+    "then maximize cross-pose correlation",
+    "then minimize pairwise profile RMSE",
+    "then minimize within-pose frame repeatability RMSE",
+    "ties use the first coordinate in the fixed order full_v,c1_s"
+  ],
+  "coordinate_order": [
+    "full_v",
+    "c1_s"
+  ],
+  "chosen_coordinate": "full_v",
+  "comparisons": [
+    {
+      "coordinate": "full_v",
+      "common_support_min": 566.0,
+      "common_support_max": 2137.65,
+      "common_support_span": 1571.65,
+      "common_bin_count": 34,
+      "raw_common_bin_count": 39,
+      "profile_bin_count": 40,
+      "common_support_coverage": 0.85,
+      "mean_pose_bin_coverage": 0.9949999999999999,
+      "min_pose_bin_coverage": 0.975,
+      "cross_pose_correlation_mean": 0.9187494463708147,
+      "cross_pose_correlation_min": 0.8262597024831712,
+      "low_frequency_correlation_mean": 0.9714919187624096,
+      "low_frequency_correlation_min": 0.9211535668199625,
+      "profile_rmse_difference_mean_mm": 0.02244163896484041,
+      "profile_rmse_difference_max_mm": 0.028412288014479266,
+      "frame_repeatability_rmse_mean_mm": 0.0016650554567100206,
+      "frame_repeatability_rmse_max_mm": 0.00276072589751156,
+      "frame_repeatability_std_mean_mm": 0.001526502591198451,
+      "selection_rule_key": [
+        -0.9714919187624096,
+        -0.9187494463708147,
+        0.02244163896484041,
+        0.0016650554567100206
+      ],
+      "selected": true,
+      "selection_frozen_before_heldout": true
+    },
+    {
+      "coordinate": "c1_s",
+      "common_support_min": -0.11532302151689332,
+      "common_support_max": 0.09870909034960217,
+      "common_support_span": 0.21403211186649548,
+      "common_bin_count": 34,
+      "raw_common_bin_count": 39,
+      "profile_bin_count": 40,
+      "common_support_coverage": 0.85,
+      "mean_pose_bin_coverage": 0.9949999999999999,
+      "min_pose_bin_coverage": 0.975,
+      "cross_pose_correlation_mean": 0.9191351519672082,
+      "cross_pose_correlation_min": 0.8263396443640473,
+      "low_frequency_correlation_mean": 0.9714862692336078,
+      "low_frequency_correlation_min": 0.9221205563632406,
+      "profile_rmse_difference_mean_mm": 0.02239791114224385,
+      "profile_rmse_difference_max_mm": 0.028471981859915285,
+      "frame_repeatability_rmse_mean_mm": 0.001610514613648557,
+      "frame_repeatability_rmse_max_mm": 0.002686559444756001,
+      "frame_repeatability_std_mean_mm": 0.001480790952674406,
+      "selection_rule_key": [
+        -0.9714862692336078,
+        -0.9191351519672082,
+        0.02239791114224385,
+        0.001610514613648557
+      ],
+      "selected": false,
+      "selection_frozen_before_heldout": true
+    }
+  ],
+  "heldout_read_for_selection": false
+}

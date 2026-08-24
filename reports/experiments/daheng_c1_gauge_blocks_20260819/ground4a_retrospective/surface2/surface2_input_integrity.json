@@ -1,0 +1,141 @@
+{
+  "schema_version": 1,
+  "data_root": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data",
+  "config_path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\configs\\measure_tool_daheng_0811.yaml",
+  "dataset_ids": [
+    "obs_36mm",
+    "obs_40mm",
+    "obs_46mm"
+  ],
+  "expected_frame_count": 75,
+  "discovered_filename_key_count": 75,
+  "extracted_frame_count": 75,
+  "all_expected_keys_present": true,
+  "missing_keys": [],
+  "unexpected_keys": [],
+  "steger_call_count": 75,
+  "steger_call_count_matches_discovered_tiffs": true,
+  "extraction_errors": [],
+  "duplicate_sha256_groups": {},
+  "dataset_summaries": {
+    "obs_36mm": {
+      "dataset": "obs_36mm",
+      "frame_csv_count": 25,
+      "tiff_count": 25,
+      "pose_repeat_counts": {
+        "001": 5,
+        "002": 5,
+        "003": 5,
+        "004": 5,
+        "005": 5
+      },
+      "manifest": {
+        "exists": true,
+        "dataset_id": "obs_36mm",
+        "status": "completed",
+        "created_at": "2026-08-20T02:29:54.519+00:00",
+        "frame_count": null,
+        "image_format": null,
+        "image_width": null,
+        "image_height": null,
+        "quality_passed": null,
+        "quality_warnings": null,
+        "task_count": 5,
+        "plan_camera": {
+          "exposure_us": 380.0,
+          "gain_db": 0.0,
+          "pixel_format": "Mono8",
+          "offset_x": 0,
+          "offset_y": 0,
+          "width": 4096,
+          "height": 3000,
+          "timeout_ms": 2000
+        }
+      },
+      "errors": [],
+      "quality_warning_frame_count": 5,
+      "quality_failed_frame_count": 5
+    },
+    "obs_40mm": {
+      "dataset": "obs_40mm",
+      "frame_csv_count": 25,
+      "tiff_count": 25,
+      "pose_repeat_counts": {
+        "001": 5,
+        "002": 5,
+        "003": 5,
+        "004": 5,
+        "005": 5
+      },
+      "manifest": {
+        "exists": true,
+        "dataset_id": "obs_40mm",
+        "status": "completed",
+        "created_at": "2026-08-20T02:32:23.602+00:00",
+        "frame_count": null,
+        "image_format": null,
+        "image_width": null,
+        "image_height": null,
+        "quality_passed": null,
+        "quality_warnings": null,
+        "task_count": 5,
+        "plan_camera": {
+          "exposure_us": 380.0,
+          "gain_db": 0.0,
+          "pixel_format": "Mono8",
+          "offset_x": 0,
+          "offset_y": 0,
+          "width": 4096,
+          "height": 3000,
+          "timeout_ms": 2000
+        }
+      },
+      "errors": [],
+      "quality_warning_frame_count": 25,
+      "quality_failed_frame_count": 25
+    },
+    "obs_46mm": {
+      "dataset": "obs_46mm",
+      "frame_csv_count": 25,
+      "tiff_count": 25,
+      "pose_repeat_counts": {
+        "001": 5,
+        "002": 5,
+        "003": 5,
+        "004": 5,
+        "005": 5
+      },
+      "manifest": {
+        "exists": true,
+        "dataset_id": "obs_46mm",
+        "status": "completed",
+        "created_at": "2026-08-20T02:55:56.767+00:00",
+        "frame_count": null,
+        "image_format": null,
+        "image_width": null,
+        "image_height": null,
+        "quality_passed": null,
+        "quality_warnings": null,
+        "task_count": 5,
+        "plan_camera": {
+          "exposure_us": 380.0,
+          "gain_db": 0.0,
+          "pixel_format": "Mono8",
+          "offset_x": 0,
+          "offset_y": 0,
+          "width": 4096,
+          "height": 3000,
+          "timeout_ms": 2000
+        }
+      },
+      "errors": [],
+      "quality_warning_frame_count": 25,
+      "quality_failed_frame_count": 25
+    }
+  },
+  "protocol": {
+    "steger": "one call per input TIFF; no residual/height value used",
+    "quality_warning_policy": "retain warning frames; do not auto-delete",
+    "expected_layout": "3 heights x 5 poses x 5 repeats"
+  }
+}

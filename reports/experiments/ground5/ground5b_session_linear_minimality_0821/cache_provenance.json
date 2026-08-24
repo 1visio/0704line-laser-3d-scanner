@@ -1,0 +1,31 @@
+{
+  "cache_source_path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\outputs\\ground5a_factory_profile_0821\\steger_geometry_cache.json",
+  "cache_source_sha256": "28f56035ef44087c7fd81967c8aea39a4a94bc9884f3cb60abf6949c1aac3056",
+  "one_steger_per_frame": true,
+  "protocol_key": {
+    "config_sha256": "562dbf0d7e31faf98e1c4b97bf731bf339e7a7f19f722c70302e5c0c00a0d99b",
+    "extraction_method": "steger",
+    "extraction_options": {
+      "sigma": 1.5,
+      "threshold": 30.0,
+      "deriv_thresh": 0.5,
+      "roi_margin": 48,
+      "roi_max_height": 512,
+      "scan_axis": "row",
+      "search_roi": {
+        "offset_x": 1760,
+        "offset_y": 0,
+        "width": 480,
+        "height": 3000
+      }
+    },
+    "image_offset_xy": [
+      0,
+      0
+    ],
+    "full_sensor_coordinate_system": true
+  },
+  "frame_count": 35,
+  "read_only_reuse": true,
+  "steger_rerun": false
+}

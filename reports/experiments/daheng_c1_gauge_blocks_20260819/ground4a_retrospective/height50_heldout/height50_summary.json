@@ -1,0 +1,135 @@
+{
+  "schema_version": 1,
+  "HEIGHT_SCALE_50MM_VALIDATION": "PARTIAL",
+  "formal_scope": "repeat2_5 only; 20 frames and 5 position condition means",
+  "truth_mm": 50.0,
+  "frozen_height_scale": {
+    "k_full": 1.00403395913372,
+    "parameter_sha256": "fb05c3e6ea09775f5dc906c8d44a25f6e8fb0cdd97846f97fca38bc55c381391",
+    "input_sha256": "f069020d7ff84b7189b0c386cd4c2a93bd55ac6753957e48d77b1966ecd47b68"
+  },
+  "provenance": {
+    "data_root": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data\\obs_50mm",
+    "obs_50mm_image_count": 25,
+    "steger_call_count_reused": 25,
+    "steger_called_once_per_frame": true,
+    "c1_enabled": true,
+    "config_sha256": "c22e463aff6dc51565679382cc766a3c7078a57f676809e7b31ee1cbe185f15f",
+    "roi_registry_path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\outputs\\daheng_c1_gauge_blocks_20260819_ground4a\\height50_heldout\\height50_manual_roi_registry.json",
+    "roi_registry_sha256": "0e5174952ff93c634edd32b0dafc7ce651bf4f371602d5ec8e90c65c8d2bb2d4",
+    "ground3_summary_path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\output_daheng_0811\\ground_spatial_correction_ground3\\ground_gs_summary.json",
+    "ground3_summary_sha256": "4cee542124110fbd157e1c41b173f5c135091028045091cf11d59bb5ecf646b0",
+    "ground_origin_xy": [
+      4.345466690716022,
+      2.878594498981755
+    ],
+    "ground_direction_xy": [
+      0.012883418031591754,
+      0.9999170053258537
+    ],
+    "s_domain_mm": [
+      -147.0472008100069,
+      144.12573742616544
+    ],
+    "roi_selection_truth_or_error_used": false,
+    "reused_artifacts": [
+      "Ground-4A 29-condition CSV and H1 protocol",
+      "frozen Ground-1 origin/direction/S domain",
+      "Daheng 0811 calibration and Frozen C1 ray correction",
+      "25 cached one-pass Steger center arrays"
+    ],
+    "newly_computed": [
+      "obs_50mm C1 reconstruction on cached centers",
+      "repeat-1 per-position session-linear ground proxy",
+      "repeat2-5 raw B and frozen H1 metrics"
+    ],
+    "not_done": [
+      "50mm participation in k fit/model selection",
+      "C0/C1 refit",
+      "Ground G(S) refit",
+      "production configuration change"
+    ]
+  },
+  "frame_metrics": {
+    "raw_B": {
+      "count": 20,
+      "bias_mm": -0.10424358452314557,
+      "mae_mm": 0.10424358452314557,
+      "rmse_mm": 0.10739629769283114,
+      "p95_mm": 0.133707564244526,
+      "max_mm": 0.1342805353746357,
+      "pass_0p05_count": 0,
+      "pass_0p05_rate": 0.0,
+      "pass_0p1_count": 8,
+      "pass_0p1_rate": 0.4,
+      "pass_0p2_count": 20,
+      "pass_0p2_rate": 1.0
+    },
+    "frozen_H1": {
+      "count": 20,
+      "bias_mm": 0.09703385780293346,
+      "mae_mm": 0.09703385780293346,
+      "rmse_mm": 0.1004400492752584,
+      "p95_mm": 0.14001201841443311,
+      "max_mm": 0.14028294083423276,
+      "pass_0p05_count": 0,
+      "pass_0p05_rate": 0.0,
+      "pass_0p1_count": 12,
+      "pass_0p1_rate": 0.6,
+      "pass_0p2_count": 20,
+      "pass_0p2_rate": 1.0
+    }
+  },
+  "position_condition_metrics": {
+    "raw_B": {
+      "count": 5,
+      "bias_mm": -0.10424358452314557,
+      "mae_mm": 0.10424358452314557,
+      "rmse_mm": 0.10738428034675303,
+      "p95_mm": 0.13149290427059163,
+      "max_mm": 0.13319859908620657,
+      "pass_0p05_count": 0,
+      "pass_0p05_rate": 0.0,
+      "pass_0p1_count": 2,
+      "pass_0p1_rate": 0.4,
+      "pass_0p2_count": 5,
+      "pass_0p2_rate": 1.0
+    },
+    "frozen_H1": {
+      "count": 5,
+      "bias_mm": 0.09703385780293346,
+      "mae_mm": 0.09703385780293346,
+      "rmse_mm": 0.10042709564571643,
+      "p95_mm": 0.13384047297396576,
+      "max_mm": 0.13912154545451472,
+      "pass_0p05_count": 0,
+      "pass_0p05_rate": 0.0,
+      "pass_0p1_count": 3,
+      "pass_0p1_rate": 0.6,
+      "pass_0p2_count": 5,
+      "pass_0p2_rate": 1.0
+    }
+  },
+  "raw_to_h1_improvement": {
+    "frame_mae_delta_mm": -0.007209726720212112,
+    "frame_rmse_delta_mm": -0.0069562484175727385,
+    "condition_mae_delta_mm": -0.007209726720212112,
+    "condition_rmse_delta_mm": -0.006957184701036595
+  },
+  "status_checks": {
+    "complete_20_frames_and_5_positions": true,
+    "primary_mae_rmse_non_worse_at_both_scopes": true,
+    "p95_and_max_non_worse_at_both_scopes": false,
+    "each_position_abs_error_non_worse": false,
+    "frame_pass_rates_non_decreasing": true
+  },
+  "repeatability": {
+    "raw_median_sigma_mm": 0.001644846318571903,
+    "raw_p95_sigma_mm": 0.0022387403764803702,
+    "raw_max_sigma_mm": 0.002329931565351216,
+    "h1_median_sigma_mm": 0.0016514815614027377,
+    "h1_p95_sigma_mm": 0.002247771363668653,
+    "h1_max_sigma_mm": 0.002339330414068182
+  },
+  "status_rule": "PASS requires complete 20/20 formal frames and 5/5 condition means, non-worse MAE/RMSE/P95/Max at both scopes, non-worse absolute error at every position, and non-decreasing frame pass rates at ±0.05/±0.1/±0.2; PARTIAL requires complete data and primary MAE/RMSE improvement but at least one tail/position/pass-rate criterion fails; otherwise FAIL."
+}

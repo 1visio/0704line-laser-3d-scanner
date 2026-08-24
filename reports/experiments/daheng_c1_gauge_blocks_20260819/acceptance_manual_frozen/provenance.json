@@ -1,0 +1,186 @@
+{
+  "generated_at_utc": "2026-08-19T06:19:42.211699+00:00",
+  "script": {
+    "path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\tools\\evaluate_daheng_c1_gauge_blocks.py",
+    "exists": true,
+    "sha256": "263e47b6400d83807605b99411364cb7d09d503ddc416c1ba9fa8b7915e0d43d"
+  },
+  "data_root": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data",
+  "config": {
+    "path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\configs\\measure_tool_daheng_0811.yaml",
+    "exists": true,
+    "sha256": "c22e463aff6dc51565679382cc766a3c7078a57f676809e7b31ee1cbe185f15f"
+  },
+  "roi_registry_input": {
+    "path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\outputs\\daheng_c1_gauge_blocks_20260819\\roi_registry_manual.json",
+    "exists": true,
+    "sha256": "e18e5328e293f273b2615a52704d0ea0d5a1fa8f1086b32facdd251bd65244f8"
+  },
+  "calibration": {
+    "intrinsics": {
+      "path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\configs\\calibration_daheng_0811\\calibration_result.yaml",
+      "exists": true,
+      "sha256": "0d2b17c3e43aea548088e9cd54b70f3a46350a5c53ea9ee27a4705d85e8fc9b4"
+    },
+    "laser_model": {
+      "path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\configs\\calibration_daheng_0811\\quadratic_graph.yaml",
+      "exists": true,
+      "sha256": "113d3c1b8f92d5a734a2bf612b82a4bd59c0436a89664b5e565e7dd1034bab27"
+    },
+    "extrinsics": {
+      "path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\configs\\calibration_daheng_0811\\camera_ground_extrinsics.yaml",
+      "exists": true,
+      "sha256": "55eaa9cddb3e94f767d918f447393464a9cf9c183955e62b5f24384431962569"
+    },
+    "laser_ray_correction_frozen_c1": {
+      "path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\configs\\calibration_daheng_0811\\frozen_c1_4k.json",
+      "exists": true,
+      "sha256": "32717a3688905b237b0acbfb54e3290e112bc816c9be1133825d255196801ae3"
+    }
+  },
+  "reconstruction_params_c0": {
+    "parallel_epsilon": 1e-09,
+    "quadratic_epsilon": 1e-12,
+    "min_camera_depth_mm": 630.0,
+    "max_camera_depth_mm": 715.0,
+    "model_range_margin_mm": 2.0,
+    "image_roi_polygon": null,
+    "enable_laser_ray_correction": false
+  },
+  "reconstruction_params_c1": {
+    "parallel_epsilon": 1e-09,
+    "quadratic_epsilon": 1e-12,
+    "min_camera_depth_mm": 630.0,
+    "max_camera_depth_mm": 715.0,
+    "model_range_margin_mm": 2.0,
+    "image_roi_polygon": null,
+    "enable_laser_ray_correction": true
+  },
+  "reused_artifacts": [
+    "configured Steger backend and profile",
+    "Daheng 0811 calibration files",
+    "quadratic_graph C0 model",
+    "Frozen C1_4k correction JSON",
+    "30/30 manually confirmed frozen ROI registry"
+  ],
+  "newly_computed": [
+    "input image audit",
+    "one Steger extraction per 150 images",
+    "C0/C1 reconstruction against loaded frozen manual ROI",
+    "C0/C1 reconstruction and lambda diagnostics",
+    "single-frame, condition, per-height, global statistics"
+  ],
+  "not_reused": [
+    "historical single-frame PNG ROI/measurements",
+    "historical gauge repeatability outputs",
+    "any result-driven ROI or re-fit"
+  ],
+  "roi_summary": {
+    "source": "manual_frozen",
+    "registry_path": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\outputs\\daheng_c1_gauge_blocks_20260819\\roi_registry_manual.json",
+    "registry_sha256": "e18e5328e293f273b2615a52704d0ea0d5a1fa8f1086b32facdd251bd65244f8",
+    "geometry_only": true,
+    "c0_c1_values_used": false,
+    "manual_confirmed": true,
+    "manual_confirmed_count": 30,
+    "manual_review_required": false,
+    "datasets": {
+      "obs_1mm": {
+        "position_order_pose_ids": [
+          "001",
+          "002",
+          "003",
+          "004",
+          "005"
+        ],
+        "position_order_v_center_px": [
+          245.0,
+          1067.5,
+          1515.0,
+          2157.5,
+          2825.0
+        ]
+      },
+      "obs_2mm": {
+        "position_order_pose_ids": [
+          "005",
+          "004",
+          "003",
+          "002",
+          "001"
+        ],
+        "position_order_v_center_px": [
+          252.5,
+          942.5,
+          1760.0,
+          2407.5,
+          2820.0
+        ]
+      },
+      "obs_6mm": {
+        "position_order_pose_ids": [
+          "001",
+          "002",
+          "003",
+          "004",
+          "005"
+        ],
+        "position_order_v_center_px": [
+          300.0,
+          1125.0,
+          1532.5,
+          2392.5,
+          2840.0
+        ]
+      },
+      "obs_10mm": {
+        "position_order_pose_ids": [
+          "005",
+          "004",
+          "003",
+          "002",
+          "001"
+        ],
+        "position_order_v_center_px": [
+          300.0,
+          1130.0,
+          1980.0,
+          2400.0,
+          2825.0
+        ]
+      },
+      "obs_20mm": {
+        "position_order_pose_ids": [
+          "005",
+          "004",
+          "003",
+          "002",
+          "001"
+        ],
+        "position_order_v_center_px": [
+          252.5,
+          1112.5,
+          1945.0,
+          2365.0,
+          2787.5
+        ]
+      },
+      "obs_30mm": {
+        "position_order_pose_ids": [
+          "001",
+          "002",
+          "003",
+          "004",
+          "005"
+        ],
+        "position_order_v_center_px": [
+          257.5,
+          1110.0,
+          1972.5,
+          2397.5,
+          2842.5
+        ]
+      }
+    }
+  }
+}

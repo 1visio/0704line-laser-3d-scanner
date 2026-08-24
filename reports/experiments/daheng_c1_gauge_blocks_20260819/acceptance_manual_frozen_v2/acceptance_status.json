@@ -1,0 +1,209 @@
+{
+  "SYSTEM_HEIGHT_ACCURACY": {
+    "criterion": "absolute height error <= 0.2 mm",
+    "primary_model": "C1",
+    "primary_mode": "local_adjacent",
+    "C0": {
+      "local_adjacent": {
+        "single_frame": {
+          "count": 146,
+          "bias_mm": -0.05299701093973592,
+          "mae_mm": 0.0549485444791921,
+          "rmse_mm": 0.06683553635685978,
+          "p95_mm": 0.12605962956179972,
+          "max_mm": 0.16606365946360313,
+          "pass_count": 146,
+          "pass_rate": 1.0,
+          "limit_mm": 0.2
+        },
+        "global_condition": {
+          "count": 30,
+          "bias_mm": -0.05229310570903758,
+          "mae_mm": 0.05419259835410829,
+          "rmse_mm": 0.06604038427627942,
+          "p95_mm": 0.12397317200847534,
+          "max_mm": 0.1643360666019582,
+          "pass_count": 30,
+          "pass_rate": 1.0,
+          "limit_mm": 0.2
+        },
+        "all_single_frames_pass_0p2mm": false,
+        "all_30_conditions_pass_0p2mm": true
+      },
+      "all_non_height": {
+        "single_frame": {
+          "count": 146,
+          "bias_mm": -0.04914938925553713,
+          "mae_mm": 0.083060811481897,
+          "rmse_mm": 0.10149446688735192,
+          "p95_mm": 0.20530974394750867,
+          "max_mm": 0.2683925174051751,
+          "pass_count": 137,
+          "pass_rate": 0.9383561643835616,
+          "limit_mm": 0.2
+        },
+        "global_condition": {
+          "count": 30,
+          "bias_mm": -0.049688598543433514,
+          "mae_mm": 0.08269571617709065,
+          "rmse_mm": 0.10051052599068855,
+          "p95_mm": 0.18481036639406256,
+          "max_mm": 0.2502889055795059,
+          "pass_count": 28,
+          "pass_rate": 0.9333333333333333,
+          "limit_mm": 0.2
+        },
+        "all_single_frames_pass_0p2mm": false,
+        "all_30_conditions_pass_0p2mm": false
+      },
+      "fixed_zg_zero": {
+        "single_frame": {
+          "count": 146,
+          "bias_mm": -0.05050575811139906,
+          "mae_mm": 0.0625181323287865,
+          "rmse_mm": 0.08224296240065844,
+          "p95_mm": 0.17616796945641539,
+          "max_mm": 0.18819911467101458,
+          "pass_count": 146,
+          "pass_rate": 1.0,
+          "limit_mm": 0.2
+        },
+        "global_condition": {
+          "count": 30,
+          "bias_mm": -0.05143819493055544,
+          "mae_mm": 0.06307818193175037,
+          "rmse_mm": 0.08229297103596868,
+          "p95_mm": 0.16353298452471038,
+          "max_mm": 0.18091811200967622,
+          "pass_count": 30,
+          "pass_rate": 1.0,
+          "limit_mm": 0.2
+        },
+        "all_single_frames_pass_0p2mm": false,
+        "all_30_conditions_pass_0p2mm": true
+      }
+    },
+    "C1": {
+      "local_adjacent": {
+        "single_frame": {
+          "count": 146,
+          "bias_mm": -0.05369854818957503,
+          "mae_mm": 0.05589484211881798,
+          "rmse_mm": 0.06913326914227104,
+          "p95_mm": 0.132735238155143,
+          "max_mm": 0.1691746310239708,
+          "pass_count": 146,
+          "pass_rate": 1.0,
+          "limit_mm": 0.2
+        },
+        "global_condition": {
+          "count": 30,
+          "bias_mm": -0.053395289173999674,
+          "mae_mm": 0.0555330152651295,
+          "rmse_mm": 0.06851547083533036,
+          "p95_mm": 0.1293079023586143,
+          "max_mm": 0.16693800950521975,
+          "pass_count": 30,
+          "pass_rate": 1.0,
+          "limit_mm": 0.2
+        },
+        "all_single_frames_pass_0p2mm": false,
+        "all_30_conditions_pass_0p2mm": true
+      },
+      "all_non_height": {
+        "single_frame": {
+          "count": 146,
+          "bias_mm": -0.0543995536397152,
+          "mae_mm": 0.06300853024745123,
+          "rmse_mm": 0.08402914166357232,
+          "p95_mm": 0.1550696419532125,
+          "max_mm": 0.2879829023812448,
+          "pass_count": 141,
+          "pass_rate": 0.9657534246575342,
+          "limit_mm": 0.2
+        },
+        "global_condition": {
+          "count": 30,
+          "bias_mm": -0.05387722027295775,
+          "mae_mm": 0.06223075582401615,
+          "rmse_mm": 0.08301962951320657,
+          "p95_mm": 0.14428320341235576,
+          "max_mm": 0.27868069151905317,
+          "pass_count": 29,
+          "pass_rate": 0.9666666666666667,
+          "limit_mm": 0.2
+        },
+        "all_single_frames_pass_0p2mm": false,
+        "all_30_conditions_pass_0p2mm": false
+      },
+      "fixed_zg_zero": {
+        "single_frame": {
+          "count": 146,
+          "bias_mm": -0.05006725421468345,
+          "mae_mm": 0.058994627770347016,
+          "rmse_mm": 0.07089918320345125,
+          "p95_mm": 0.1357609070438161,
+          "max_mm": 0.16095296705101603,
+          "pass_count": 146,
+          "pass_rate": 1.0,
+          "limit_mm": 0.2
+        },
+        "global_condition": {
+          "count": 30,
+          "bias_mm": -0.04944451681886218,
+          "mae_mm": 0.058030309764449596,
+          "rmse_mm": 0.07003973656421991,
+          "p95_mm": 0.13177836986874447,
+          "max_mm": 0.15374279025043414,
+          "pass_count": 30,
+          "pass_rate": 1.0,
+          "limit_mm": 0.2
+        },
+        "all_single_frames_pass_0p2mm": false,
+        "all_30_conditions_pass_0p2mm": true
+      }
+    },
+    "primary_result": {
+      "single_frame": {
+        "count": 146,
+        "bias_mm": -0.05369854818957503,
+        "mae_mm": 0.05589484211881798,
+        "rmse_mm": 0.06913326914227104,
+        "p95_mm": 0.132735238155143,
+        "max_mm": 0.1691746310239708,
+        "pass_count": 146,
+        "pass_rate": 1.0,
+        "limit_mm": 0.2
+      },
+      "global_condition": {
+        "count": 30,
+        "bias_mm": -0.053395289173999674,
+        "mae_mm": 0.0555330152651295,
+        "rmse_mm": 0.06851547083533036,
+        "p95_mm": 0.1293079023586143,
+        "max_mm": 0.16693800950521975,
+        "pass_count": 30,
+        "pass_rate": 1.0,
+        "limit_mm": 0.2
+      },
+      "all_single_frames_pass_0p2mm": false,
+      "all_30_conditions_pass_0p2mm": true
+    }
+  },
+  "C1_ENGINEERING_STATUS": "FAIL",
+  "C1_ENGINEERING_STATUS_REASON": "one or more audit or accuracy gates failed",
+  "audit_gate_pass": true,
+  "registry_manual_review_required": false,
+  "all_primary_height_rows_success": false,
+  "condition_count": 30,
+  "height_measurement_row_count": 900,
+  "height_measurement_expected_count": 900,
+  "height_measurement_failed_count": 24,
+  "condition_row_count": 180,
+  "condition_expected_count": 180,
+  "condition_missing_count": 0,
+  "missing_conditions": [],
+  "paired_condition_row_count": 90,
+  "paired_condition_expected_count": 90,
+  "paired_condition_missing_count": 0
+}

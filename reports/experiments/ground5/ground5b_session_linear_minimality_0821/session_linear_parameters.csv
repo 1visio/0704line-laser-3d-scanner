@@ -1,0 +1,7 @@
+pose_id,chain,coordinate,a,b,fit_point_count,fit_frame_count,fit_scope,factory_applied,fit_source
+006,C,full_v,0.00010527396347535514,-0.3682956834538375,7765,5,common_factory_support,True,heldout_pose_laser_ground_only
+006,D-v,full_v,8.739524102662933e-05,-0.36044461545566453,12463,5,all_board_points,False,heldout_pose_laser_ground_only
+006,D-S,physical_S,-0.0009007710503509596,-0.23081634138352253,12463,5,all_board_points,False,heldout_pose_laser_ground_only
+007,C,full_v,8.065262407992737e-05,-0.3364916449445116,7708,5,common_factory_support,True,heldout_pose_laser_ground_only
+007,D-v,full_v,8.366784938691959e-05,-0.3553093323086681,12260,5,all_board_points,False,heldout_pose_laser_ground_only
+007,D-S,physical_S,-0.0008624292432353042,-0.23121368530788608,12260,5,all_board_points,False,heldout_pose_laser_ground_only

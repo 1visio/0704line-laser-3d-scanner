@@ -1,0 +1,117 @@
+{
+  "decision": {
+    "SELECTED_CORRECTION_LAYER": "HEIGHT",
+    "LAMBDA_LAYER_PHYSICAL_VALIDITY": "NOT_SUPPORTED",
+    "DEVELOPMENT_LAMBDA_LAYER_PHYSICAL_VALIDITY": "PARTIAL",
+    "Q2_ONLY_CORRECTION_CANDIDATE": "YES",
+    "MORE_DATA_REQUIRED_BEFORE_NEXT_ANALYSIS": "YES",
+    "H_B2_IMPROVES_RAW_ALL_DEVELOPMENT_SCHEMES": true,
+    "L_B2_IMPROVES_RAW_ALL_DEVELOPMENT_SCHEMES": true,
+    "L_B2_NONINFERIOR_TO_H_B2_ALL_DEVELOPMENT_SCHEMES": false,
+    "historical_surface_model": "B2",
+    "historical_q1_retained": "NO",
+    "historical_Q2_GAP_FILLED": "NO",
+    "historical_SURFACE2C_ALLOWED": "NO"
+  },
+  "physical_audit": {
+    "fit_failure": false,
+    "new_invalid_point_count": 1100,
+    "development_new_invalid_point_count": 0,
+    "c1_clamp_state_change_count": 0,
+    "max_abs_delta_lambda_mm": 34.75828216611252,
+    "max_p95_abs_delta_lambda_mm": 34.75827875665282,
+    "max_abs_delta_Zg_mm": 34.79810312174929,
+    "development_max_abs_delta_lambda_mm": 30.96264545884413,
+    "development_max_p95_abs_delta_lambda_mm": 30.96263744901654,
+    "development_max_abs_delta_Zg_mm": 30.990992892147485,
+    "development_c1_clamp_state_change_count": 0,
+    "lambda_coefficient_max_relative_range": 3.9767329425769016,
+    "thresholds": {
+      "max_abs_delta_lambda_mm": 2.0,
+      "max_p95_abs_delta_lambda_mm": 1.0,
+      "max_abs_delta_Zg_mm": 2.0,
+      "max_coefficient_relative_range": 1.0
+    },
+    "LAMBDA_LAYER_PHYSICAL_VALIDITY": "NOT_SUPPORTED",
+    "development_LAMBDA_LAYER_PHYSICAL_VALIDITY": "PARTIAL"
+  },
+  "protocol": {
+    "condition_equal_weight": true,
+    "random_point_split": false,
+    "heldout_50_excluded_from_fit_and_selection": true,
+    "C0_refit": false,
+    "C1_refit": false,
+    "q2_redefined": false,
+    "q1_used": false,
+    "quadratic_terms": false,
+    "spline_or_ml": false,
+    "production_validation": false,
+    "lambda_layer_recomputed_repeat1_proxy": true,
+    "ground_u_compensation": null
+  },
+  "provenance": {
+    "input_paths": {
+      "config": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\laser_measurement_tool\\configs\\measure_tool_daheng_0811.yaml",
+      "surface1a_points": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\outputs\\daheng_c1_gauge_blocks_20260819_ground4a\\surface1a\\surface1a_points.csv",
+      "surface1a_summary": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\outputs\\daheng_c1_gauge_blocks_20260819_ground4a\\surface1a\\surface1a_summary.json",
+      "surface_coordinate": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\outputs\\daheng_c1_gauge_blocks_20260819_ground4a\\surface1a\\surface_coordinate_definition.json",
+      "surface2b_samples": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\outputs\\daheng_c1_gauge_blocks_20260819_ground4a\\surface2\\surface2b\\surface2b_samples.csv",
+      "surface2br2_condition_table": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\outputs\\daheng_c1_gauge_blocks_20260819_ground4a\\surface2\\surface2br2\\surface2br2_condition_table.csv",
+      "surface2br2_predictions": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\outputs\\daheng_c1_gauge_blocks_20260819_ground4a\\surface2\\surface2br2\\surface2br2_condition_predictions.csv",
+      "surface2br2_cv_metrics": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\outputs\\daheng_c1_gauge_blocks_20260819_ground4a\\surface2\\surface2br2\\surface2br2_cv_metrics.csv",
+      "surface2br2_coefficients": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\outputs\\daheng_c1_gauge_blocks_20260819_ground4a\\surface2\\surface2br2\\surface2br2_coefficients.csv",
+      "surface2br2_stability": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\outputs\\daheng_c1_gauge_blocks_20260819_ground4a\\surface2\\surface2br2\\surface2br2_coefficient_stability.csv",
+      "surface2br2_summary": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\outputs\\daheng_c1_gauge_blocks_20260819_ground4a\\surface2\\surface2br2\\surface2br2_summary.json",
+      "model_selection_summary": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\outputs\\daheng_c1_gauge_blocks_20260819_ground4a\\surface2\\surface2_model_selection\\surface2_model_selection_summary.json",
+      "pointwise_diagnostics": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\outputs\\daheng_c1_gauge_blocks_20260819_manual_frozen\\pointwise_diagnostics.csv",
+      "surface2_center_cache": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\outputs\\daheng_c1_gauge_blocks_20260819_ground4a\\surface2\\surface2_center_cache.csv",
+      "surface2_roi": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\outputs\\daheng_c1_gauge_blocks_20260819_ground4a\\surface2\\manual_roi\\roi_registry_manual.json",
+      "height50_roi": "D:\\Docs\\linelaserscan\\0704line-laser-3d-scanner\\outputs\\daheng_c1_gauge_blocks_20260819_ground4a\\height50_heldout\\height50_manual_roi_registry.json"
+    },
+    "input_sha256": {
+      "config": "d71dd6e9ac5919c0a6ef220ed40a8f3b517c31bfc98fcbb6a6ff6a8cbcd9d47c",
+      "surface1a_points": "0a325ea20c8b250ea94553cd6c9c78c198ce49f48a27925697a34eabf9fd4c9a",
+      "surface1a_summary": "3af1f2384d70cc2fc934565acea48fda944367abb04a20dcbca7bf67a13fc3d3",
+      "surface_coordinate": "41ed897fdf7904cf83503221c72b219f22403854a9d6e5a29ba7e0d4ba33170a",
+      "surface2b_samples": "f2bb04053c77806ede096ba5b15d05d76f2a0f1b7465e0a189adf7f1346687c7",
+      "surface2br2_condition_table": "d309642826a935a31c5f85efda229db610b7232e5eacc586ae825f26cfdfdbc3",
+      "surface2br2_predictions": "1668c23163a6b71b48dc694c9151aaeb00d61ccec56b16d3edc439ac67d6f26e",
+      "surface2br2_cv_metrics": "1032cf827849dfbc2342ba20807818d766d1ce29a07a26dc757a4976f14f6fb7",
+      "surface2br2_coefficients": "a18cbc8189540d49a42fd00affd052c13d7c486b0d89803a7205905e744c98ce",
+      "surface2br2_stability": "a6d8fd055cf92d0f484e464b58820d20c2442bcf8d3d0d666ef870474473bc58",
+      "surface2br2_summary": "e2cd1d7ca93dbe8def72f4813bb65506473ffd23a6a5ab7dfbb548cc3d0f806a",
+      "model_selection_summary": "c449080d2d46506a978f39e87478e88001ecc090b13f145a2f0c89f4cc24a258",
+      "pointwise_diagnostics": "3c63dc9d115d714d9b78747db06c5016bfd863592c6b959c31301e1a6cd67487",
+      "surface2_center_cache": "8f45620ebd1cee60fec504e9f04baf7573aaa1bcb5b9d2b57feb8161b37fcb50",
+      "surface2_roi": "04cbcae3ae58172099509aaca99056a3eb17ea09511fba17974cdd70d1d089de",
+      "height50_roi": "0e5174952ff93c634edd32b0dafc7ce651bf4f371602d5ec8e90c65c8d2bb2d4"
+    },
+    "frozen_hashes": {
+      "config_sha256": "d71dd6e9ac5919c0a6ef220ed40a8f3b517c31bfc98fcbb6a6ff6a8cbcd9d47c",
+      "quadratic_c0_sha256": "113d3c1b8f92d5a734a2bf612b82a4bd59c0436a89664b5e565e7dd1034bab27",
+      "frozen_c1_sha256": "32717a3688905b237b0acbfb54e3290e112bc816c9be1133825d255196801ae3",
+      "intrinsics_sha256": "0d2b17c3e43aea548088e9cd54b70f3a46350a5c53ea9ee27a4705d85e8fc9b4",
+      "extrinsics_sha256": "55eaa9cddb3e94f767d918f447393464a9cf9c183955e62b5f24384431962569"
+    },
+    "reused_surface2br2_hashes": {
+      "surface2br2_condition_table": "d309642826a935a31c5f85efda229db610b7232e5eacc586ae825f26cfdfdbc3",
+      "surface2br2_predictions": "1668c23163a6b71b48dc694c9151aaeb00d61ccec56b16d3edc439ac67d6f26e",
+      "surface2br2_cv_metrics": "1032cf827849dfbc2342ba20807818d766d1ce29a07a26dc757a4976f14f6fb7",
+      "surface2br2_coefficients": "a18cbc8189540d49a42fd00affd052c13d7c486b0d89803a7205905e744c98ce",
+      "surface2br2_stability": "a6d8fd055cf92d0f484e464b58820d20c2442bcf8d3d0d666ef870474473bc58",
+      "surface2br2_summary": "e2cd1d7ca93dbe8def72f4813bb65506473ffd23a6a5ab7dfbb548cc3d0f806a"
+    },
+    "development_condition_count": 44,
+    "strict_50_condition_count": 5,
+    "development_formal_point_count": 11160,
+    "strict_50_formal_point_count": 1100,
+    "raw_replay_max_difference_mm": 1.7791323969618134e-13
+  },
+  "historical_conclusion_preserved": {
+    "SELECTED_SURFACE_MODEL": "B2",
+    "Q1_RETAINED": "NO",
+    "Q2_GAP_FILLED": "NO",
+    "SURFACE2C_ALLOWED": "NO"
+  },
+  "created_at_utc": "2026-08-20T10:35:51.434647+00:00"
+}

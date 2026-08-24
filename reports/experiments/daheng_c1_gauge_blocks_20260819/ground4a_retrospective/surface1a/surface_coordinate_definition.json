@@ -1,0 +1,45 @@
+{
+  "coordinate_name": "q1_q2",
+  "coordinate_type": "unique_frozen_C0_quadratic_surface_intrinsic_coordinates",
+  "model_type": "quadratic_graph",
+  "dependent_axis": "X",
+  "independent_axes": [
+    "Y",
+    "Z"
+  ],
+  "independent_axis_indices_camera_xyz": [
+    1,
+    2
+  ],
+  "independent_center_mm": [
+    -10.98752311856499,
+    677.1720248013299
+  ],
+  "independent_scale_mm": [
+    66.96753407116536,
+    24.316113306359032
+  ],
+  "formula": "q_i=(P_c0[independent_axis_i]-independent_center_mm[i])/independent_scale_mm[i]",
+  "P_c0_definition": "lambda_c0 times undistorted normalized camera ray; camera coordinates in mm",
+  "S_definition": "S=(XY-Ground1_origin_xy) dot Ground1_direction_xy",
+  "ground_origin_xy": [
+    4.345466690716022,
+    2.878594498981755
+  ],
+  "ground_direction_xy": [
+    0.012883418031591754,
+    0.9999170053258537
+  ],
+  "S_domain_mm": [
+    -147.0472008100069,
+    144.12573742616544
+  ],
+  "residual_definition": "height_residual=Zg-(a_position*S+b_position)-true_height; a/b are repeat-1 session_linear ground proxies",
+  "Zg_definition": "final Frozen C1 reconstructed ground Z, including the current reconstruction path; no additional correction",
+  "height_inlier_definition": "same XY robust height-line inlier protocol as existing C1 gauge replay",
+  "jacobian_definition": "central finite difference of final C1 lambda and final ground Zg with respect to original pixel u/v",
+  "jacobian_epsilon_px": 0.01,
+  "q_pair_tolerance_normalized": 0.05,
+  "heldout_policy": "50mm is held-out validation only; not used to define q, scales, tolerance, or any fitted model; its q-domain overlap is used only for post-hoc cross-domain coverage classification",
+  "created_at_utc": "2026-08-20T00:57:18.301450+00:00"
+}

@@ -71,7 +71,7 @@ from measurement.ground_reference import (
     load_frozen_session_ground_reference,
 )
 from measurement.board_mask import (
-    select_board_ground_points,
+    select_board_ground_points_with_mask,
     select_manual_ground_roi_points,
 )
 
@@ -84,6 +84,12 @@ from .recording import FrameRecorder
 from .ground_sanity import (
     GroundSanityResult,
     evaluate_ground_sanity,
+)
+from .ground_point_audit import (
+    GroundPointAuditValidationError,
+    build_frozen_chain_provenance,
+    build_session_ground_plane_provenance,
+    export_ground_point_audit,
 )
 from .session_calibration import (
     SessionGroundRepeatability,
@@ -3145,7 +3151,28 @@ class OnlineCameraWindow(QMainWindow):
             result = self._sanity_frame_result()
             if result is None:
                 return
-            sanity_points, mask_metadata = self._session_sanity_points(result)
+            active_generation = self._pipeline.ground_extrinsic_generation
+            if (
+                result.ground_extrinsic_source != "session"
+                or result.ground_extrinsic_generation != active_generation
+                or active_generation != self._session_ground_generation
+            ):
+                raise GroundPointAuditValidationError(
+                    "当前 FrameResult 与 active Session ground generation 不一致"
+                )
+            calibration_host = self._session_ground_calibration_host_monotonic_ns
+            if calibration_host is None or int(result.frame.host_monotonic_ns) <= int(
+                calibration_host
+            ):
+                raise GroundPointAuditValidationError(
+                    "当前激光帧不是 Session PnP 后的新帧"
+                )
+            (
+                sanity_points,
+                selected_indices,
+                selected_mask,
+                mask_metadata,
+            ) = self._session_sanity_selection(result)
             sanity = evaluate_ground_sanity(
                 sanity_points,
                 ground_extrinsic_source=result.ground_extrinsic_source,
@@ -3175,6 +3202,63 @@ class OnlineCameraWindow(QMainWindow):
         sanity_payload["stage_a_height_scale_applied"] = False
         sanity_payload["frame"]["offset_x"] = int(result.frame.offset_x)
         sanity_payload["frame"]["offset_y"] = int(result.frame.offset_y)
+
+        try:
+            session_json_path = self._session_ground_json_path()
+            session_plane = build_session_ground_plane_provenance(
+                self._active_session_ground_result
+            )
+            frozen_provenance = build_frozen_chain_provenance(
+                self._pipeline.package.manifest_path,
+                calibration_package_id=result.calibration_package_id,
+                calibration_manifest_sha256=result.calibration_manifest_sha256,
+                algorithm_config_sha256=result.algorithm_config_sha256,
+            )
+            metric_points = None
+            if (
+                result.ground_reference_source != "none"
+                or result.ground_reference_status != "inactive"
+            ):
+                metric_points = result.points_ground
+            audit = export_ground_point_audit(
+                session_json_path.parent / "ground_spatial_audit",
+                session_id=session_json_path.parent.name,
+                session_generation=self._session_ground_generation,
+                ground_extrinsic_generation=result.ground_extrinsic_generation,
+                frame_id=(
+                    f"camera_{int(result.frame.camera_frame_number):06d}_"
+                    f"host_{int(result.frame.host_monotonic_ns)}"
+                ),
+                camera_frame_number=int(result.frame.camera_frame_number),
+                frame_host_monotonic_ns=int(result.frame.host_monotonic_ns),
+                frame_offset=(int(result.frame.offset_x), int(result.frame.offset_y)),
+                ground_extrinsic_source=result.ground_extrinsic_source,
+                calibration_package_id=result.calibration_package_id,
+                calibration_manifest_sha256=result.calibration_manifest_sha256,
+                algorithm_config_sha256=result.algorithm_config_sha256,
+                pixels_uv=result.pixels_uv,
+                points_camera=result.points_camera,
+                points_ground_raw=result.points_ground_raw,
+                points_ground_metric=metric_points,
+                selected_indices=selected_indices,
+                selected_mask=selected_mask,
+                sanity_points=sanity_points,
+                sanity_result=sanity,
+                mask_metadata=mask_metadata,
+                ground_plane=session_plane["ground_plane"],
+                session_pnp=session_plane["session_pnp"],
+                frozen_provenance=frozen_provenance,
+            )
+        except (OSError, TypeError, ValueError, GroundPointAuditValidationError) as error:
+            self._last_ground_sanity = None
+            self._reset_ground_sanity_display()
+            self.statusBar().showMessage(
+                f"检查结果已计算，但 point-level audit 导出失败：{error}"
+            )
+            QMessageBox.warning(self, "Ground point audit 导出失败", str(error))
+            self._update_control_states()
+            return
+
         try:
             json_path = merge_session_ground_sanity(
                 self._session_ground_json_path(), sanity_payload
@@ -3193,7 +3277,8 @@ class OnlineCameraWindow(QMainWindow):
                 f"Bias {sanity.bias_zg_mm:.4f} mm，"
                 f"RMSE {sanity.rmse_zg_mm:.4f} mm，"
                 f"mask 点 {sanity.mask.get('selected_point_count', sanity.input_point_count)}，"
-                f"有效点 {sanity.valid_point_count}；已保存 {json_path}"
+                f"有效点 {sanity.valid_point_count}；"
+                f"audit 已保存 {audit.audit_dir}；Session JSON {json_path}"
             )
         else:
             warning_text = "; ".join(
@@ -3214,18 +3299,31 @@ class OnlineCameraWindow(QMainWindow):
         self, result: FrameResult
     ) -> tuple[np.ndarray, dict[str, object]]:
         """Apply the PnP-derived board interior mask before sanity metrics."""
+        points, _, _, metadata = self._session_sanity_selection(result)
+        return points, metadata
+
+    def _session_sanity_selection(
+        self, result: FrameResult
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, dict[str, object]]:
+        """Return sanity points plus their exact source-row mask linkage."""
         sanity_config = self._config.session_ground_calibration.sanity
         points = self._raw_ground_points(result)
         if not sanity_config.mask_enabled:
-            return points, {
-                "enabled": False,
-                "status": "disabled",
-                "source": "configuration",
-                "input_point_count": int(len(points)),
-                "selected_point_count": int(len(points)),
-            }
+            selected_mask = np.ones(len(points), dtype=bool)
+            return (
+                points,
+                np.arange(len(points), dtype=np.int64),
+                selected_mask,
+                {
+                    "enabled": False,
+                    "status": "disabled",
+                    "source": "configuration",
+                    "input_point_count": int(len(points)),
+                    "selected_point_count": int(len(points)),
+                },
+            )
 
-        return self._select_pnp_board_ground_points(
+        return self._select_pnp_board_ground_points_with_mask(
             result,
             inset_mm=sanity_config.mask_inset_mm,
         )
@@ -3247,6 +3345,19 @@ class OnlineCameraWindow(QMainWindow):
         inset_mm: float,
     ) -> tuple[np.ndarray, dict[str, object]]:
         """Shared PnP board-mask selection for sanity and ground reference."""
+        points, _, _, metadata = self._select_pnp_board_ground_points_with_mask(
+            result,
+            inset_mm=inset_mm,
+        )
+        return points, metadata
+
+    def _select_pnp_board_ground_points_with_mask(
+        self,
+        result: FrameResult,
+        *,
+        inset_mm: float,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, dict[str, object]]:
+        """Select board points once while retaining exact source indices."""
         points = self._raw_ground_points(result)
 
         corners = (
@@ -3256,34 +3367,44 @@ class OnlineCameraWindow(QMainWindow):
         )
         pixels = getattr(result, "pixels_uv", None)
         if corners is None or pixels is None:
-            return np.empty((0, 3), dtype=np.float64), {
-                "enabled": True,
-                "status": "unavailable",
-                "source": GROUND_SUPPORT_PNP_BOARD_MASK,
-                "reason": "reconstructed_source_pixels_missing",
-                "input_point_count": int(len(points)),
-                "selected_point_count": 0,
-            }
+            return (
+                np.empty((0, 3), dtype=np.float64),
+                np.empty(0, dtype=np.int64),
+                np.zeros(len(points), dtype=bool),
+                {
+                    "enabled": True,
+                    "status": "unavailable",
+                    "source": GROUND_SUPPORT_PNP_BOARD_MASK,
+                    "reason": "reconstructed_source_pixels_missing",
+                    "input_point_count": int(len(points)),
+                    "selected_point_count": 0,
+                },
+            )
 
         mask_offset = self._session_ground_calibration_offset
         if mask_offset is None:
             mask_offset = (int(result.frame.offset_x), int(result.frame.offset_y))
         session_result = self._active_session_ground_result
         if session_result.rvec is None or session_result.tvec is None:
-            return np.empty((0, 3), dtype=np.float64), {
-                "enabled": True,
-                "status": "unavailable",
-                "source": GROUND_SUPPORT_PNP_BOARD_MASK,
-                "reason": "session_pnp_pose_missing",
-                "input_point_count": int(len(points)),
-                "selected_point_count": 0,
-            }
+            return (
+                np.empty((0, 3), dtype=np.float64),
+                np.empty(0, dtype=np.int64),
+                np.zeros(len(points), dtype=bool),
+                {
+                    "enabled": True,
+                    "status": "unavailable",
+                    "source": GROUND_SUPPORT_PNP_BOARD_MASK,
+                    "reason": "session_pnp_pose_missing",
+                    "input_point_count": int(len(points)),
+                    "selected_point_count": 0,
+                },
+            )
         try:
             calibration = self._pipeline.calibration_for_reconstruction()
             camera_matrix = np.asarray(calibration["K"], dtype=np.float64).copy()
             camera_matrix[0, 2] -= float(mask_offset[0])
             camera_matrix[1, 2] -= float(mask_offset[1])
-            return select_board_ground_points(
+            selection = select_board_ground_points_with_mask(
                 pixels,
                 points,
                 rvec=session_result.rvec,
@@ -3297,16 +3418,27 @@ class OnlineCameraWindow(QMainWindow):
                 inset_mm=inset_mm,
                 detected_corners=corners,
             )
+            return (
+                selection.selected_points,
+                selection.selected_indices,
+                selection.selected_mask,
+                selection.metadata,
+            )
         except (TypeError, ValueError) as error:
-            return np.empty((0, 3), dtype=np.float64), {
-                "enabled": True,
-                "status": "unavailable",
-                "source": GROUND_SUPPORT_PNP_BOARD_MASK,
-                "reason": str(error),
-                "corner_count": int(len(np.asarray(corners).reshape(-1, 2))),
-                "input_point_count": int(len(points)),
-                "selected_point_count": 0,
-            }
+            return (
+                np.empty((0, 3), dtype=np.float64),
+                np.empty(0, dtype=np.int64),
+                np.zeros(len(points), dtype=bool),
+                {
+                    "enabled": True,
+                    "status": "unavailable",
+                    "source": GROUND_SUPPORT_PNP_BOARD_MASK,
+                    "reason": str(error),
+                    "corner_count": int(len(np.asarray(corners).reshape(-1, 2))),
+                    "input_point_count": int(len(points)),
+                    "selected_point_count": 0,
+                },
+            )
 
     def _ground_reference_support_points(
         self,

@@ -1,0 +1,11 @@
+{
+  "data_root": "D:\\Docs\\linelaserscan\\calibration_tool\\projects\\daheng\\data",
+  "dataset_count": 6,
+  "image_count": 150,
+  "expected_image_count": 150,
+  "all_image_count_ok": true,
+  "duplicate_sha256_groups": {},
+  "duplicate_sha256_group_count": 0,
+  "steger_call_count": 150,
+  "steger_call_count_matches_images": true
+}

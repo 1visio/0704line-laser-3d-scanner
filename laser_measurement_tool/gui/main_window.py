@@ -6,15 +6,14 @@ from typing import Any
 
 import cv2
 import numpy as np
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
-    QFormLayout,
+    QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QInputDialog,
-    QLayout,
     QLabel,
     QMainWindow,
     QMessageBox,
@@ -92,45 +91,16 @@ def _format_optional(value: float | None) -> str:
     return "—" if value is None else f"{value:.6f}"
 
 
-def _configure_wrapping_label(
-    label: QLabel, *, selectable: bool = True, flexible: bool = True
-) -> QLabel:
-    """Configure a compact label whose value wraps only when it must."""
-    label.setWordWrap(True)
-    label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
-    label.setMinimumWidth(0)
-    label.setSizePolicy(
-        QSizePolicy.Policy.Ignored if flexible else QSizePolicy.Policy.Preferred,
-        QSizePolicy.Policy.Minimum,
-    )
-    if not flexible:
-        # This is an upper bound, not a fixed narrow column: normal titles use
-        # their natural width, while a very long title cannot starve the value.
-        label.setMinimumWidth(
-            min(label.fontMetrics().horizontalAdvance(label.text()), 170)
-        )
-        label.setMaximumWidth(170)
-    if selectable:
-        label.setTextInteractionFlags(
-            Qt.TextInteractionFlag.TextSelectableByMouse
-        )
-    return label
+class _ResultValueLabel(QLabel):
+    """Wrapping value label that does not widen the sidebar by its text."""
 
+    def sizeHint(self) -> QSize:  # noqa: N802
+        hint = super().sizeHint()
+        return QSize(0, hint.height())
 
-def _add_compact_result_row(
-    layout: QVBoxLayout, parent: QWidget, title: str, value: str
-) -> None:
-    """Add a two-column result row with an adaptive value column."""
-    row = QHBoxLayout()
-    row.setContentsMargins(0, 0, 0, 0)
-    row.setSpacing(6)
-    row.addWidget(
-        _configure_wrapping_label(
-            QLabel(title, parent), selectable=False, flexible=False
-        )
-    )
-    row.addWidget(_configure_wrapping_label(QLabel(value, parent)), 1)
-    layout.addLayout(row)
+    def minimumSizeHint(self) -> QSize:  # noqa: N802
+        hint = super().minimumSizeHint()
+        return QSize(0, hint.height())
 
 
 class MainWindow(QMainWindow):
@@ -209,11 +179,6 @@ class MainWindow(QMainWindow):
         self._connect_signals()
         self._set_image_actions_enabled(False)
         self.statusBar().showMessage("请加载灰度图像")
-
-    def resizeEvent(self, event) -> None:  # noqa: N802
-        super().resizeEvent(event)
-        if hasattr(self, "_result_labels"):
-            self._refresh_adaptive_results_layout()
 
     @property
     def current_image(self) -> np.ndarray | None:
@@ -548,7 +513,11 @@ class MainWindow(QMainWindow):
             QSizePolicy.Policy.Preferred,
             QSizePolicy.Policy.Expanding,
         )
-        self._control_panel_scroll_area.setWidget(self._build_control_panel())
+        control_panel = self._build_control_panel()
+        control_panel.setMaximumWidth(
+            self._control_panel_scroll_area.maximumWidth()
+        )
+        self._control_panel_scroll_area.setWidget(control_panel)
         layout.addWidget(self._control_panel_scroll_area)
         return central_widget
 
@@ -557,12 +526,11 @@ class MainWindow(QMainWindow):
         panel.setMinimumWidth(0)
         panel.setSizePolicy(
             QSizePolicy.Policy.Expanding,
-            QSizePolicy.Policy.Preferred,
+            QSizePolicy.Policy.Expanding,
         )
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(6, 6, 6, 6)
         layout.setSpacing(6)
-        layout.setSizeConstraint(QLayout.SizeConstraint.SetMinAndMaxSize)
 
         self.load_button = QPushButton("加载图像", panel)
         self.online_button = QPushButton("在线相机", panel)
@@ -615,99 +583,125 @@ class MainWindow(QMainWindow):
 
     def _build_results_group(self, parent: QWidget) -> QGroupBox:
         group = QGroupBox("计算结果 (mm)", parent)
+        self._results_group = group
+        group.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Maximum,
+        )
         layout = QVBoxLayout(group)
         layout.setContentsMargins(6, 8, 6, 6)
         layout.setSpacing(6)
-        layout.setSizeConstraint(QLayout.SizeConstraint.SetMinAndMaxSize)
-        reference_group = QGroupBox("公共地面基准", group)
-        reference_group.setSizePolicy(
-            QSizePolicy.Policy.Expanding,
-            QSizePolicy.Policy.Minimum,
-        )
-        reference_form = QFormLayout(reference_group)
-        self._configure_result_form(reference_form)
         self._result_labels: dict[str, QLabel] = {}
+
+        reference_group, reference_layout = self._create_result_group(
+            "公共地面基准", group
+        )
         for key, title in (
             ("ground", "地面基准 Zg"),
             ("ground_sigma", "地面噪声 σ"),
             ("baseline_points", "内点/总点"),
         ):
-            label = _configure_wrapping_label(QLabel(
-                self._ground_extrinsic_source if key == "ground_source" else "—",
+            self._result_labels[key] = self._add_result_row(
+                reference_layout,
                 reference_group,
-            ))
-            self._result_labels[key] = label
-            reference_form.addRow(
-                _configure_wrapping_label(
-                    QLabel(f"{title}:", reference_group),
-                    selectable=False,
-                    flexible=False,
-                ),
-                label,
+                title,
+                "—",
             )
         layout.addWidget(reference_group)
 
-        session_group = QGroupBox("本次测量状态", group)
-        session_group.setSizePolicy(
-            QSizePolicy.Policy.Expanding,
-            QSizePolicy.Policy.Minimum,
+        session_group, session_layout = self._create_result_group(
+            "本次测量状态", group
         )
-        session_form = QFormLayout(session_group)
-        self._configure_result_form(session_form)
         for key, title in (
             ("height_correction_mode", "高度修正模式"),
             ("stage_a_enabled", "Stage-A 补偿"),
-            ("stage_a_domain", "Stage-A 有效域"),
-            ("hb2_domain", "H-B2 q2 有效域"),
-            ("hb2_policy", "H-B2 OOD 策略"),
+            ("stage_a_domain", "Stage-A 域"),
+            ("hb2_domain", "H-B2 q2 域"),
+            ("hb2_policy", "H-B2 OOD"),
             ("session_ground_reference", "Session 地面基准"),
             ("ground_reference_coordinate", "Session 坐标"),
-            ("ground_reference_params", "Session a / b"),
-            ("ground_reference_domain", "Session S 有效域"),
-            ("ground_reference_sha", "Frozen JSON SHA256"),
+            ("ground_reference_params", "Session a/b"),
+            ("ground_reference_domain", "Session S 域"),
+            ("ground_reference_sha", "Frozen JSON SHA"),
             ("ground_reference_mode", "地面参考模式"),
-            ("ground_source", "ground 外参来源"),
+            ("ground_source", "ground 来源"),
         ):
-            label = _configure_wrapping_label(QLabel(
+            self._result_labels[key] = self._add_result_row(
+                session_layout,
+                session_group,
+                title,
                 self._ground_extrinsic_source
                 if key == "ground_source"
                 else "—",
-                session_group,
-            ))
-            self._result_labels[key] = label
-            session_form.addRow(
-                _configure_wrapping_label(
-                    QLabel(f"{title}:", session_group),
-                    selectable=False,
-                    flexible=False,
-                ),
-                label,
             )
         layout.addWidget(session_group)
         self._obstacle_results_layout = QVBoxLayout()
-        self._obstacle_results_layout.setSizeConstraint(
-            QLayout.SizeConstraint.SetMinAndMaxSize
-        )
+        self._obstacle_results_layout.setContentsMargins(0, 0, 0, 0)
+        self._obstacle_results_layout.setSpacing(6)
         self._obstacle_result_groups: list[QGroupBox] = []
         layout.addLayout(self._obstacle_results_layout)
         return group
 
     @staticmethod
-    def _configure_result_form(form: QFormLayout) -> None:
-        """Keep short titles on one row and wrap only the value when needed."""
-        form.setContentsMargins(6, 6, 6, 6)
-        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
-        form.setFieldGrowthPolicy(
-            QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow
+    def _configure_result_grid(layout: QGridLayout) -> None:
+        """Configure the shared two-column result property-table layout."""
+        layout.setContentsMargins(6, 6, 6, 6)
+        layout.setHorizontalSpacing(7)
+        layout.setVerticalSpacing(2)
+        layout.setColumnStretch(0, 0)
+        layout.setColumnStretch(1, 1)
+
+    @classmethod
+    def _create_result_group(
+        cls, title: str, parent: QWidget
+    ) -> tuple[QGroupBox, QGridLayout]:
+        group = QGroupBox(title, parent)
+        group.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Maximum,
         )
-        form.setLabelAlignment(
+        layout = QGridLayout(group)
+        cls._configure_result_grid(layout)
+        return group, layout
+
+    @staticmethod
+    def _add_result_row(
+        layout: QGridLayout, parent: QWidget, title: str, value: str
+    ) -> QLabel:
+        """Add one compact title/value row and return its value label."""
+        row = 0
+        while any(
+            layout.itemAtPosition(row, column) is not None
+            for column in (0, 1)
+        ):
+            row += 1
+        title_label = QLabel(f"{title}:", parent)
+        title_label.setWordWrap(False)
+        title_label.setAlignment(
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
         )
-        form.setFormAlignment(
+        title_label.setSizePolicy(
+            QSizePolicy.Policy.Maximum,
+            QSizePolicy.Policy.Fixed,
+        )
+
+        value_label = _ResultValueLabel(value, parent)
+        value_label.setWordWrap(True)
+        value_label.setAlignment(
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop
         )
-        form.setHorizontalSpacing(6)
-        form.setVerticalSpacing(2)
+        value_label.setMinimumWidth(0)
+        value_label.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Minimum,
+        )
+        value_label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+
+        layout.addWidget(title_label, row, 0)
+        layout.addWidget(value_label, row, 1)
+        return value_label
 
     @property
     def _image_action_buttons(self) -> tuple[QPushButton, ...]:
@@ -1221,30 +1215,6 @@ class MainWindow(QMainWindow):
             group.deleteLater()
         self._obstacle_result_groups.clear()
 
-    def _refresh_adaptive_results_layout(self) -> None:
-        """Re-activate wrapped result rows after text or window-width changes."""
-        for label in self._result_labels.values():
-            label.updateGeometry()
-        for group in self._obstacle_result_groups:
-            group_layout = group.layout()
-            if group_layout is not None:
-                group_layout.invalidate()
-                group_layout.activate()
-            group.updateGeometry()
-        self._obstacle_results_layout.invalidate()
-        self._obstacle_results_layout.activate()
-        scroll_area = getattr(self, "_control_panel_scroll_area", None)
-        if scroll_area is None:
-            return
-        panel = scroll_area.widget()
-        if panel is not None:
-            panel_layout = panel.layout()
-            if panel_layout is not None:
-                panel_layout.invalidate()
-                panel_layout.activate()
-            panel.updateGeometry()
-        scroll_area.updateGeometry()
-
     def _update_results_panel(
         self, measurements: list[HeightLineMeasurement]
     ) -> None:
@@ -1343,15 +1313,16 @@ class MainWindow(QMainWindow):
         )
 
         for index, measurement in enumerate(measurements, start=1):
-            group = QGroupBox(f"障碍物 {index}")
-            form = QVBoxLayout(group)
-            form.setContentsMargins(6, 6, 6, 6)
-            form.setSizeConstraint(QLayout.SizeConstraint.SetMinAndMaxSize)
-            form.setSpacing(2)
+            group = QGroupBox(
+                f"障碍物 {index}",
+                self._results_group,
+            )
             group.setSizePolicy(
                 QSizePolicy.Policy.Expanding,
-                QSizePolicy.Policy.Minimum,
+                QSizePolicy.Policy.Maximum,
             )
+            result_layout = QVBoxLayout(group)
+            result_layout.setContentsMargins(6, 6, 6, 6)
             angle = measurement.angle_with_baseline_deg
             stage_a = self._stage_a_height_result(measurement.height_mean_mm)
             reconstruction = (
@@ -1379,45 +1350,50 @@ class MainWindow(QMainWindow):
                 if height_result.height_hb2 is None
                 else f"{height_result.height_hb2:.3f} mm"
             )
-            active_height = (
+            v_min = geometry["v_min"]
+            v_median = geometry["v_median"]
+            v_max = geometry["v_max"]
+            v_range = (
                 "—"
-                if height_result.active_height is None
-                else f"{height_result.active_height:.3f} mm"
-            )
-            legacy_rows = (
-                ("原始高度 height_raw (均值)", raw_height),
-                ("补偿高度 height_stage_a", stage_a_height),
-                ("Stage-A 状态", self._display_stage_a_status(stage_a.stage_a_status)),
-            )
-            for title, value in legacy_rows:
-                label = _configure_wrapping_label(
-                    QLabel(f"{title}: {value}", group)
+                if any(value is None for value in (v_min, v_median, v_max))
+                else (
+                    f"{v_min:.1f} ~ {v_max:.1f} px"
+                    f"（中位 {v_median:.1f}）"
                 )
-                form.addWidget(label)
-            rows = (
-                ("H-B2 shadow", f"height_hb2: {hb2_height}"),
-                ("当前高度", f"{active_height} / {height_result.active_height_correction}"),
-                ("修正状态", self._display_height_status(height_result.active_height_status)),
-                ("q1 / q2", f"Frozen-C0 均值: {_format_optional(height_result.q1)} / {_format_optional(height_result.q2)}"),
-                ("q2 域", f"{height_result.q2_in_domain} / {self._display_height_status(height_result.hb2_q2_status)}"),
-                ("v 范围", f"{_format_optional(geometry['v_min'])} / {_format_optional(geometry['v_median'])} / {_format_optional(geometry['v_max'])} px"),
-                ("点数 / C1", f"{geometry['point_count']} / {geometry['c1_clamp_status']}"),
-                ("高度 σ", f"raw: {measurement.height_std_mm:.3f} mm"),
-                ("高度中位数", f"raw: {measurement.height_median_mm:.3f} mm"),
-                ("长度", f"{measurement.length_mm:.3f}"),
-                ("与基准线夹角", "—" if angle is None else f"{angle:.2f}°"),
-                ("拟合 RMSE", f"{measurement.height_fit.rmse_mm:.3f}"),
-                (
-                    "内点 / 总点",
-                    f"{measurement.height_inlier_count}/"
-                    f"{measurement.height_point_count}",
-                ),
             )
-            for title, value in rows:
-                _add_compact_result_row(form, group, title, value)
+            result_lines = [
+                f"原始高度: {raw_height}",
+                f"Stage-A 高度: {stage_a_height}",
+                f"Stage-A 状态: {self._display_stage_a_status(stage_a.stage_a_status)}",
+                f"H-B2 高度: {hb2_height}",
+                f"q2 域: {height_result.q2_in_domain} / {self._display_height_status(height_result.hb2_q2_status)}",
+                f"v 范围: {v_range}",
+                f"高度 σ (raw): {measurement.height_std_mm:.3f} mm",
+                f"高度中位数 (raw): {measurement.height_median_mm:.3f} mm",
+                f"长度: {measurement.length_mm:.3f}",
+                f"与基准线夹角: {'—' if angle is None else f'{angle:.2f}°'}",
+                f"拟合 RMSE: {measurement.height_fit.rmse_mm:.3f}",
+                (
+                    f"内点 / 总点: {measurement.height_inlier_count}/"
+                    f"{measurement.height_point_count}"
+                ),
+            ]
+            result_label = QLabel("\n".join(result_lines), group)
+            result_label.setWordWrap(True)
+            result_label.setAlignment(
+                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop
+            )
+            result_label.setMinimumWidth(0)
+            result_label.setSizePolicy(
+                QSizePolicy.Policy.Expanding,
+                QSizePolicy.Policy.Minimum,
+            )
+            result_label.setTextInteractionFlags(
+                Qt.TextInteractionFlag.TextSelectableByMouse
+            )
+            result_layout.addWidget(result_label)
             self._obstacle_results_layout.addWidget(group)
             self._obstacle_result_groups.append(group)
-        self._refresh_adaptive_results_layout()
 
     def _format_height_status(
         self, index: int, measurement: HeightLineMeasurement
